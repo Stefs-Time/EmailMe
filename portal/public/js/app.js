@@ -29,6 +29,8 @@ const NAV = [
   { section: 'Contacts' },
   { href: '#/contacts', icon: 'people', label: 'Contacts', match: 'contact' },
   { href: '#/import', icon: 'cloud-arrow-up', label: 'Import', match: 'import', perm: 'imports:write' },
+  // Viewers cannot import, but may still review what was imported.
+  { href: '#/imports', icon: 'clock-history', label: 'Import history', match: 'imports', notPerm: 'imports:write' },
   { href: '#/lists', icon: 'card-list', label: 'Lists', match: 'lists' },
   { href: '#/review', icon: 'hourglass-split', label: 'Review queue', match: 'review', badge: 'review' },
   { href: '#/suppression', icon: 'slash-circle', label: 'Suppression list', match: 'suppression' },
@@ -75,26 +77,31 @@ function renderShell() {
       <div class="brand"><a href="#/"><img src="/img/logo.svg" alt="MailHarbor"></a>
         <div class="org">${state.session.orgName}</div></div>
       <div class="side-nav flex-grow-1 pb-3">
-        ${NAV.filter((n) => !n.perm || ctx.can(n.perm)).map((n) => (n.section
+        ${NAV.filter((n) => (!n.perm || ctx.can(n.perm)) && (!n.notPerm || !ctx.can(n.notPerm))).map((n) => (n.section
           ? html`<div class="nav-section">${n.section}</div>`
           : html`<a href="${n.href}" data-match="${n.match}"><i class="bi bi-${n.icon}"></i><span>${n.label}</span>${n.badge ? html`<span class="badge rounded-pill text-bg-warning d-none" data-badge="${n.badge}"></span>` : ''}</a>`))}
       </div>
-      <div class="sidebar-footer">
+      ${ctx.can('campaigns:compose') ? html`<div class="sidebar-footer">
         <a class="btn btn-sm btn-outline-primary w-100 mb-2" href="${state.session.listmonkUrl}/admin/campaigns/new" target="_blank" rel="noopener">
-          <i class="bi bi-send me-1"></i>New campaign in listmonk</a>
+          <i class="bi bi-send me-1"></i>New campaign in listmonk<span class="visually-hidden"> (opens in a new tab)</span></a>
         <div class="text-muted-2">Campaigns are written and sent in listmonk. <a href="#/guides/campaigns">How?</a></div>
-      </div>
+      </div>` : ''}
     </nav>
+    <div class="sidebar-backdrop" id="backdrop"></div>
     <div class="main">
       <header class="topbar">
         <button class="btn btn-light d-lg-none" id="menu-btn" aria-label="Open menu"><i class="bi bi-list"></i></button>
-        <h1 class="page-title" id="page-title"></h1>
+        <span class="page-title d-lg-none" id="page-title"></span>
+        <form class="quick-search d-none d-md-flex flex-grow-1" id="quick-search" role="search" aria-label="Quick contact search">
+          <div class="input-group input-group-sm"><span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+            <input class="form-control" name="q" type="search" placeholder="Find a contact by email, name or company" aria-label="Find a contact"></div>
+        </form>
         <div class="ms-auto dropdown">
           <button class="btn btn-light dropdown-toggle d-flex align-items-center gap-2" data-bs-toggle="dropdown" aria-expanded="false">
             <span class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center fw-semibold" aria-hidden="true" id="avatar"></span>
             <span class="d-none d-sm-inline">${u.name}</span></button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><span class="dropdown-item-text small text-muted-2">${u.email}<br>Role: <strong>${u.role}</strong></span></li>
+            <li><span class="dropdown-item-text small text-muted-2">${u.email}<br>Role: <strong>${u.role}</strong>${u.managedByEnv ? html`<br>Managed by environment variables` : ''}</span></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="#/account"><i class="bi bi-person me-2"></i>My account</a></li>
             <li><a class="dropdown-item" href="#/guides"><i class="bi bi-journal-text me-2"></i>Guides</a></li>
@@ -109,6 +116,14 @@ function renderShell() {
   av.textContent = (u.name || u.email).trim().charAt(0).toUpperCase();
   av.style.width = '2rem'; av.style.height = '2rem';
   $('#menu-btn').addEventListener('click', () => $('#sidebar').classList.toggle('open'));
+  $('#backdrop').addEventListener('click', () => $('#sidebar').classList.remove('open'));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#sidebar').classList.remove('open'); });
+  $('#quick-search').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const q = e.target.q.value.trim();
+    e.target.q.value = '';
+    ctx.navigate(`#/contacts${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+  });
   $('#logout').addEventListener('click', async () => {
     await api('POST', '/auth/logout').catch(() => {});
     location.hash = '#/';
@@ -134,11 +149,14 @@ async function route() {
   if (typeof state.cleanup === 'function') { try { state.cleanup(); } catch { /* ignore */ } }
   state.cleanup = null;
   $('#sidebar')?.classList.remove('open');
-  if (!r) { mount(main, html`<div class="empty"><i class="bi bi-signpost"></i>Page not found. <a href="#/">Go to the dashboard</a></div>`); return; }
-  if (r.perm && !ctx.can(r.perm)) { mount(main, errorBox({ message: 'You do not have permission to view this page.' })); return; }
+  if (!r) { mount(main, html`<h1 class="visually-hidden">Page not found</h1><div class="empty"><i class="bi bi-signpost"></i>Page not found. <a href="#/">Go to the dashboard</a></div>`); return; }
+  if (r.perm && !ctx.can(r.perm)) {
+    mount(main, html`<div class="page-head"><div><h1>${r.title}</h1></div></div>${errorBox({ message: 'Your role does not include this page. Ask an administrator if you need access.' })}`);
+    return;
+  }
   $('#page-title').textContent = r.title;
   document.title = `${r.title} · MailHarbor`;
-  $$('.side-nav a').forEach((a) => a.classList.toggle('active', r.view.startsWith(a.dataset.match) || (a.dataset.match === 'contact' && r.view === 'contact')));
+  $$('.side-nav a').forEach((a) => a.classList.toggle('active', r.view === a.dataset.match || (r.view.startsWith(a.dataset.match) && !$$('.side-nav a').some((x) => x.dataset.match === r.view))));
   try {
     const mod = viewCache[r.view] || (viewCache[r.view] = await import(`./views/${r.view}.js`));
     state.cleanup = await mod.render(main, ctx, match.slice(1));
@@ -158,6 +176,11 @@ async function start() {
     boot();
   });
   window.addEventListener('hashchange', route);
+  // The skip link must move focus without changing the hash (the router owns it).
+  document.querySelector('.skip-link')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('main')?.focus();
+  });
   window.addEventListener('unhandledrejection', (e) => { if (e.reason?.status) errorToast(e.reason); });
   await boot();
 }

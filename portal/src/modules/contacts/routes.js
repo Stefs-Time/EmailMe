@@ -60,6 +60,13 @@ function contactRoutes(deps) {
     res.json({ success: true, data: rows, meta: { total, page: q.page, perPage: q.per_page } });
   });
 
+  /** Every id matching the filters (max 5000, the bulk-action limit). */
+  r.get('/ids', requirePermission('contacts:write'), async (req, res) => {
+    const q = parse(filterSchema, req.query);
+    const data = await readOnly(deps.pool, (db) => repo.matchingIds(db, toFilters(q), 5000));
+    res.json({ success: true, data });
+  });
+
   /** Values for filter dropdowns. */
   r.get('/facets', requirePermission('contacts:read'), async (_req, res) => {
     const data = await readOnly(deps.pool, async (db) => {

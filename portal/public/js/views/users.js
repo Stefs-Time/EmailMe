@@ -13,30 +13,33 @@ export async function render(el, ctx) {
   let users = [];
   async function load() {
     users = (await get('/users')).data;
-    mount($('#t', el), html`<div class="table-responsive"><table class="table align-middle"><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Last sign-in</th><th></th></tr></thead><tbody>
-      ${users.map((u) => html`<tr><td><div class="fw-semibold">${u.name}${u.id === ctx.user.id ? html` <span class="badge text-bg-light">you</span>` : ''}</div><div class="small text-muted-2">${u.email}</div></td>
+    mount($('#t', el), html`<div class="table-responsive"><table class="table align-middle"><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Last sign-in</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
+      ${users.map((u) => html`<tr><td><div class="fw-semibold">${u.name}${u.id === ctx.user.id ? html` <span class="badge text-bg-light">you</span>` : ''}${u.managed_by_env ? html` <span class="badge badge-managed" title="Created and kept in sync from the ADMIN_EMAIL / ADMIN_PASSWORD environment variables">Environment-managed</span>` : ''}</div><div class="small text-muted-2">${u.email}</div></td>
         <td class="text-capitalize">${u.role}</td><td>${u.status === 'active' ? html`<span class="status s-active">Active</span>` : html`<span class="status s-inactive">Disabled</span>`}</td>
         <td class="small">${datetime(u.last_login_at)}</td><td class="text-end"><button class="btn btn-sm btn-light" data-edit="${u.id}">Edit</button></td></tr>`)}</tbody></table></div>`);
   }
   const pwHelp = html`<div class="form-text">At least 12 characters including letters and a number. Share it securely; ask them to change it after signing in.</div>`;
   $('#new', el).addEventListener('click', () => formModal({ title: 'Add user', submitLabel: 'Create user', body: html`
-    <div class="mb-2"><label class="form-label">Name</label><input class="form-control" name="name" required maxlength="120"></div>
-    <div class="mb-2"><label class="form-label">Email</label><input class="form-control" type="email" name="email" required></div>
-    <div class="mb-2"><label class="form-label">Role</label><select class="form-select" name="role">${options(ROLES, 'manager')}</select></div>
-    <div><label class="form-label">Temporary password</label><input class="form-control" type="password" name="password" required minlength="12" autocomplete="new-password">${pwHelp}</div>`,
+    <div class="mb-2"><label class="form-label" for="n-name">Name</label><input class="form-control" id="n-name" name="name" required maxlength="120"></div>
+    <div class="mb-2"><label class="form-label" for="n-email">Email</label><input class="form-control" id="n-email" type="email" name="email" required></div>
+    <div class="mb-2"><label class="form-label" for="n-role">Role</label><select class="form-select" id="n-role" name="role">${options(ROLES, 'manager')}</select></div>
+    <div><label class="form-label" for="n-pw">Temporary password</label><input class="form-control" id="n-pw" type="password" name="password" required minlength="12" autocomplete="new-password">${pwHelp}</div>`,
   onSubmit: async (fd) => { await post('/users', Object.fromEntries(fd)); toast('User created'); load(); } }));
   el.addEventListener('click', (e) => {
     const b = e.target.closest('[data-edit]');
     if (!b) return;
     const u = users.find((x) => x.id === b.dataset.edit);
+    const locked = u.managed_by_env ? raw('disabled') : '';
     formModal({ title: `Edit ${u.name}`, body: html`
-      <div class="mb-2"><label class="form-label">Name</label><input class="form-control" name="name" value="${u.name}" required maxlength="120"></div>
-      <div class="mb-2"><label class="form-label">Role</label><select class="form-select" name="role">${options(ROLES, u.role)}</select></div>
-      <div class="mb-2"><label class="form-label">Status</label><select class="form-select" name="status">
+      ${u.managed_by_env ? html`<div class="alert alert-info small"><i class="bi bi-lock me-1"></i>This administrator is controlled by the
+        <code>ADMIN_EMAIL</code> / <code>ADMIN_PASSWORD</code> environment variables (e.g. Railway → Variables). Its role, status and password can only be changed there.</div>` : ''}
+      <div class="mb-2"><label class="form-label" for="u-name">Name</label><input class="form-control" id="u-name" name="name" value="${u.name}" required maxlength="120"></div>
+      <div class="mb-2"><label class="form-label" for="u-role">Role</label><select class="form-select" id="u-role" name="role" ${locked}>${options(ROLES, u.role)}</select></div>
+      <div class="mb-2"><label class="form-label" for="u-status">Status</label><select class="form-select" id="u-status" name="status" ${locked}>
         <option value="active" ${u.status === 'active' ? raw('selected') : ''}>Active</option><option value="disabled" ${u.status === 'disabled' ? raw('selected') : ''}>Disabled (cannot sign in)</option></select></div>
-      <div><label class="form-label">Reset password (optional)</label><input class="form-control" type="password" name="password" minlength="12" autocomplete="new-password">${pwHelp}</div>`,
+      ${u.managed_by_env ? '' : html`<div><label class="form-label" for="u-pw">Reset password (optional)</label><input class="form-control" id="u-pw" type="password" name="password" minlength="12" autocomplete="new-password">${pwHelp}</div>`}`,
     onSubmit: async (fd) => {
-      const body = { name: fd.get('name'), role: fd.get('role'), status: fd.get('status') };
+      const body = u.managed_by_env ? { name: fd.get('name') } : { name: fd.get('name'), role: fd.get('role'), status: fd.get('status') };
       if (fd.get('password')) body.password = fd.get('password');
       await patch(`/users/${u.id}`, body); toast('User updated'); load();
     } });

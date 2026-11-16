@@ -70,6 +70,8 @@ function systemRoutes({ pool, lm, config, sync }) {
       out.listmonk.error = err.message;
     }
     out.sync = await getState(pool, 'heartbeat', null);
+    out.backup = await getState(pool, 'backup_heartbeat', null);
+    out.backupStaleHours = config.BACKUP_STALE_HOURS;
     out.syncStale = !out.sync || Date.now() - new Date(out.sync.at).getTime() > config.SYNC_STALE_MINUTES * 60000;
     out.listmonkUrl = config.LISTMONK_PUBLIC_URL;
     out.globalUnsubscribe = config.GLOBAL_UNSUBSCRIBE;

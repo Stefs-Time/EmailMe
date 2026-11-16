@@ -82,6 +82,9 @@ class SyncWorker {
       } catch (err) {
         error = err.message;
         this.log.error({ err }, 'sync step failed');
+        if (/rejected the portal API credentials/.test(err.message) && this.onAuthFailure) {
+          await this.onAuthFailure().catch((e) => this.log.error({ err: e.message }, 'renewing listmonk credentials failed'));
+        }
         await raiseAlert(this.pool, 'sync_failed', 'critical',
           'Recipient sync is failing. Suppression records may be out of date.', { error: err.message }).catch(() => {});
       }
@@ -296,6 +299,7 @@ class SyncWorker {
 
   // 5. Health ---------------------------------------------------------------
   async healthChecks() {
+    await this.checkBackups().catch((err) => this.log.warn({ err }, 'backup check failed'));
     try {
       await this.lm.health();
       await resolveAlert(this.pool, 'listmonk_unreachable');
@@ -359,6 +363,26 @@ class SyncWorker {
       } catch (err) {
         this.log.debug({ err }, 'settings check skipped');
       }
+    }
+  }
+
+  /** Scope §8: backup execution status. */
+  async checkBackups() {
+    const hours = this.config.BACKUP_STALE_HOURS;
+    if (!hours) return;
+    const hb = await getState(this.pool, 'backup_heartbeat', null);
+    const ageH = hb ? (Date.now() - new Date(hb.at).getTime()) / 3600000 : Infinity;
+    if (hb && !hb.ok) {
+      await raiseAlert(this.pool, 'backup_failed', 'critical', `The last database backup failed: ${hb.error || 'unknown error'}`);
+    } else {
+      await resolveAlert(this.pool, 'backup_failed');
+    }
+    if (ageH > hours) {
+      await raiseAlert(this.pool, 'backup_stale', 'warning', hb
+        ? `No successful database backup in the last ${Math.floor(ageH)} hours.`
+        : 'No database backup has been recorded yet. Check the backup job.');
+    } else {
+      await resolveAlert(this.pool, 'backup_stale');
     }
   }
 

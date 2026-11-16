@@ -26,6 +26,14 @@ export async function render(el, ctx) {
         <div class="small text-muted-2 mt-3">Also confirm DNS for your sending domain: SPF, DKIM, DMARC, Return-Path and reverse DNS. See the <a href="#/guides/deliverability">deliverability guide</a>.</div>
       </div></div></div>
       <div class="col-xl-5">
+        <div class="card mb-3"><div class="card-header">Backups</div><div class="card-body small">
+          ${h.backup ? html`<div class="d-flex gap-2 align-items-start">${icon(h.backup.ok)}<div>
+              <div class="fw-semibold">${h.backup.ok ? `Last backup ${ago(h.backup.at)}` : `Last backup FAILED ${ago(h.backup.at)}`}</div>
+              ${h.backup.ok ? html`<div class="text-muted-2">${h.backup.file} · ${num(Math.round((h.backup.size || 0) / 1024))} KB · ${(h.backup.locations || []).map((l) => (l.startsWith('s3://') ? 'off-site (S3)' : 'local volume')).join(' + ')}</div>`
+                : html`<div class="text-danger">${h.backup.error}</div>`}</div></div>`
+            : html`<div class="d-flex gap-2">${icon(false, 'warning')}<div>No backup has been recorded. Set up the backup job (see the administrator guide).</div></div>`}
+          ${h.backupStaleHours ? html`<div class="text-muted-2 mt-2">An alert is raised if no successful backup happens within ${num(h.backupStaleHours)} hours.</div>` : ''}
+        </div></div>
         <div class="card mb-3"><div class="card-header">Sending configuration</div><div class="card-body small">
           ${(h.listmonk.smtp || []).map((s) => html`<div class="mb-2"><span class="mono">${s.host}:${s.port}</span> · ${s.tls} · ${num(s.maxConns)} connections</div>`)}
           ${h.listmonk.sending ? html`<div>Rate: ${num(h.listmonk.sending.ratePerSecond)} msg/s · concurrency ${num(h.listmonk.sending.concurrency)} · batch ${num(h.listmonk.sending.batchSize)}</div>` : ''}

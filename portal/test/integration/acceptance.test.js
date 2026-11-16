@@ -3,8 +3,9 @@
 /**
  * End-to-end acceptance tests against a REAL listmonk + PostgreSQL
  * (scope §10). Skipped unless INTEGRATION=1. Required env (see README):
- *   DATABASE_URL, LISTMONK_URL, LISTMONK_API_USER, LISTMONK_API_TOKEN,
- *   LISTMONK_ADMIN_USER, LISTMONK_ADMIN_PASSWORD (to enable bounce webhooks)
+ *   DATABASE_URL, LISTMONK_URL, LISTMONK_ADMIN_USER, LISTMONK_ADMIN_PASSWORD
+ *   (the suite uses the portal's self-bootstrap to obtain its API token, and
+ *   the admin login to enable bounce webhooks)
  *
  * WARNING: creates and deletes test contacts (@mh-test.example). Never run
  * against production.
@@ -105,8 +106,14 @@ const contactByEmail = async (email) => {
   return r.data.find((c) => c.email === email);
 };
 
+let adminApi;
+/** Injects a bounce as listmonk would record it (admin session; the portal's own API user cannot post bounces). */
 async function bounce(email, type, meta) {
-  await lm.recordBounce({ email, type, source: 'test', meta });
+  if (!adminApi) {
+    const { loginSession } = require('../../src/lib/listmonkAdmin');
+    adminApi = await loginSession(config.LISTMONK_URL, config.LISTMONK_ADMIN_USER, config.LISTMONK_ADMIN_PASSWORD);
+  }
+  await adminApi('POST', '/webhooks/bounce', { email, type, source: 'test', meta });
   await sync.runOnce();
 }
 
@@ -119,11 +126,15 @@ before(async () => {
   const { SyncWorker } = require('../../src/modules/sync/worker');
   const { createApp } = require('../../src/app');
   const argon2 = require('argon2');
-  config = loadConfig({ ...process.env, NODE_ENV: 'test', SESSION_SECRET: 'x'.repeat(40) });
+  const { resolveListmonkCredentials, ensureEnvAdmin } = require('../../src/lib/startup');
+  config = loadConfig({ ...process.env, NODE_ENV: 'test', SESSION_SECRET: 'x'.repeat(40), LISTMONK_API_TOKEN: '',
+    ADMIN_EMAIL: `envadmin-${RUN}@mh-test.example`, ADMIN_PASSWORD: 'Env-admin-pass-1' });
   const logger = pino({ level: 'silent' });
   pool = createPool(config);
   await migrate(pool, logger);
-  lm = new ListmonkClient({ baseUrl: config.LISTMONK_URL, apiUser: config.LISTMONK_API_USER, apiToken: config.LISTMONK_API_TOKEN, logger });
+  await ensureEnvAdmin(pool, config, logger);
+  const creds = await resolveListmonkCredentials(pool, config, logger);
+  lm = new ListmonkClient({ baseUrl: config.LISTMONK_URL, apiUser: creds.user, apiToken: creds.token, logger });
   sync = new SyncWorker({ pool, listmonk: lm, config, logger });
   const hash = await argon2.hash('Test-password-123');
   for (const [email, role] of [[`admin-${RUN}@mh-test.example`, 'admin'], [`viewer-${RUN}@mh-test.example`, 'viewer']]) {
@@ -143,7 +154,7 @@ after(async () => {
   // Clean up test contacts in listmonk and test users.
   const { rows } = await pool.query(`SELECT id FROM subscribers WHERE email LIKE $1`, [`%.${RUN}@mh-test.example`]);
   for (const r of rows) await lm.deleteSubscriber(r.id).catch(() => {});
-  await pool.query(`DELETE FROM portal.users WHERE email LIKE $1`, [`%-${RUN}@mh-test.example`]);
+  await pool.query(`DELETE FROM portal.users WHERE email LIKE $1`, [`%${RUN}@mh-test.example`]);
   server?.close();
   await pool?.end();
 });
@@ -347,4 +358,55 @@ t('TC14: unreachable listmonk raises an administrative alert', async () => {
   await sync.healthChecks();
   const { rows: after } = await pool.query(`SELECT 1 FROM portal.alerts WHERE key = 'listmonk_unreachable' AND resolved_at IS NULL`);
   assert.equal(after.length, 0, 'alert resolves when listmonk is back');
+});
+
+t('auth: wrong password is a clean 401, and 10 failures lock the account', async () => {
+  jar.probe = new Map();
+  const s1 = await http('probe', 'GET', '/api/auth/session');
+  csrf.probe = s1.data.csrfToken;
+  const email = `viewer-${RUN}@mh-test.example`;
+  const statuses = [];
+  for (let i = 0; i < 10; i += 1) statuses.push((await http('probe', 'POST', '/api/auth/login', { email, password: 'wrong-password-1' })).status);
+  assert.deepEqual([...new Set(statuses)], [401]);
+  const locked = await http('probe', 'POST', '/api/auth/login', { email, password: 'Test-password-123' });
+  assert.equal(locked.status, 429, 'correct password refused while locked');
+  await pool.query(`UPDATE portal.users SET locked_until = NULL, failed_logins = 0 WHERE email = $1`, [email]);
+});
+
+t('env admin: exists, is admin, and cannot be demoted, disabled or re-passworded in the UI', async () => {
+  const { rows } = await pool.query(`SELECT id, role, managed_by_env FROM portal.users WHERE email = $1`, [`envadmin-${RUN}@mh-test.example`]);
+  assert.equal(rows[0].role, 'admin');
+  assert.equal(rows[0].managed_by_env, true);
+  const id = rows[0].id;
+  assert.equal((await http('admin', 'PATCH', `/api/users/${id}`, { role: 'viewer' })).status, 400);
+  assert.equal((await http('admin', 'PATCH', `/api/users/${id}`, { status: 'disabled' })).status, 400);
+  assert.equal((await http('admin', 'PATCH', `/api/users/${id}`, { password: 'Another-pass-123' })).status, 400);
+  assert.equal((await http('admin', 'PATCH', `/api/users/${id}`, { name: 'Owner', role: 'admin', status: 'active' })).status, 200, 'renaming is allowed');
+  // A changed ADMIN_PASSWORD is applied on the next start.
+  const { ensureEnvAdmin } = require('../../src/lib/startup');
+  await ensureEnvAdmin(pool, { ...config, ADMIN_PASSWORD: 'Rotated-admin-pass-2' }, pino({ level: 'silent' }));
+  jar.env = new Map();
+  await login('env', `envadmin-${RUN}@mh-test.example`, 'Rotated-admin-pass-2');
+  const cp = await http('env', 'POST', '/api/auth/change-password', { currentPassword: 'Rotated-admin-pass-2', newPassword: 'Something-else-123' });
+  assert.equal(cp.status, 422, 'password changes must go through the variable');
+});
+
+t('bulk select: ids endpoint returns every matching contact (managers only)', async () => {
+  const r = await http('admin', 'GET', `/api/contacts/ids?q=${encodeURIComponent(`.${RUN}@mh-test.example`)}`);
+  assert.equal(r.status, 200);
+  assert.ok(r.data.ids.length >= 3);
+  assert.equal(r.data.truncated, false);
+  assert.equal((await http('viewer', 'GET', '/api/contacts/ids')).status, 403);
+});
+
+t('self-bootstrap: a revoked listmonk token is replaced automatically', async () => {
+  const { resolveListmonkCredentials } = require('../../src/lib/startup');
+  const { setSecret } = require('../../src/lib/secrets');
+  await setSecret(pool, config.SESSION_SECRET, 'listmonk_api_token', 'not-a-valid-token');
+  const creds = await resolveListmonkCredentials(pool, config, pino({ level: 'silent' }));
+  assert.equal(creds.source, 'created');
+  lm.setCredentials(creds.user, creds.token);
+  assert.ok(await lm.getLists(), 'new token works');
+  const again = await resolveListmonkCredentials(pool, config, pino({ level: 'silent' }));
+  assert.equal(again.source, 'stored', 'a working stored token is reused, not recreated');
 });

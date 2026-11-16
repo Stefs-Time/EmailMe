@@ -153,6 +153,15 @@ async function queryContacts(client, filters, { page = 1, perPage = 25, sort = '
   return { rows: rows.map(strip), total };
 }
 
+/** Ids of all contacts matching the filters (capped), for "select all matching". */
+async function matchingIds(client, filters, limit) {
+  const { innerWhere, outerWhere, params } = buildFilters(filters);
+  params.push(limit + 1);
+  const { rows } = await client.query(
+    `SELECT c.id FROM (${BASE} ${innerWhere}) c ${outerWhere} ORDER BY c.id LIMIT $${params.length}`, params);
+  return { ids: rows.slice(0, limit).map((r) => r.id), truncated: rows.length > limit };
+}
+
 /** Keyset-paginated iterator for exports (stable, memory-safe). */
 async function* iterateContacts(client, filters, batchSize = 1000) {
   let lastId = 0;
@@ -239,6 +248,7 @@ module.exports = {
   ELIGIBLE,
   SORTS,
   queryContacts,
+  matchingIds,
   iterateContacts,
   getContact,
   findByEmails,

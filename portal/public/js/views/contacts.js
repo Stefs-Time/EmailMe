@@ -12,9 +12,10 @@ export async function render(el, ctx) {
   const state = {
     q: q.get('q') || '', status: q.get('status') || '', list_id: q.get('list_id') || '', source: q.get('source') || '',
     consent_method: q.get('consent_method') || '', sort: q.get('sort') || 'created_at', dir: q.get('dir') || 'desc',
-    page: Number(q.get('page') || 1), per_page: 25,
+    page: Number(q.get('page') || 1), per_page: Number(q.get('per_page')) || 25,
   };
   const selected = new Set();
+  let lastTotal = 0;
   mount(el, loading());
   const { data: facets } = await get('/contacts/facets');
   const listName = new Map(facets.lists.map((l) => [l.id, l.name]));
@@ -30,7 +31,7 @@ export async function render(el, ctx) {
     </div>
     <div class="card">
       <div class="card-body border-bottom">
-        <form class="filter-bar" id="filters" role="search">
+        <form class="filter-bar" id="filters" role="search" aria-label="Filter contacts">
           <div class="input-group search"><span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
             <input class="form-control" name="q" placeholder="Email, name or company" value="${state.q}" aria-label="Search contacts"></div>
           <select class="form-select" name="status" aria-label="Status">
@@ -47,7 +48,7 @@ export async function render(el, ctx) {
     </div>`);
 
   async function load() {
-    ctx.setQuery({ ...state, per_page: undefined, page: state.page > 1 ? state.page : undefined,
+    ctx.setQuery({ ...state, per_page: state.per_page !== 25 ? state.per_page : undefined, page: state.page > 1 ? state.page : undefined,
       sort: state.sort !== 'created_at' ? state.sort : undefined, dir: state.dir !== 'desc' ? state.dir : undefined });
     const t = $('#table', el);
     try {
@@ -65,7 +66,7 @@ export async function render(el, ctx) {
         </tr></thead><tbody>
         ${r.data.map((c) => html`<tr class="row-link" data-id="${c.id}">
           ${canWrite ? html`<td class="ps-3"><input type="checkbox" class="form-check-input" data-sel="${c.id}" ${selected.has(c.id) ? raw('checked') : ''} aria-label="Select ${c.email}"></td>` : ''}
-          <td><div class="cell-email">${c.email}</div><div class="small text-muted-2">${c.name}${c.attribs?.company ? ` · ${c.attribs.company}` : ''}</div></td>
+          <td><a class="cell-email text-decoration-none" href="#/contacts/${c.id}">${c.email}</a><div class="small text-muted-2">${c.name}${c.attribs?.company ? ` · ${c.attribs.company}` : ''}</div></td>
           <td>${statusBadge(c.status)}</td>
           <td class="small">${(c.list_ids || []).slice(0, 2).map((id) => listName.get(id) || `#${id}`).join(', ')}${(c.list_ids || []).length > 2 ? ` +${c.list_ids.length - 2}` : ''}</td>
           <td class="small">${c.attribs?.source || '–'}</td>
@@ -75,7 +76,11 @@ export async function render(el, ctx) {
           <td class="small text-nowrap">${date(c.created_at)}</td>
         </tr>`)}
         </tbody></table></div>
-        ${pager(r.meta, (p) => { state.page = p; load(); })}`);
+        ${pager(r.meta, (p) => { state.page = p; load(); })}
+        <div class="d-flex align-items-center gap-2 px-3 pb-3 small"><label for="per-page" class="text-muted-2">Rows per page</label>
+          <select id="per-page" class="form-select form-select-sm w-auto">${options([25, 50, 100, 200].map((n) => ({ value: n, label: String(n) })), state.per_page)}</select>
+          ${canWrite && r.meta.total > r.data.length ? html`<button class="btn btn-sm btn-link ms-auto" id="select-matching">Select all ${num(Math.min(r.meta.total, 5000))} matching contacts</button>` : ''}</div>`);
+      lastTotal = r.meta.total;
     } catch (err) {
       errorToast(err);
       mount(t, html`<div class="p-3 text-danger">${err.message}</div>`);
@@ -168,9 +173,21 @@ export async function render(el, ctx) {
     }
     const cb = e.target.closest('[data-sel]');
     if (cb) { selected[cb.checked ? 'add' : 'delete'](Number(cb.dataset.sel)); renderBulk(); return; }
-    if (e.target.closest('td:first-child input')) return;
+    if (e.target.id === 'select-matching') {
+      const { page, per_page, sort, dir, ...f } = state; // eslint-disable-line no-unused-vars
+      get(`/contacts/ids${qs(f)}`).then((x) => {
+        x.data.ids.forEach((id) => selected.add(id));
+        renderBulk(); load();
+        if (x.data.truncated) toast(`Selected the first ${num(x.data.ids.length)} of ${num(lastTotal)}. Narrow the filter to act on the rest.`, 'warning');
+      }).catch(errorToast);
+      return;
+    }
+    if (e.target.closest('td:first-child input') || e.target.closest('a')) return;
     const row = e.target.closest('tr[data-id]');
     if (row) location.hash = `#/contacts/${row.dataset.id}`;
+  });
+  $('#table', el).addEventListener('change', (e) => {
+    if (e.target.id === 'per-page') { state.per_page = Number(e.target.value); state.page = 1; load(); }
   });
   $('#table', el).addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.target.matches('[data-sort]')) e.target.click();

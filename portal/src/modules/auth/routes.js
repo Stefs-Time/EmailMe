@@ -58,7 +58,7 @@ function authRoutes({ pool, config }) {
   r.post('/login', loginLimiter, async (req, res) => {
     const body = parse(z.object({ email: z.string().trim().min(3).max(254), password: z.string().min(1).max(200) }), req.body);
     const { rows } = await pool.query(
-      `SELECT id, email, name, role, status, password_hash, failed_logins, locked_until, password_changed_at
+      `SELECT id, email, name, role, status, password_hash, failed_logins, locked_until, password_changed_at, managed_by_env
          FROM portal.users WHERE LOWER(email) = LOWER($1)`,
       [body.email],
     );
@@ -73,11 +73,14 @@ function authRoutes({ pool, config }) {
     const ok = await argon2.verify(u.password_hash, body.password).catch(() => false);
     if (!ok || u.status !== 'active') {
       const failed = u.failed_logins + 1;
+      const lock = failed >= MAX_FAILED;
+      // On lock, reset the counter so the next window starts fresh.
       await pool.query(
-        `UPDATE portal.users SET failed_logins = $2,
-           locked_until = CASE WHEN $2 >= $3 THEN NOW() + ($4 || ' minutes')::interval ELSE locked_until END
-         WHERE id = $1`,
-        [u.id, failed >= MAX_FAILED ? 0 : failed, MAX_FAILED, String(LOCK_MINUTES)],
+        `UPDATE portal.users
+            SET failed_logins = $2::int,
+                locked_until = CASE WHEN $3::boolean THEN NOW() + make_interval(mins => $4::int) ELSE locked_until END
+          WHERE id = $1`,
+        [u.id, lock ? 0 : failed, lock, LOCK_MINUTES],
       );
       await audit(pool, req, 'auth.login_failed', { targetType: 'user', targetId: u.id });
       throw unauthorized('Incorrect email or password');
@@ -89,7 +92,7 @@ function authRoutes({ pool, config }) {
     req.session.pwdStamp = new Date(u.password_changed_at).getTime();
     const csrfToken = ensureCsrfToken(req);
     await pool.query('UPDATE portal.users SET failed_logins = 0, locked_until = NULL, last_login_at = NOW() WHERE id = $1', [u.id]);
-    req.user = { id: u.id, email: u.email, name: u.name, role: u.role };
+    req.user = { id: u.id, email: u.email, name: u.name, role: u.role, managedByEnv: u.managed_by_env };
     await audit(pool, req, 'auth.login', { targetType: 'user', targetId: u.id });
     res.json({ success: true, data: { user: { ...req.user, permissions: permissionsFor(u.role) }, csrfToken } });
   });
@@ -102,6 +105,9 @@ function authRoutes({ pool, config }) {
   });
 
   r.post('/change-password', requireAuth, async (req, res) => {
+    if (req.user.managedByEnv) {
+      throw validation('This account\'s password is set by the ADMIN_PASSWORD environment variable. Change it there (e.g. Railway → Variables) and redeploy.');
+    }
     const body = parse(z.object({ currentPassword: z.string().min(1).max(200), newPassword: passwordSchema }), req.body);
     const { rows } = await pool.query('SELECT password_hash FROM portal.users WHERE id = $1', [req.user.id]);
     if (!(await argon2.verify(rows[0].password_hash, body.currentPassword).catch(() => false))) {

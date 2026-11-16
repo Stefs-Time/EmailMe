@@ -34,7 +34,7 @@ export async function render(el, ctx) {
     ${d.alerts.length ? html`<div class="mb-3">${d.alerts.map((a) => html`<div class="alert-item ${a.severity}" role="alert">
         <i class="bi bi-${a.severity === 'critical' ? 'exclamation-octagon-fill' : a.severity === 'warning' ? 'exclamation-triangle-fill' : 'info-circle-fill'}"></i>
         <div class="flex-grow-1"><strong>${a.severity === 'critical' ? 'Action needed: ' : ''}</strong>${a.message}
-          <div class="small opacity-75">${a.occurrences > 1 ? `${num(a.occurrences)} occurrences · ` : ''}last seen ${ago(a.last_seen)}</div></div>
+          <div class="meta">${a.occurrences > 1 ? `${num(a.occurrences)} occurrences · ` : ''}last seen ${ago(a.last_seen)}</div></div>
         ${a.id && ctx.can('system:read') ? html`<button class="btn btn-sm btn-light" data-resolve="${a.id}">Dismiss</button>` : ''}
       </div>`)}</div>` : ''}
 

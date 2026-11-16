@@ -1,7 +1,6 @@
 'use strict';
 
 const pino = require('pino');
-const argon2 = require('argon2');
 const { loadConfig } = require('./config');
 const { createPool } = require('./db/pool');
 const { migrate } = require('./db/migrate');
@@ -9,21 +8,8 @@ const { ListmonkClient } = require('./lib/listmonk');
 const { SyncWorker } = require('./modules/sync/worker');
 const { recoverInterrupted } = require('./modules/imports/service');
 const { createApp } = require('./app');
-
-async function ensureFirstAdmin(pool, config, logger) {
-  const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM portal.users');
-  if (rows[0].n > 0) return;
-  if (!config.ADMIN_EMAIL || !config.ADMIN_PASSWORD) {
-    logger.warn('No portal users exist. Set ADMIN_EMAIL and ADMIN_PASSWORD (or run `npm run create-admin`) to create the first administrator.');
-    return;
-  }
-  const hash = await argon2.hash(config.ADMIN_PASSWORD, { type: argon2.argon2id });
-  await pool.query(
-    `INSERT INTO portal.users (email, name, role, password_hash) VALUES ($1, 'Administrator', 'admin', $2)`,
-    [config.ADMIN_EMAIL.toLowerCase(), hash],
-  );
-  logger.info({ email: config.ADMIN_EMAIL }, 'created first administrator; remove ADMIN_PASSWORD from the environment now');
-}
+const { ensureEnvAdmin, resolveListmonkCredentials, withRetry } = require('./lib/startup');
+const { raiseAlert, resolveAlert } = require('./lib/audit');
 
 async function main() {
   let config;
@@ -42,13 +28,13 @@ async function main() {
   pool.on('error', (err) => logger.error({ err }, 'idle database client error'));
 
   await migrate(pool, logger);
-  await ensureFirstAdmin(pool, config, logger);
+  await ensureEnvAdmin(pool, config, logger);
   await recoverInterrupted(pool);
 
   const lm = new ListmonkClient({
     baseUrl: config.LISTMONK_URL,
-    apiUser: config.LISTMONK_API_USER,
-    apiToken: config.LISTMONK_API_TOKEN,
+    apiUser: null,
+    apiToken: null,
     timeoutMs: config.LISTMONK_TIMEOUT_MS,
     logger,
   });
@@ -67,7 +53,28 @@ async function main() {
   server.requestTimeout = 10 * 60 * 1000; // large exports
   server.headersTimeout = 65 * 1000;
   server.keepAliveTimeout = 61 * 1000;
-  sync.start();
+
+  // Resolve listmonk API credentials in the background so the health check
+  // passes while listmonk is still starting; the sync worker waits for them.
+  const connectListmonk = async () => {
+    const creds = await withRetry(() => resolveListmonkCredentials(pool, config, logger), logger, { attempts: 100, delayMs: 5000 });
+    lm.setCredentials(creds.user, creds.token);
+    await resolveAlert(pool, 'listmonk_credentials');
+    logger.info({ user: creds.user, source: creds.source }, 'connected to listmonk API');
+  };
+  sync.onAuthFailure = async () => {
+    if (!config.LISTMONK_ADMIN_USER) {
+      await raiseAlert(pool, 'listmonk_credentials', 'critical',
+        'listmonk rejected the portal API token. Update LISTMONK_API_TOKEN, or set LISTMONK_ADMIN_USER / LISTMONK_ADMIN_PASSWORD so MailHarbor can renew it.');
+      return;
+    }
+    lm.setCredentials(null, null);
+    await connectListmonk();
+  };
+  track(connectListmonk().then(() => sync.start()).catch(async (err) => {
+    logger.error({ err: err.message }, 'could not connect to listmonk');
+    await raiseAlert(pool, 'listmonk_credentials', 'critical', `MailHarbor cannot connect to listmonk: ${err.message}`).catch(() => {});
+  }));
 
   let shuttingDown = false;
   const shutdown = async (signal) => {

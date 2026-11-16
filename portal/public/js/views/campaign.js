@@ -23,7 +23,7 @@ export async function render(el, ctx, [id]) {
   mount(el, html`<nav aria-label="breadcrumb"><ol class="breadcrumb small"><li class="breadcrumb-item"><a href="#/campaigns">Campaign reports</a></li><li class="breadcrumb-item active">${c.name}</li></ol></nav>
     <div class="page-head"><div><h1 class="d-flex gap-2 align-items-center flex-wrap">${c.name} ${campStatus(c.status)}</h1>
       <p>Subject: “${c.subject}” · Lists: ${c.lists.join(', ') || '–'} · Started ${datetime(c.started_at)}</p></div>
-      <a class="btn btn-outline-primary" href="${data.listmonkUrl}" target="_blank" rel="noopener">Open in listmonk <i class="bi bi-box-arrow-up-right small"></i></a></div>
+      ${ctx.can('campaigns:compose') ? html`<a class="btn btn-outline-primary" href="${data.listmonkUrl}" target="_blank" rel="noopener">Open in listmonk <i class="bi bi-box-arrow-up-right small" aria-hidden="true"></i><span class="visually-hidden"> (new tab)</span></a>` : ''}</div>
     ${['running', 'paused'].includes(c.status) ? html`<div class="card mb-3"><div class="card-body"><div class="d-flex justify-content-between small mb-1"><span>Sending progress</span><span>${num(c.sent)} / ${num(c.targeted)}</span></div>
       <div class="hbar"><span data-w="${progress}"></span></div></div></div>` : ''}
     <div class="row g-3 mb-3">${tiles.map(([l, v, icon, rate]) => html`<div class="col-6 col-md-4 col-xl"><div class="card kpi">

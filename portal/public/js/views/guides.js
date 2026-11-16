@@ -139,7 +139,25 @@ const G = {
       <tr><td><strong>Viewer</strong></td><td>See the dashboard, contacts, lists and reports. Cannot change anything or export personal data.</td></tr>
       <tr><td><strong>Manager</strong></td><td>Everything a viewer can, plus add/edit contacts, manage lists, import, export, unsubscribe, suppress and resolve reviews.</td></tr>
       <tr><td><strong>Administrator</strong></td><td>Everything, plus manage users, lift suppressions, erase contacts, view the audit log.</td></tr></tbody></table>
-    <p>Accounts lock for 15 minutes after 10 wrong passwords. Administrators reset passwords under <a href="#/users">Users</a>. listmonk logins are separate and are managed in listmonk → Users.</p>`)],
+    <p>Accounts lock for 15 minutes after 10 wrong passwords. Administrators reset passwords under <a href="#/users">Users</a>; the environment-managed administrator is reset by changing <code>ADMIN_PASSWORD</code> (see <a href="#/guides/admin">For administrators</a>). listmonk logins are separate and are managed in listmonk → Users.</p>`)],
+
+  admin: ['For administrators', raw(`
+    <h2>For administrators</h2>
+    <h3>The environment-managed administrator</h3>
+    <p>The hosting variables <code>ADMIN_EMAIL</code> and <code>ADMIN_PASSWORD</code> define a break-glass administrator. On every start
+    MailHarbor makes sure this account exists, is an active administrator and uses that password. It is marked
+    <em>Environment-managed</em> under <a href="#/users">Users</a>; its role, status and password can only be changed through the variables.</p>
+    <ul><li><strong>Locked out?</strong> Change <code>ADMIN_PASSWORD</code> (Railway → MailHarbor service → Variables) and redeploy; sign in with the new password.</li>
+      <li><strong>Hand over ownership:</strong> set <code>ADMIN_EMAIL</code> to the new owner's address. The previous account becomes a normal administrator you can then disable.</li>
+      <li>Create personal accounts for everyone else under <a href="#/users">Users</a>. Do not share the environment-managed login.</li></ul>
+    <h3>Connection to listmonk</h3>
+    <p>MailHarbor creates its own restricted listmonk API user (<code>mailharbor</code>) with the listmonk admin credentials you provide, and
+    renews it automatically if it is deleted. Do not give that API user extra permissions in listmonk.</p>
+    <h3>Backups</h3>
+    <p><a href="#/system">System health</a> shows the last backup and raises an alert if it failed or is overdue. Restoring is described in the administrator guide (<code>docs/ADMIN_GUIDE.md</code>).
+    Test a restore at least once a quarter.</p>
+    <h3>Go-live checklist</h3>
+    <p>Before the first campaign, every critical item on <a href="#/system">System health</a> must be green, and SPF, DKIM and DMARC must be set for your sending domain.</p>`)],
 
   faq: ['Troubleshooting', raw(`
     <h2>Troubleshooting & FAQ</h2>

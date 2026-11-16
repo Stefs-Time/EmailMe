@@ -12,7 +12,7 @@ export async function render(el, ctx) {
     ctx.refreshBadges();
     if (!rows.length) { mount($('#t', el), empty('check2-all', 'Nothing to review', 'Held contacts will appear here.')); return; }
     mount($('#t', el), html`<div class="table-responsive"><table class="table align-middle">
-      <thead><tr><th>Contact</th><th>Why it was held</th><th>Held since</th><th></th></tr></thead><tbody>
+      <thead><tr><th>Contact</th><th>Why it was held</th><th>Held since</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
       ${rows.map((r) => html`<tr><td><a class="cell-email" href="#/contacts/${r.subscriber_id}">${r.email}</a><div class="small text-muted-2">${r.name}</div></td>
         <td class="small">${r.reason}${r.details?.code ? html` <span class="mono">${r.details.code}</span>` : ''}</td>
         <td class="small text-nowrap">${datetime(r.created_at)}</td>

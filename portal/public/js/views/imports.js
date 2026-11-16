@@ -12,7 +12,7 @@ export async function render(el, ctx) {
     const r = await get(`/imports?page=${page}`);
     if (!r.data.length) { mount($('#t', el), empty('cloud-arrow-up', 'No imports yet')); return; }
     mount($('#t', el), html`<div class="table-responsive"><table class="table table-hover align-middle">
-      <thead><tr><th>File</th><th>Status</th><th class="num">Rows</th><th class="num">Created</th><th class="num">Added to lists</th><th class="num">Excluded</th><th>By</th><th>When</th><th></th></tr></thead><tbody>
+      <thead><tr><th>File</th><th>Status</th><th class="num">Rows</th><th class="num">Created</th><th class="num">Added to lists</th><th class="num">Excluded</th><th>By</th><th>When</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
       ${r.data.map((i) => {
         const res = i.summary?.result || {};
         const excluded = ['suppressed', 'invalid_email', 'duplicate', 'missing_consent', 'invalid_data', 'failed'].reduce((a, k) => a + (res[k] || 0), 0);

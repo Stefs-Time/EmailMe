@@ -28,7 +28,7 @@ body { background: var(--mh-bg); }
 
 .btn-primary { --bs-btn-bg: #1f4e8c; --bs-btn-border-color: #1f4e8c; --bs-btn-hover-bg: #16365f; --bs-btn-hover-border-color: #16365f; --bs-btn-active-bg: #12304f; }
 .btn-outline-primary { --bs-btn-color: #1f4e8c; --bs-btn-border-color: #1f4e8c; --bs-btn-hover-bg: #1f4e8c; --bs-btn-hover-border-color: #1f4e8c; }
-.btn-teal { --bs-btn-color: #fff; --bs-btn-bg: var(--mh-teal); --bs-btn-border-color: var(--mh-teal); --bs-btn-hover-color: #fff; --bs-btn-hover-bg: #0b7469; --bs-btn-hover-border-color: #0b7469; }
+.btn-teal { --bs-btn-color: #fff; --bs-btn-bg: #0b7469; --bs-btn-border-color: #0b7469; --bs-btn-hover-color: #fff; --bs-btn-hover-bg: #095c53; --bs-btn-hover-border-color: #095c53; --bs-btn-active-bg: #084f47; --bs-btn-disabled-bg: #0b7469; }
 .form-control:focus, .form-select:focus, .btn:focus-visible, a:focus-visible {
   border-color: #6d97cc; box-shadow: 0 0 0 .2rem rgba(31, 78, 140, .25); outline: none;
 }
@@ -46,7 +46,7 @@ body { background: var(--mh-bg); }
 .sidebar .brand { padding: 1.1rem 1.25rem .9rem; border-bottom: 1px solid var(--mh-border); }
 .sidebar .brand img { height: 34px; width: auto; }
 .sidebar .org { font-size: .75rem; color: var(--mh-muted); margin-top: .35rem; letter-spacing: .02em; }
-.nav-section { padding: .9rem .75rem .25rem; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: #8a95a5; font-weight: 600; }
+.nav-section { padding: .9rem .75rem .25rem; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; color: #5f6b7a; font-weight: 600; }
 .side-nav a {
   display: flex; align-items: center; gap: .7rem; padding: .5rem .85rem; margin: .1rem .5rem; border-radius: .5rem;
   color: #384556; text-decoration: none; font-weight: 500;
@@ -101,7 +101,7 @@ body { background: var(--mh-bg); }
 .s-blocklisted { color: #2f3a48; background: #e4e7ec; }
 .s-pending_review { color: #a2470d; background: #fff0e5; }
 .s-inactive { color: #5b6472; background: #f1f2f4; }
-.s-no_lists { color: #6b7686; background: #f4f5f7; border-color: #e3e6ea; }
+.s-no_lists { color: #4f5a69; background: #f4f5f7; border-color: #e3e6ea; }
 .bg-s-active { background: #1f9d63; } .bg-s-unconfirmed { background: #6c8fb8; } .bg-s-soft_bounced { background: #d9a21b; }
 .bg-s-hard_bounced { background: #d64535; } .bg-s-complaint { background: #b23a7e; } .bg-s-unsubscribed { background: #8d96a3; }
 .bg-s-blocklisted { background: #3d4756; } .bg-s-pending_review { background: #e07a2f; } .bg-s-inactive { background: #b5bcc6; }
@@ -116,7 +116,7 @@ body { background: var(--mh-bg); }
 /* Tables */
 .table { --bs-table-bg: transparent; margin-bottom: 0; }
 .table > :not(caption) > * > * { padding: .65rem .8rem; border-bottom-color: #edf0f4; }
-.table thead th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #6c7787; font-weight: 600; background: #f8fafc; white-space: nowrap; }
+.table thead th { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: #4f5a69; font-weight: 600; background: #f8fafc; white-space: nowrap; }
 .table-hover tbody tr:hover { --bs-table-hover-bg: #f6f9fc; }
 .table tbody tr.row-link { cursor: pointer; }
 th.sortable { cursor: pointer; user-select: none; }
@@ -201,3 +201,17 @@ th.sorted { color: var(--mh-navy); }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .82rem; }
 .form-control, .form-select { background-color: #fff; }
 .form-control:disabled, .form-select:disabled { background-color: #eef1f5; }
+
+/* Accessibility (audit): AA contrast for Bootstrap utility colours used on light surfaces */
+.text-danger { color: #b42318 !important; }
+.btn-light.text-danger { color: #b42318 !important; }
+.btn-outline-secondary { --bs-btn-color: #475467; --bs-btn-border-color: #98a2b3; --bs-btn-hover-bg: #475467; --bs-btn-hover-border-color: #475467; }
+.alert-item .meta { font-size: .8rem; margin-top: .15rem; }
+.pager-label { pointer-events: none; color: #344054 !important; background: #fff; border-color: #98a2b3 !important; }
+.table-responsive:focus-visible { outline: 2px solid #6d97cc; outline-offset: 2px; }
+.topbar .quick-search { max-width: 360px; }
+.sidebar-backdrop { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(16, 24, 40, .35); z-index: 1035; display: none; }
+.sidebar.open + .sidebar-backdrop { display: block; }
+.badge-managed { background: #eaf0f7; color: #1f3d63; font-weight: 600; }
+
+code { color: #22303f; background: #eef1f5; padding: .1rem .35rem; border-radius: .3rem; font-size: .85em; }

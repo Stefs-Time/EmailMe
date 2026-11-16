@@ -85,6 +85,11 @@ services:
       ORG_NAME: ${ORG_NAME:-MailHarbor}
       ADMIN_EMAIL: ${PORTAL_ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${PORTAL_ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${PORTAL_ADMIN_NAME:-Administrator}
+      # Lets the portal create/renew its own listmonk API user if no token is set.
+      LISTMONK_ADMIN_USER: ${LISTMONK_ADMIN_USER:-admin}
+      LISTMONK_ADMIN_PASSWORD: ${LISTMONK_ADMIN_PASSWORD}
+      BACKUP_STALE_HOURS: "26"
       TRUST_PROXY: "1"
       TZ: ${TZ:-Africa/Johannesburg}
     networks: [internal]
@@ -108,24 +113,31 @@ services:
     networks: [internal, egress]
 
   backup:
-    image: postgres:17-alpine
+    # Same image as the portal; runs scripts/backup.js daily (pg_dump, verify,
+    # retention, heartbeat shown on System health). Optional S3 copy: add the
+    # BACKUP_S3_* variables from .env.example.
+    image: mailharbor-portal:latest
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
+    command: ["node", "scripts/backup.js", "--loop"]
+    user: "0:0"
     environment:
-      PGHOST: db
-      PGUSER: ${POSTGRES_USER:-listmonk}
-      PGPASSWORD: ${POSTGRES_PASSWORD}
-      PGDATABASE: ${POSTGRES_DB:-listmonk}
+      BACKUP_DATABASE_URL: postgres://${POSTGRES_USER:-listmonk}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-listmonk}
+      BACKUP_DIR: /backups
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
       BACKUP_HOUR: ${BACKUP_HOUR:-2}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      BACKUP_S3_REGION: ${BACKUP_S3_REGION:-auto}
+      BACKUP_S3_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID:-}
+      BACKUP_S3_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY:-}
       TZ: ${TZ:-Africa/Johannesburg}
-    entrypoint: ["/bin/sh", "/scripts/backup-loop.sh"]
     volumes:
-      - ./deploy/backup:/scripts:ro
       - ./backups:/backups
-    networks: [internal]
+    # egress only needed for an S3 copy
+    networks: [internal, egress]
 
 networks:
   internal:

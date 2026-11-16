@@ -7,7 +7,7 @@ export async function render(el, ctx) {
   mount(el, html`<div class="page-head"><div><h1>Campaign reports</h1><p>Delivery, bounces, unsubscribes and engagement for every campaign sent from listmonk.</p></div>
     <div class="d-flex gap-2 flex-wrap">
       ${ctx.can('exports:read') ? html`<button class="btn btn-outline-primary" id="csv"><i class="bi bi-download me-1"></i>Export report</button>` : ''}
-      <a class="btn btn-primary" href="${lm}/admin/campaigns/new" target="_blank" rel="noopener"><i class="bi bi-send me-1"></i>New campaign <i class="bi bi-box-arrow-up-right small"></i></a></div></div>
+      ${ctx.can('campaigns:compose') ? html`<a class="btn btn-primary" href="${lm}/admin/campaigns/new" target="_blank" rel="noopener"><i class="bi bi-send me-1"></i>New campaign <i class="bi bi-box-arrow-up-right small" aria-hidden="true"></i><span class="visually-hidden"> (opens listmonk in a new tab)</span></a>` : ''}</div></div>
     <div class="card"><div class="card-body border-bottom"><form class="filter-bar" id="f">
       <input class="form-control search" name="q" placeholder="Search name or subject" aria-label="Search campaigns">
       <select class="form-select" name="status" aria-label="Status">${options(['draft', 'scheduled', 'running', 'paused', 'cancelled', 'finished'], '', { blank: 'All statuses' })}</select>

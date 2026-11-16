@@ -36,8 +36,15 @@ const schema = z.object({
   // deep links such as "Create campaign".
   LISTMONK_URL: z.string().url(),
   LISTMONK_PUBLIC_URL: z.string().url().optional(),
-  LISTMONK_API_USER: z.string().min(1),
-  LISTMONK_API_TOKEN: z.string().min(1),
+  LISTMONK_API_USER: z.string().regex(/^[a-zA-Z0-9_.-]{2,50}$/).default('mailharbor'),
+  // Either give a token, or give listmonk admin credentials and the portal
+  // creates its own least-privilege API user at startup (Railway friendly).
+  LISTMONK_API_TOKEN: z.string().min(1).optional(),
+  LISTMONK_ADMIN_USER: z.string().min(1).optional(),
+  LISTMONK_ADMIN_PASSWORD: z.string().min(1).optional(),
+  // With admin credentials: once, apply the scope's bounce policy and the
+  // List-Unsubscribe header, and set listmonk's root URL to LISTMONK_PUBLIC_URL.
+  LISTMONK_APPLY_RECOMMENDED: bool(true),
   LISTMONK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
 
   // Business rules.
@@ -50,13 +57,32 @@ const schema = z.object({
   ORG_NAME: z.string().default('MailHarbor'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
-  // Optional first-run admin bootstrap (only used when no portal users exist).
-  ADMIN_EMAIL: z.string().email().optional(),
-  ADMIN_PASSWORD: z.string().min(12).optional(),
+  // Break-glass administrator controlled by environment variables. When set,
+  // this account is created or repaired on every start: always an active admin
+  // whose password equals ADMIN_PASSWORD. Change the variable to rotate it.
+  ADMIN_EMAIL: z.string().trim().toLowerCase().email().optional(),
+  ADMIN_PASSWORD: z.string().min(12, 'ADMIN_PASSWORD must be at least 12 characters')
+    .refine((p) => /[a-zA-Z]/.test(p) && /[0-9]/.test(p), 'ADMIN_PASSWORD needs letters and at least one number')
+    .optional(),
+  ADMIN_NAME: z.string().trim().min(1).max(120).default('Administrator'),
+
+  // Alert when the last successful backup is older than this (0 = no check).
+  BACKUP_STALE_HOURS: z.coerce.number().min(0).max(24 * 31).default(0),
+}).superRefine((c, ctx) => {
+  if (!c.LISTMONK_API_TOKEN && !(c.LISTMONK_ADMIN_USER && c.LISTMONK_ADMIN_PASSWORD)) {
+    ctx.addIssue({ code: 'custom', path: ['LISTMONK_API_TOKEN'],
+      message: 'Set LISTMONK_API_TOKEN, or LISTMONK_ADMIN_USER and LISTMONK_ADMIN_PASSWORD so the portal can create its own API user' });
+  }
+  if (Boolean(c.ADMIN_EMAIL) !== Boolean(c.ADMIN_PASSWORD)) {
+    ctx.addIssue({ code: 'custom', path: ['ADMIN_PASSWORD'], message: 'Set both ADMIN_EMAIL and ADMIN_PASSWORD, or neither' });
+  }
 });
 
 function loadConfig(env = process.env) {
-  const parsed = schema.safeParse(env);
+  // Platforms such as Railway may define variables as empty strings; treat
+  // those as unset so defaults and "optional" behave as expected.
+  const clean = Object.fromEntries(Object.entries(env).filter(([, v]) => v !== ''));
+  const parsed = schema.safeParse(clean);
   if (!parsed.success) {
     const lines = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`);
     const err = new Error(`Invalid configuration:\n${lines.join('\n')}`);

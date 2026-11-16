@@ -12,12 +12,24 @@ const { upstream, AppError } = require('./errors');
 class ListmonkClient {
   constructor({ baseUrl, apiUser, apiToken, timeoutMs = 15000, logger }) {
     this.baseUrl = baseUrl.replace(/\/+$/, '');
-    this.auth = `token ${apiUser}:${apiToken}`;
+    this.setCredentials(apiUser, apiToken);
     this.timeoutMs = timeoutMs;
     this.log = logger;
   }
 
+  /** Credentials can arrive after startup (self-bootstrap on Railway). */
+  setCredentials(apiUser, apiToken) {
+    this.auth = apiUser && apiToken ? `token ${apiUser}:${apiToken}` : null;
+  }
+
+  get ready() {
+    return Boolean(this.auth);
+  }
+
   async request(method, path, { query, body, form, timeoutMs } = {}) {
+    if (!this.auth && path !== '/api/health') {
+      throw upstream('The connection to listmonk is still being set up. Try again in a minute.');
+    }
     const url = new URL(this.baseUrl + path);
     if (query) {
       for (const [k, v] of Object.entries(query)) {
@@ -26,7 +38,8 @@ class ListmonkClient {
         else url.searchParams.set(k, String(v));
       }
     }
-    const headers = { Authorization: this.auth, Accept: 'application/json' };
+    const headers = { Accept: 'application/json' };
+    if (this.auth) headers.Authorization = this.auth;
     let payload;
     if (form) {
       payload = form;

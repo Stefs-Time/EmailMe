@@ -12,7 +12,7 @@ export async function render(el, ctx) {
     lists = (await get('/lists')).data;
     if (!lists.length) { mount($('#t', el), empty('card-list', 'No lists yet', 'Create a list, then import contacts into it.')); return; }
     mount($('#t', el), html`<div class="table-responsive"><table class="table table-hover align-middle">
-      <thead><tr><th>List</th><th>Opt-in</th><th class="num">Members</th><th class="num">Confirmed</th><th class="num">Unconfirmed</th><th class="num">Unsubscribed</th><th class="num">Will receive</th><th>Created</th><th></th></tr></thead><tbody>
+      <thead><tr><th>List</th><th>Opt-in</th><th class="num">Members</th><th class="num">Confirmed</th><th class="num">Unconfirmed</th><th class="num">Unsubscribed</th><th class="num">Will receive</th><th>Created</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
       ${lists.map((l) => html`<tr>
         <td><a class="fw-semibold" href="#/contacts?list_id=${l.id}">${l.name}</a>
           <div class="small text-muted-2">${l.type === 'public' ? 'Public (shown on subscription forms)' : 'Private'}${l.description ? ` · ${l.description}` : ''}</div></td>

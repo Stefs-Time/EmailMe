@@ -23,7 +23,7 @@ export async function render(el, ctx) {
     rows = r.data;
     if (!rows.length) { mount($('#t', el), empty('shield-check', 'Nothing suppressed', state.q ? 'No match for that search.' : 'Bounced, complained and unsubscribed addresses will appear here automatically.')); return; }
     mount($('#t', el), html`<div class="table-responsive"><table class="table table-hover align-middle">
-      <thead><tr><th>Email</th><th>Reason</th><th>Source</th><th>Suppressed</th><th>By</th><th></th></tr></thead><tbody>
+      <thead><tr><th>Email</th><th>Reason</th><th>Source</th><th>Suppressed</th><th>By</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
       ${rows.map((s) => html`<tr><td class="cell-email">${s.email || html`<span class="text-muted-2">[erased – hash only]</span>`}
           ${s.subscriber_id ? html`<a class="small ms-1" href="#/contacts/${s.subscriber_id}">view</a>` : ''}
           ${s.lifted_at ? html`<div class="small text-success">Lifted ${datetime(s.lifted_at)}: ${s.lift_reason}</div>` : ''}</td>

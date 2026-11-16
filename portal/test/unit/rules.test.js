@@ -93,9 +93,29 @@ test('dates and consent methods are normalised', () => {
 test('configuration fails fast with clear messages', () => {
   assert.throws(() => loadConfig({}), /DATABASE_URL[\s\S]*SESSION_SECRET/);
   const c = loadConfig({ DATABASE_URL: 'postgres://x', SESSION_SECRET: 'x'.repeat(32), LISTMONK_URL: 'http://lm:9000/',
-    LISTMONK_API_USER: 'u', LISTMONK_API_TOKEN: 't', GLOBAL_UNSUBSCRIBE: 'false' });
+    LISTMONK_API_USER: 'mailharbor', LISTMONK_API_TOKEN: 't', GLOBAL_UNSUBSCRIBE: 'false' });
   assert.equal(c.LISTMONK_URL, 'http://lm:9000');
   assert.equal(c.LISTMONK_PUBLIC_URL, 'http://lm:9000');
   assert.equal(c.GLOBAL_UNSUBSCRIBE, false);
   assert.equal(c.PORT, 3000);
+});
+
+test('configuration: Railway-style variables (empty strings, self-bootstrap, env admin)', () => {
+  const base = { DATABASE_URL: 'postgres://x', SESSION_SECRET: 'x'.repeat(32), LISTMONK_URL: 'http://lm:9000' };
+  assert.throws(() => loadConfig(base), /LISTMONK_API_TOKEN/);
+  const c = loadConfig({ ...base, LISTMONK_API_TOKEN: '', LISTMONK_ADMIN_USER: 'admin', LISTMONK_ADMIN_PASSWORD: 'p', ADMIN_EMAIL: '' });
+  assert.equal(c.LISTMONK_API_TOKEN, undefined);
+  assert.equal(c.LISTMONK_API_USER, 'mailharbor');
+  assert.equal(c.ADMIN_EMAIL, undefined);
+  assert.throws(() => loadConfig({ ...base, LISTMONK_API_TOKEN: 't', ADMIN_EMAIL: 'a@b.co' }), /both ADMIN_EMAIL and ADMIN_PASSWORD/);
+  assert.throws(() => loadConfig({ ...base, LISTMONK_API_TOKEN: 't', ADMIN_EMAIL: 'a@b.co', ADMIN_PASSWORD: 'onlyletterslong' }), /letters and at least one number/);
+  assert.equal(loadConfig({ ...base, LISTMONK_API_TOKEN: 't', ADMIN_EMAIL: 'A@B.co', ADMIN_PASSWORD: 'Strong-pass-123' }).ADMIN_EMAIL, 'a@b.co');
+});
+
+test('secrets: encrypted values round-trip and fail closed with another key', () => {
+  const { encrypt, decrypt } = require('../../src/lib/secrets');
+  const v = encrypt('k'.repeat(32), 'token-123');
+  assert.ok(!v.includes('token-123'));
+  assert.equal(decrypt('k'.repeat(32), v), 'token-123');
+  assert.equal(decrypt('z'.repeat(32), v), null);
 });

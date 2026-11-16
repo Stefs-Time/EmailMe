@@ -25,6 +25,8 @@ const PERMISSIONS = {
   'users:manage': ['admin'],
   'audit:read': ['admin'],
   'system:read': ['manager', 'admin'],
+  // Show "write a campaign in listmonk" links (listmonk has its own logins).
+  'campaigns:compose': ['manager', 'admin'],
 };
 
 function can(role, permission) {
@@ -38,7 +40,7 @@ function loadUser(pool) {
     const id = req.session?.userId;
     if (!id) return next();
     const { rows } = await pool.query(
-      `SELECT id, email, name, role, status, password_changed_at FROM portal.users WHERE id = $1`,
+      `SELECT id, email, name, role, status, password_changed_at, managed_by_env FROM portal.users WHERE id = $1`,
       [id],
     );
     const u = rows[0];
@@ -48,7 +50,7 @@ function loadUser(pool) {
       await new Promise((r) => req.session.regenerate(() => r()));
       return next();
     }
-    req.user = { id: u.id, email: u.email, name: u.name, role: u.role };
+    req.user = { id: u.id, email: u.email, name: u.name, role: u.role, managedByEnv: u.managed_by_env };
     next();
   };
 }

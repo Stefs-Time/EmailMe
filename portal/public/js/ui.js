@@ -30,7 +30,23 @@ export function mount(el, content) {
 }
 
 /** CSP forbids inline style attributes; widths are applied via the CSSOM. */
+let labelSeq = 0;
+/** Associates each .form-label with the control that follows it (WCAG 1.3.1 / 4.1.2). */
+function linkLabels(root) {
+  $$('label.form-label:not([for])', root).forEach((l) => {
+    let n = l.nextElementSibling;
+    while (n && !n.matches('input,select,textarea') && !n.querySelector?.('input,select,textarea')) n = n.nextElementSibling;
+    const control = n && (n.matches('input,select,textarea') ? n : n.querySelector('input,select,textarea'));
+    if (!control) return;
+    if (!control.id) { labelSeq += 1; control.id = `fld-${labelSeq}`; }
+    l.htmlFor = control.id;
+  });
+}
+
 export function applyWidths(root) {
+  linkLabels(root);
+  // Scrollable tables must be reachable by keyboard (WCAG 2.1.1).
+  $$('.table-responsive', root).forEach((n) => { n.tabIndex = 0; if (!n.hasAttribute('aria-label')) n.setAttribute('aria-label', 'Table (scrollable)'); });
   $$('[data-w]', root).forEach((n) => { n.style.width = `${Math.max(0, Math.min(100, Number(n.dataset.w)))}%`; });
   $$('[data-bg]', root).forEach((n) => { n.style.background = n.dataset.bg; });
 }
@@ -114,7 +130,7 @@ export function formModal({ title, body, submitLabel = 'Save', danger = false, s
   const content = $('#modal-content');
   $('#modal .modal-dialog').className = `modal-dialog modal-dialog-centered modal-dialog-scrollable ${size}`;
   mount(content, html`<form novalidate>
-    <div class="modal-header"><h2 class="modal-title fs-5">${title}</h2>
+    <div class="modal-header"><h2 class="modal-title fs-5" id="modal-title">${title}</h2>
       <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
     <div class="modal-body">${body}<div class="alert alert-danger d-none mt-3 mb-0" data-error></div></div>
     <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
@@ -185,7 +201,7 @@ export function pager(meta, onPage) {
     <div class="btn-group btn-group-sm">
       <button class="btn btn-outline-secondary" data-page="1" ${p <= 1 ? raw('disabled') : ''} aria-label="First page"><i class="bi bi-chevron-double-left"></i></button>
       <button class="btn btn-outline-secondary" data-page="${p - 1}" ${p <= 1 ? raw('disabled') : ''} aria-label="Previous page"><i class="bi bi-chevron-left"></i></button>
-      <span class="btn btn-outline-secondary disabled">Page ${p} of ${num(pages)}</span>
+      <span class="btn btn-outline-secondary pager-label" aria-live="polite">Page ${p} of ${num(pages)}</span>
       <button class="btn btn-outline-secondary" data-page="${p + 1}" ${p >= pages ? raw('disabled') : ''} aria-label="Next page"><i class="bi bi-chevron-right"></i></button>
       <button class="btn btn-outline-secondary" data-page="${pages}" ${p >= pages ? raw('disabled') : ''} aria-label="Last page"><i class="bi bi-chevron-double-right"></i></button>
     </div></div>`;

@@ -17,7 +17,7 @@ function userRoutes({ pool }) {
 
   r.get('/', async (_req, res) => {
     const { rows } = await pool.query(
-      `SELECT id, email, name, role, status, last_login_at, created_at FROM portal.users ORDER BY name`,
+      `SELECT id, email, name, role, status, managed_by_env, last_login_at, created_at FROM portal.users ORDER BY name`,
     );
     res.json({ success: true, data: rows });
   });
@@ -61,8 +61,12 @@ function userRoutes({ pool }) {
     if (id === req.user.id && (body.role && body.role !== 'admin' || body.status === 'disabled')) {
       throw badRequest('You cannot demote or disable your own account');
     }
-    const { rows: existing } = await pool.query('SELECT id, role, status FROM portal.users WHERE id = $1', [id]);
+    const { rows: existing } = await pool.query('SELECT id, role, status, managed_by_env FROM portal.users WHERE id = $1', [id]);
     if (!existing.length) throw notFound('User not found');
+    const ex = existing[0];
+    if (ex.managed_by_env && ((body.role && body.role !== ex.role) || (body.status && body.status !== ex.status) || body.password)) {
+      throw badRequest('This administrator is managed by the ADMIN_EMAIL / ADMIN_PASSWORD environment variables. Change those variables instead.');
+    }
 
     // Keep at least one active admin.
     if (existing[0].role === 'admin' && ((body.role && body.role !== 'admin') || body.status === 'disabled')) {
@@ -89,7 +93,7 @@ function userRoutes({ pool }) {
     if (!sets.length) throw badRequest('Nothing to update');
     const { rows } = await pool.query(
       `UPDATE portal.users SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1
-       RETURNING id, email, name, role, status, last_login_at, created_at`,
+       RETURNING id, email, name, role, status, managed_by_env, last_login_at, created_at`,
       params,
     );
     const changed = Object.keys(body).map((k) => (k === 'password' ? 'password(reset)' : k));

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 50" role="img" aria-label="MailHarbor">
+  <rect x="1" y="1" width="48" height="48" rx="11" fill="#16365f"/>
+  <path d="M11 17.5c0-1.5 1.2-2.6 2.6-2.6h22.8c1.4 0 2.6 1.1 2.6 2.6v11.4c0 1.5-1.2 2.6-2.6 2.6H13.6c-1.4 0-2.6-1.1-2.6-2.6z" fill="none" stroke="#fff" stroke-width="2.5"/>
+  <path d="M12 16.7 25 25.6l13-8.9" fill="none" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M9 37.5c3 0 3-2 6-2s3 2 6 2 3-2 6-2 3 2 6 2 3-2 6-2 3 2 6 2" fill="none" stroke="#2bb3a3" stroke-width="2.5" stroke-linecap="round"/>
+  <text x="62" y="33.5" font-family="Inter, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="25" font-weight="700" fill="#16365f" letter-spacing="-0.4">Mail<tspan fill="#0f8f82">Harbor</tspan></text>
+</svg>

@@ -1,0 +1,139 @@
+# MailHarbor + listmonk — self-hosted stack (Ubuntu Server + Docker Compose).
+#
+#   cp .env.example .env   # fill in every value
+#   docker compose up -d
+#
+# Services:
+#   caddy    - HTTPS reverse proxy (automatic Let's Encrypt certificates)
+#   portal   - MailHarbor (contacts, imports, exports, suppression, reports)
+#   listmonk - campaign sending engine (pinned version; upgrade deliberately)
+#   db       - PostgreSQL (internal network only, never published)
+#   backup   - nightly pg_dump with retention
+#
+# Only ports 80 and 443 are exposed to the internet.
+
+name: mailharbor
+
+x-db-env: &db-env
+  POSTGRES_DB: ${POSTGRES_DB:-listmonk}
+  POSTGRES_USER: ${POSTGRES_USER:-listmonk}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      <<: *db-env
+      PORTAL_DB_PASSWORD: ${PORTAL_DB_PASSWORD:?set PORTAL_DB_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks: [internal]
+
+  listmonk:
+    image: listmonk/listmonk:v6.2.0
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    # --install is idempotent (only runs on an empty database); --upgrade applies
+    # schema migrations after you bump the image tag.
+    command: [sh, -c, "./listmonk --install --idempotent --yes --config '' && ./listmonk --upgrade --yes --config '' && ./listmonk --config ''"]
+    environment:
+      LISTMONK_app__address: 0.0.0.0:9000
+      LISTMONK_db__host: db
+      LISTMONK_db__port: 5432
+      LISTMONK_db__user: ${POSTGRES_USER:-listmonk}
+      LISTMONK_db__password: ${POSTGRES_PASSWORD}
+      LISTMONK_db__database: ${POSTGRES_DB:-listmonk}
+      LISTMONK_db__ssl_mode: disable
+      LISTMONK_db__max_open: 25
+      LISTMONK_db__max_idle: 25
+      LISTMONK_ADMIN_USER: ${LISTMONK_ADMIN_USER:-admin}
+      LISTMONK_ADMIN_PASSWORD: ${LISTMONK_ADMIN_PASSWORD:?set LISTMONK_ADMIN_PASSWORD in .env}
+      TZ: ${TZ:-Africa/Johannesburg}
+    volumes:
+      - listmonk-uploads:/listmonk/uploads
+    # egress: listmonk must reach your SMTP server and POP3 bounce mailbox.
+    networks: [internal, egress]
+
+  portal:
+    build: ./portal
+    image: mailharbor-portal:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      listmonk:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://mailharbor:${PORTAL_DB_PASSWORD}@db:5432/${POSTGRES_DB:-listmonk}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET in .env}
+      LISTMONK_URL: http://listmonk:9000
+      LISTMONK_PUBLIC_URL: https://${LISTMONK_DOMAIN}
+      LISTMONK_API_USER: ${LISTMONK_API_USER:-}
+      LISTMONK_API_TOKEN: ${LISTMONK_API_TOKEN:-}
+      GLOBAL_UNSUBSCRIBE: ${GLOBAL_UNSUBSCRIBE:-true}
+      ORG_NAME: ${ORG_NAME:-MailHarbor}
+      ADMIN_EMAIL: ${PORTAL_ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${PORTAL_ADMIN_PASSWORD:-}
+      TRUST_PROXY: "1"
+      TZ: ${TZ:-Africa/Johannesburg}
+    networks: [internal]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [portal, listmonk]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      PORTAL_DOMAIN: ${PORTAL_DOMAIN:?set PORTAL_DOMAIN in .env}
+      LISTMONK_DOMAIN: ${LISTMONK_DOMAIN:?set LISTMONK_DOMAIN in .env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [internal, egress]
+
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-listmonk}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-listmonk}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_HOUR: ${BACKUP_HOUR:-2}
+      TZ: ${TZ:-Africa/Johannesburg}
+    entrypoint: ["/bin/sh", "/scripts/backup-loop.sh"]
+    volumes:
+      - ./deploy/backup:/scripts:ro
+      - ./backups:/backups
+    networks: [internal]
+
+networks:
+  internal:
+    internal: true
+  egress: {}
+
+volumes:
+  db-data:
+  listmonk-uploads:
+  caddy-data:
+  caddy-config:

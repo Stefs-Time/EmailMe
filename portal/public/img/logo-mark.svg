@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="MailHarbor">
+  <rect width="64" height="64" rx="14" fill="#16365f"/>
+  <path d="M14 22.5c0-2 1.6-3.5 3.5-3.5h29c1.9 0 3.5 1.5 3.5 3.5v15c0 2-1.6 3.5-3.5 3.5h-29c-1.9 0-3.5-1.5-3.5-3.5z" fill="none" stroke="#fff" stroke-width="3.2"/>
+  <path d="M15.5 21.5 32 33l16.5-11.5" fill="none" stroke="#fff" stroke-width="3.2" stroke-linejoin="round"/>
+  <path d="M12 48c4 0 4-2.6 8-2.6s4 2.6 8 2.6 4-2.6 8-2.6 4 2.6 8 2.6 4-2.6 8-2.6" fill="none" stroke="#2bb3a3" stroke-width="3.2" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,3 @@
+email,first_name,last_name,company,source,consent_method,consent_date,consent_purpose,city
+thandi.nkosi@example.co.za,Thandi,Nkosi,Acme Trading,website,web_form,2026-03-14,Monthly newsletter,Johannesburg
+pieter.vanwyk@example.co.za,Pieter,van Wyk,,trade show,event_signup,2026-05-02,Product updates,Cape Town

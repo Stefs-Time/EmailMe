@@ -1,0 +1,38 @@
+{
+  "name": "mailharbor-portal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MailHarbor: contact management, import/export, suppression and reporting portal for listmonk",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "node src/db/migrate.js",
+    "create-admin": "node scripts/create-admin.js",
+    "bootstrap-listmonk": "node scripts/bootstrap-listmonk.js",
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "test:unit": "node --test \"test/unit/*.test.js\"",
+    "test:integration": "INTEGRATION=1 node --test --test-concurrency=1 \"test/integration/*.test.js\""
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "argon2": "^0.45.2",
+    "bootstrap": "^5.3.9",
+    "bootstrap-icons": "^1.13.2",
+    "chart.js": "^4.6.1",
+    "connect-pg-simple": "^10.0.0",
+    "csv-parse": "^7.0.3",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.4",
+    "express-session": "^1.19.0",
+    "helmet": "^8.3.0",
+    "multer": "^2.5.0",
+    "pg": "^8.23.1",
+    "pino": "^10.4.0",
+    "zod": "^4.6.7"
+  }
+}

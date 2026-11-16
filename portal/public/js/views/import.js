@@ -82,8 +82,8 @@ export async function render(el, ctx, [importId]) {
             </tbody></table></div></div></div>
         <div class="col-xl-5">
           <div class="card mb-3"><div class="card-header">Where should they go?</div><div class="card-body">
-            <label class="form-label">Add to lists</label>
-            <select class="form-select" name="lists" multiple size="5">${options(facets.lists.map((l) => ({ value: l.id, label: `${l.name}${l.optin === 'double' ? ' (double opt-in)' : ''}` })), o.listIds || [])}</select>
+            <label class="form-label">Add to lists <span class="text-danger">*</span></label>
+            <select class="form-select" name="lists" multiple size="5" required aria-required="true">${options(facets.lists.map((l) => ({ value: l.id, label: `${l.name}${l.optin === 'double' ? ' (double opt-in)' : ''}` })), o.listIds || [])}</select>
             <div class="form-text">Ctrl / Cmd-click to choose several. Existing contacts are only added to lists they have never been on.</div>
             <label class="form-label mt-3">Subscription status</label>
             <select class="form-select" name="subscriptionStatus">

@@ -215,3 +215,7 @@ th.sorted { color: var(--mh-navy); }
 .badge-managed { background: #eaf0f7; color: #1f3d63; font-weight: 600; }
 
 code { color: #22303f; background: #eef1f5; padding: .1rem .35rem; border-radius: .3rem; font-size: .85em; }
+
+/* Programmatic focus target after navigation: no visible frame */
+#main:focus { outline: none; }
+.resolved-alerts summary { cursor: pointer; padding: .6rem 1rem; color: #475467; font-size: .85rem; }

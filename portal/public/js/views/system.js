@@ -5,6 +5,13 @@ export async function render(el, ctx) {
   mount(el, loading('Checking systems…'));
   const [{ data: h }, { data: alerts }] = await Promise.all([get('/system/health'), get('/system/alerts')]);
   const failing = h.checks.filter((c) => !c.ok && c.severity === 'critical').length;
+  const openAlerts = alerts.filter((a) => !a.resolved_at);
+  const resolvedAlerts = alerts.filter((a) => a.resolved_at);
+  const alertItem = (a) => html`<li class="list-group-item">
+    <div class="d-flex justify-content-between gap-2"><span class="small fw-semibold ${a.resolved_at ? 'text-muted-2' : a.severity === 'critical' ? 'text-danger' : ''}">${a.message}</span>
+    ${!a.resolved_at ? html`<button class="btn btn-sm btn-light" data-resolve="${a.id}">Resolve</button>` : ''}</div>
+    <div class="small text-muted-2">${a.resolved_at ? `Resolved ${datetime(a.resolved_at)}` : `${a.severity === 'critical' ? 'Critical' : 'Warning'} · ${num(a.occurrences)}× · last ${ago(a.last_seen)}`}</div>
+    ${a.details?.lines ? html`<pre class="small mono bg-light p-2 mt-1 mb-0 text-wrap">${a.details.lines.join('\n')}</pre>` : ''}</li>`;
   const icon = (ok, sev = 'critical') => (ok ? html`<i class="bi bi-check-circle-fill text-success"></i>`
     : sev === 'info' ? html`<i class="bi bi-info-circle-fill text-primary"></i>` : sev === 'warning' ? html`<i class="bi bi-exclamation-triangle-fill text-warning"></i>` : html`<i class="bi bi-x-circle-fill text-danger"></i>`);
 
@@ -39,13 +46,11 @@ export async function render(el, ctx) {
           ${h.listmonk.sending ? html`<div>Rate: ${num(h.listmonk.sending.ratePerSecond)} msg/s · concurrency ${num(h.listmonk.sending.concurrency)} · batch ${num(h.listmonk.sending.batchSize)}</div>` : ''}
           <div class="mt-2">Unsubscribes are <strong>${h.globalUnsubscribe ? 'global (all lists)' : 'per list'}</strong>.</div>
           <div class="text-muted-2 mt-2">SMTP passwords are stored only in listmonk and are never shown here.</div></div></div>
-        <div class="card"><div class="card-header">Alerts</div>
-          ${alerts.length ? html`<ul class="list-group list-group-flush">${alerts.slice(0, 20).map((a) => html`<li class="list-group-item">
-            <div class="d-flex justify-content-between gap-2"><span class="small fw-semibold ${a.resolved_at ? 'text-muted-2' : a.severity === 'critical' ? 'text-danger' : ''}">${a.message}</span>
-            ${!a.resolved_at ? html`<button class="btn btn-sm btn-light" data-resolve="${a.id}">Resolve</button>` : ''}</div>
-            <div class="small text-muted-2">${a.resolved_at ? `Resolved ${datetime(a.resolved_at)}` : `Open · ${num(a.occurrences)}× · last ${ago(a.last_seen)}`}</div>
-            ${a.details?.lines ? html`<pre class="small mono bg-light p-2 mt-1 mb-0 text-wrap">${a.details.lines.join('\n')}</pre>` : ''}</li>`)}</ul>`
-            : html`<div class="card-body text-muted-2">No alerts. </div>`}</div>
+        <div class="card"><div class="card-header d-flex justify-content-between">Alerts <span class="small fw-normal text-muted-2">${num(openAlerts.length)} open</span></div>
+          ${openAlerts.length ? html`<ul class="list-group list-group-flush">${openAlerts.map(alertItem)}</ul>`
+            : html`<div class="card-body text-muted-2"><i class="bi bi-check-circle text-success me-1"></i>No open alerts.</div>`}
+          ${resolvedAlerts.length ? html`<details class="resolved-alerts border-top"><summary>Recently resolved (${num(resolvedAlerts.length)})</summary>
+            <ul class="list-group list-group-flush">${resolvedAlerts.slice(0, 15).map(alertItem)}</ul></details>` : ''}</div>
       </div></div>`);
 
   $('#sync', el).addEventListener('click', async (e) => {

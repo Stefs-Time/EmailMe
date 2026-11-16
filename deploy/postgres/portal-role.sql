@@ -19,3 +19,10 @@ GRANT USAGE ON SCHEMA public TO mailharbor;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO mailharbor;
 -- Tables listmonk creates in future upgrades become readable automatically.
 SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT ON TABLES TO mailharbor', :'owner') \gexec
+-- If the portal already ran as another role, hand its objects to mailharbor
+-- (ownership is needed for future migrations, not just access).
+SELECT format('ALTER TABLE portal.%I OWNER TO mailharbor', tablename) FROM pg_tables WHERE schemaname = 'portal' \gexec
+SELECT format('ALTER SEQUENCE portal.%I OWNER TO mailharbor', sequencename) FROM pg_sequences
+ WHERE schemaname = 'portal'
+   AND NOT EXISTS (SELECT 1 FROM pg_depend d JOIN pg_class c ON c.oid = d.objid
+                    WHERE c.relname = sequencename AND d.deptype IN ('a', 'i')) \gexec

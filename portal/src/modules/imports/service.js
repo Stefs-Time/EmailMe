@@ -84,7 +84,12 @@ async function preview(ctx, id, { mapping, options }) {
   for (const h of Object.keys(mapping)) if (!headers.includes(h)) throw validation(`Unknown column "${h}"`);
   const emailCols = Object.values(mapping).filter((f) => f === 'email').length;
   if (emailCols !== 1) throw validation('Map exactly one column to Email');
-  if (options.listIds.length) {
+  // listmonk's importer only creates subscribers into at least one list, and a
+  // contact on no list never receives anything: require a list up front.
+  if (!options.listIds.length) {
+    throw validation('Choose at least one list to add these contacts to', [{ field: 'lists', message: 'Choose at least one list' }]);
+  }
+  {
     const { rows } = await ctx.pool.query('SELECT id FROM lists WHERE id = ANY($1::int[])', [options.listIds]);
     if (rows.length !== options.listIds.length) throw validation('One or more selected lists do not exist');
   }

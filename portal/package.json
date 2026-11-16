@@ -16,7 +16,8 @@
     "bootstrap-listmonk": "node scripts/bootstrap-listmonk.js",
     "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
     "test:unit": "node --test \"test/unit/*.test.js\"",
-    "test:integration": "INTEGRATION=1 node --test --test-concurrency=1 \"test/integration/*.test.js\""
+    "test:integration": "INTEGRATION=1 node --test --test-concurrency=1 \"test/integration/*.test.js\"",
+    "backup": "node scripts/backup.js"
   },
   "license": "UNLICENSED",
   "dependencies": {

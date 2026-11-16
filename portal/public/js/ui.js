@@ -112,7 +112,11 @@ export function toast(message, type = 'success') {
 }
 
 export function errorToast(err) {
-  const details = (err.details || []).filter((d) => d.message).map((d) => (d.field ? `${d.field}: ${d.message}` : d.message));
+  // Only add field details that say something the main message doesn't.
+  const main = String(err.message || '').toLowerCase();
+  const details = (err.details || [])
+    .filter((d) => d.message && !main.includes(String(d.message).toLowerCase()))
+    .map((d) => (d.field ? `${label(d.field.split('.').pop())}: ${d.message}` : d.message));
   toast(details.length ? `${err.message} — ${details.slice(0, 3).join('; ')}` : err.message, 'danger');
 }
 

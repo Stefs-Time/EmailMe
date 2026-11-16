@@ -122,6 +122,10 @@ export async function render(el, ctx, [importId]) {
         stepPreview(r.data.import, r.data.samples);
       } catch (err) {
         errorToast(err);
+        // Point at the field that needs attention.
+        $$('.is-invalid', el).forEach((n) => n.classList.remove('is-invalid'));
+        const field = (err.details || []).find((d) => d.field === 'lists') && $('select[name=lists]', el);
+        if (field) { field.classList.add('is-invalid'); field.focus(); field.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
         btn.disabled = false;
         btn.textContent = 'Check my data';
       }

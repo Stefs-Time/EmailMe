@@ -219,3 +219,6 @@ code { color: #22303f; background: #eef1f5; padding: .1rem .35rem; border-radius
 /* Programmatic focus target after navigation: no visible frame */
 #main:focus { outline: none; }
 .resolved-alerts summary { cursor: pointer; padding: .6rem 1rem; color: #475467; font-size: .85rem; }
+
+/* Toasts below the top bar, clear of page footers and primary actions */
+.toast-stack { margin-top: 56px; z-index: 1090; }

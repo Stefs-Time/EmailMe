@@ -28,14 +28,17 @@ nano .env
 ./setup.sh
 ```
 
-`setup.sh`:
-1. builds the portal image;
-2. starts PostgreSQL and listmonk (listmonk creates its tables on first start);
-3. creates a least-privilege **listmonk API user** for the portal and saves its token in `.env`;
-4. sets listmonk's public root URL and applies the recommended bounce actions and the List-Unsubscribe header;
-5. starts the portal, Caddy (HTTPS) and the backup service.
+`setup.sh` builds the portal image and starts everything. On its first start the portal:
+1. creates the **environment-managed administrator** from `PORTAL_ADMIN_EMAIL` / `PORTAL_ADMIN_PASSWORD`;
+2. creates its own least-privilege **listmonk API user** (with the listmonk admin credentials) and stores the token encrypted;
+3. sets listmonk's public root URL and applies the recommended bounce actions and the List-Unsubscribe header.
 
-After it finishes, **delete `PORTAL_ADMIN_PASSWORD` from `.env`**.
+### The environment-managed administrator
+`PORTAL_ADMIN_EMAIL` / `PORTAL_ADMIN_PASSWORD` (`ADMIN_EMAIL` / `ADMIN_PASSWORD` on Railway) are re-applied on **every**
+start: the account always exists, is an active administrator and has exactly that password. Keep the password in
+`.env`; to rotate it or recover a lost login, change it and run `docker compose up -d portal`. In the app it is marked
+*Environment-managed*, and its role, status and password cannot be changed there. Create personal accounts for staff
+under **Users** and keep this one for emergencies.
 
 ### Firewall
 
@@ -116,11 +119,14 @@ valid, and MailHarbor records exactly that.
 
 ## 6. Backups and restore (TC16)
 
-- The `backup` service writes `backups/mailharbor-YYYYmmdd-HHMMSS.dump` daily at `BACKUP_HOUR`, verifies each archive
-  with `pg_restore --list`, keeps `BACKUP_RETENTION_DAYS` days, and records the outcome in `backups/LAST_BACKUP`.
+- The `backup` service runs `portal/scripts/backup.js` daily at `BACKUP_HOUR`. It writes
+  `backups/mailharbor-YYYYmmdd-HHMMSS.dump`, verifies each archive with `pg_restore --list`, keeps
+  `BACKUP_RETENTION_DAYS` days, and reports the result on **System health → Backups**. A failure raises a critical alert;
+  no successful backup within 26 h raises a warning.
 - One dump covers **both** listmonk's data and MailHarbor's `portal` schema.
-- **Copy backups off the server** (e.g. nightly `rclone` or `restic` to object storage). A backup on the same disk is not a backup.
-- Run a backup now: `docker compose exec backup sh /scripts/backup-loop.sh now`
+- **Off-site copy:** set the `BACKUP_S3_*` variables in `.env` (Cloudflare R2, AWS S3, Backblaze B2, MinIO…), and each
+  backup is also uploaded there with the same retention. A backup on the same disk is not a backup.
+- Run a backup now: `docker compose run --rm backup node scripts/backup.js`
 - Restore (destructive): `./deploy/backup/restore.sh backups/<file>.dump`
 - Also keep a copy of `.env` in your password manager: it holds the secrets needed to rebuild.
 
@@ -159,8 +165,9 @@ Logs: `docker compose logs -f portal listmonk`. Portal logs are JSON (pino) and 
 
 | Task | How |
 |---|---|
-| Reset a portal admin password | `docker compose exec portal node scripts/create-admin.js admin@co.za` |
-| Rotate the listmonk API token | Delete user `mailharbor` in listmonk → Users; clear `LISTMONK_API_TOKEN` in `.env`; run `./setup.sh` |
+| Reset the environment-managed admin password | Change `PORTAL_ADMIN_PASSWORD` in `.env`, then `docker compose up -d portal` |
+| Reset another admin's password | Users → Edit, or `docker compose exec portal node scripts/create-admin.js admin@co.za` |
+| Rotate the listmonk API token | Delete user `mailharbor` in listmonk → Users. The portal creates a new one automatically within a minute |
 | Force a sync | MailHarbor → System health → *Run sync now* |
 | Rotate `SESSION_SECRET` | Change in `.env`, `docker compose up -d portal` (signs everyone out) |
 
@@ -169,7 +176,7 @@ Logs: `docker compose logs -f portal listmonk`. Portal logs are JSON (pino) and 
 | Symptom | Check |
 |---|---|
 | Portal restarts in a loop | `docker compose logs portal`: usually a missing variable, which is named in the error |
-| "listmonk rejected the portal API credentials" | Token wrong or API user deleted; see *Rotate the listmonk API token* |
+| "listmonk rejected the portal API credentials" | With listmonk admin credentials set, the portal renews its token itself; otherwise update `LISTMONK_API_TOKEN` |
 | Certificates not issued | DNS not pointing at the server yet, or port 80 blocked |
 | No bounces recorded | Bounce mailbox settings, Return-Path, and the *Bounce mailbox error* alert |
 | Contacts imported but not on a list | Row report: suppressed, previously unsubscribed, or no consent basis |

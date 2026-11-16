@@ -39,6 +39,7 @@ a role or allocation error, an accessibility failure, or a misleading UI. **Low*
 | F18 | System health | Low | No backup status (scope §8 "backup execution status"). | Backup card + alerts for failed or overdue backups | Added |
 | F19 | Focus | Low | A dark outline framed the main area after every navigation (programmatic focus). | Outline removed for the programmatic focus target only | Fixed |
 | F20 | Permission page | Low | "No permission" pages had no heading. | Page title as `<h1>` with a clear message | Fixed |
+| F22 | Feedback | Medium | Error toasts appeared bottom-right **on top of the page's primary button** (found in UAT: after the "choose a list" error, "Check my data" could not be clicked until the toast closed). Messages also repeated themselves ("…to — lists: Choose at least one list"). | Toasts moved top-right under the top bar; repeated details removed; the import form highlights and focuses the missing field | Fixed, UAT re-run |
 | F21 | Soft bounces | Low | Docs promised soft 3 → blocklist, but a fresh listmonk keeps "2 → none". | Recommended settings now set 3 → blocklist unless someone already chose a policy | Fixed, verified |
 
 Railway-specific findings (setup, not UI):
@@ -89,19 +90,38 @@ See §5 for the run log. Each step is an end-to-end browser workflow.
 
 | ID | Role | Scenario | Result |
 |---|---|---|---|
-| M1 | Manager | Import 30 contacts with consent from file; no list chosen → clear message; then imported | see §5 |
-| M2 | Manager | Filter by source, "Select all 30 matching" across pages | see §5 |
-| M3 | Manager | Bulk add the selection to a double opt-in list | see §5 |
-| M4 | Manager | Open a contact from the list, Actions → Unsubscribe → status *Unsubscribed* | see §5 |
-| M5 | Manager | "Export view" downloads a CSV with every filtered row | see §5 |
-| M6 | Manager | No Users, Audit log, Lift or Erase controls | see §5 |
-| M7 | Manager | Keyboard: focus a contact link, Enter opens it | see §5 |
-| V1 | Viewer | Contacts visible; no add, export, selection or contact actions | see §5 |
-| V2 | Viewer | Import history reachable from the menu | see §5 |
+| M1 | Manager | Import 30 contacts with consent from file; no list chosen → clear message; then imported | **PASS** |
+| M2 | Manager | Filter by source, "Select all 30 matching" across pages | **PASS** |
+| M3 | Manager | Bulk add the selection to a double opt-in list | **PASS** |
+| M4 | Manager | Open a contact from the list, Actions → Unsubscribe → status *Unsubscribed* | **PASS** |
+| M5 | Manager | "Export view" downloads a CSV with every filtered row | **PASS** |
+| M6 | Manager | No Users, Audit log, Lift or Erase controls | **PASS** |
+| M7 | Manager | Keyboard: focus a contact link, Enter opens it | **PASS** |
+| V1 | Viewer | Contacts visible; no add, export, selection or contact actions | **PASS** |
+| V2 | Viewer | Import history reachable from the menu | **PASS** |
 
 ## 5. UAT run log
 
-_Filled in from the latest run below._
+Final run, 16 Nov 2026: **9/9 PASS, no page errors.**
+
+The first two runs failed at M1, and M2–M5, M7 and V1 then failed because they depend on M1's data. Those runs found
+F3 (import with no list failed only at commit) and F22 (toast covering the retry button). Both were fixed before the final run.
+
+```
+PASS M1 import 30 contacts (no list → clear error; then imported)
+PASS M2 filter by source and select all matching (beyond one page)
+PASS M3 bulk add selection to a list
+PASS M4 unsubscribe one contact from its page (status becomes Unsubscribed)
+PASS M5 export current view downloads a CSV
+PASS M6 manager cannot see Users / Audit / Lift / Erase
+PASS M7 keyboard: Tab reaches a contact link and Enter opens it
+PASS V1 viewer sees contacts but no write controls
+PASS V2 viewer reaches Import history from the menu
+PASS no page errors
+```
+
+Accessibility (axe-core, all roles, all screens and modals): **0 violations** after fixes, down from 9 distinct
+contrast failures plus unlabelled dialogs, labels not linked to inputs and empty table headers.
 
 ## 6. Recommendations (not done: need a decision or external access)
 

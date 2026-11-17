@@ -1,6 +1,7 @@
 import { get, post, put } from '../api.js';
 import { html, mount, $, $$, loading, toast, errorToast, confirmModal } from '../ui.js';
 import { createBuilder } from '../builder.js';
+import { enableTagChips } from '../tags.js';
 
 /** Starting design for a new template: name header, campaign content, footer. */
 const STARTER = {
@@ -36,7 +37,7 @@ export async function render(el, ctx, [id]) {
     <div class="card mb-3" id="builder-card"><div id="builder"></div>
       <div class="card-footer small text-muted-2">Drag blocks above or below <strong>Campaign content</strong> to build the header and footer. Click empty space for page settings.</div></div>
     <div class="card mb-3 d-none" id="html-card"><div class="card-body">
-      <label class="form-label" for="th">HTML</label><textarea class="form-control mono editor-code border" id="th" spellcheck="false">${t.html}</textarea>
+      <label class="form-label" for="th">HTML</label><textarea class="form-control mono editor-code border" id="th" data-taggable spellcheck="false">${t.html}</textarea>
       <div class="form-text">Use <code>{{ content }}</code> for the campaign body, and tags such as <code>{{ org_name }}</code>, <code>{{ org_address }}</code>, <code>{{ unsubscribe_url }}</code>, <code>{{ view_url }}</code>.
         Scripts, forms and embedded frames are removed when you save. Use inline styles; many email clients ignore external CSS.</div>
     </div></div>
@@ -123,7 +124,8 @@ export async function render(el, ctx, [id]) {
   const beforeUnload = (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } };
   window.addEventListener('beforeunload', beforeUnload);
   if (editor === 'builder') startBuilder(t.body_json || STARTER);
+  const stopTags = enableTagChips(el, { fallback: () => (editor === 'builder' ? builder?.selectedEditable() : null) });
   showPane(editor);
   preview();
-  return () => window.removeEventListener('beforeunload', beforeUnload);
+  return () => { window.removeEventListener('beforeunload', beforeUnload); stopTags(); };
 }

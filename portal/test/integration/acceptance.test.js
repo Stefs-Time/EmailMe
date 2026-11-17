@@ -510,6 +510,26 @@ t('template builder: default template is a builder design; templates are validat
   assert.equal((m.parsed.html.match(/\/u\/[0-9a-f-]{36}/g) || []).length, 1, 'one unsubscribe link (from the template footer)');
 });
 
+t('samples and personalisation chips: ready-made designs; imported columns offered as fields', async () => {
+  const samples = await http('admin', 'GET', '/api/campaigns/samples');
+  assert.ok(samples.data.length >= 8);
+  for (const id of ['promotion', 'product-launch', 'still-interested', 'find-out-more']) assert.ok(samples.data.some((s) => s.id === id), id);
+
+  const c = await http('admin', 'POST', '/api/campaigns', { name: 'Win-back', sample: 'still-interested' });
+  assert.equal(c.status, 201);
+  assert.equal(c.data.editor, 'builder');
+  assert.match(c.data.subject, /are you still interested/);
+  assert.match(c.data.body_html, /href="\{\{ unsubscribe_url \}\}"/, 'easy way out links to unsubscribe');
+  const ready = await http('admin', 'GET', `/api/campaigns/${c.data.id}`);
+  assert.ok(ready.data.problems.some((p) => /button has no link/.test(p)), 'sample buttons must be given a link before sending');
+  assert.equal((await http('admin', 'POST', '/api/campaigns', { name: 'x', sample: 'nope' })).status, 422);
+  assert.equal((await http('admin', 'GET', '/api/campaigns/samples/nope')).status, 404);
+
+  await http('admin', 'POST', '/api/contacts', { email: 'attr-ann@ok.example', firstName: 'Ann', listIds: [listId], consent: { method: 'web_form' }, attribs: { city: 'Durban' } });
+  const facets = await http('admin', 'GET', '/api/contacts/facets');
+  assert.ok(facets.data.attributes.includes('city'), 'imported columns are offered as personalisation chips');
+});
+
 t('exports and campaign report download as CSV', async () => {
   const text = await (await http('admin', 'GET', '/api/exports/contacts.csv?status=suppressed', undefined, { raw: true })).text();
   assert.ok(text.includes('hard-dan@ok.example'));

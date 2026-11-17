@@ -11,6 +11,7 @@
 // CSP note: inline style attributes are blocked, so canvas styling is applied
 // through the CSSOM (element.style.x = …), which CSP allows.
 import { html, raw, mount, $, $$, formModal, toast } from './ui.js';
+import { tagBar } from './tags.js';
 
 export const BLOCKS = [
   { type: 'heading', label: 'Heading', icon: 'type-h1' },
@@ -49,7 +50,6 @@ const FONTS = {
   georgia: ['Georgia (serif)', "Georgia, 'Times New Roman', serif"],
 };
 const HEADING_SIZE = { 1: 28, 2: 22, 3: 18 };
-const TAGS = [['first_name', 'First name'], ['last_name', 'Last name'], ['full_name', 'Full name'], ['company', 'Company'], ['email', 'Email'], ['org_name', 'Organisation']];
 
 /** WCAG contrast ratio between two #rrggbb colours. */
 function contrast(a, b) {
@@ -70,10 +70,12 @@ const newBlock = (type) => ({ id: uid(), type, props: clone(DEFAULTS[type]) });
 /**
  * @param {HTMLElement} root
  * @param {object} initial  block document
- * @param {{ onChange: (doc) => void, mode?: 'campaign' | 'template' }} opts
+ * @param {{ onChange: (doc) => void, mode?: 'campaign' | 'template', customTags?: string[] }} opts
  *   mode 'template' adds the Campaign content and Footer blocks and page settings.
+ *   customTags: imported column names offered as personalisation chips. The page wires
+ *   the chips with enableTagChips() (tags.js), using selectedEditable() as the fallback.
  */
-export function createBuilder(root, initial, { onChange, mode = 'campaign' }) {
+export function createBuilder(root, initial, { onChange, mode = 'campaign', customTags = [] }) {
   const isTemplate = mode === 'template';
   const doc = { version: 1, blocks: (initial?.blocks || []).map((b) => {
     const x = withDefaults(b);
@@ -99,8 +101,10 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign' }) {
         <div class="bb-bar">
           <button type="button" class="btn btn-sm btn-light" id="bb-undo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled><i class="bi bi-arrow-counterclockwise"></i></button>
           <button type="button" class="btn btn-sm btn-light" id="bb-redo" title="Redo (Ctrl+Y)" aria-label="Redo" disabled><i class="bi bi-arrow-clockwise"></i></button>
-          <span class="small text-muted-2 ms-2 d-none d-md-inline">Drag blocks in · click to edit · type directly in the email</span>
+          <span class="small text-muted-2 ms-2 d-none d-xxl-inline">Drag blocks in · click to edit · type directly in the email</span>
         </div>
+        <div class="bb-tagrow">${tagBar({ custom: customTags, label: 'Personalise:' })}
+          <div class="small text-muted-2 mt-1">Click in a heading, text or button, then click a field to insert it. The preview shows real names.</div></div>
         <div class="bb-canvas-wrap"><div class="bb-canvas"><div class="bb-list" data-list="root" aria-label="Email content"></div></div></div>
       </div>
       <aside class="bb-props" aria-label="Block settings"><div class="bb-props-inner"></div></aside>
@@ -370,9 +374,7 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign' }) {
     ${['left', 'center', 'right'].map((a) => html`<button type="button" class="btn btn-outline-secondary ${value === a ? 'active' : ''}" data-align="${a}" aria-pressed="${value === a}" aria-label="Align ${a}"><i class="bi bi-text-${a === 'center' ? 'center' : a}"></i></button>`)}</div></div>`;
   const bgField = (p, key = 'bg') => html`<div class="col-12"><div class="form-check form-switch small"><input class="form-check-input" type="checkbox" role="switch" id="bb-bg-on" data-bg-toggle="${key}" ${p[key] ? raw('checked') : ''}><label class="form-check-label" for="bb-bg-on">Background colour</label></div>
     ${p[key] ? html`<input type="color" class="form-control form-control-color w-100 mt-1" data-prop="${key}" value="${p[key]}" aria-label="Background colour">` : ''}</div>`;
-  const tagSelect = () => html`<div class="col-12"><label class="form-label small">Insert personalisation</label><select class="form-select form-select-sm" data-tag-insert>
-    <option value="">Choose a field…</option>${TAGS.map(([t, l]) => html`<option value="${t}">${l}</option>`)}</select>
-    <div class="form-text">Inserted where the cursor is, e.g. {{ first_name | "there" }}.</div></div>`;
+
 
   function renderProps() {
     const loc = selectedId && locate(selectedId);
@@ -389,7 +391,7 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign' }) {
       case 'heading':
         fields = html`<div class="col-12"><label class="form-label small">Size</label><select class="form-select form-select-sm" data-prop="level" data-num>
           ${[[1, 'Large (H1)'], [2, 'Medium (H2)'], [3, 'Small (H3)']].map(([v, l]) => html`<option value="${v}" ${p.level === v ? raw('selected') : ''}>${l}</option>`)}</select></div>
-          ${alignField(p.align)}${colorField('color', p.color, 'Text colour')}${numberField('pad', p.pad, 'Spacing (px)', 0, 64)}${tagSelect()}${bgField(p)}`;
+          ${alignField(p.align)}${colorField('color', p.color, 'Text colour')}${numberField('pad', p.pad, 'Spacing (px)', 0, 64)}${bgField(p)}`;
         break;
       case 'text':
         fields = html`<div class="col-12"><span class="form-label small d-block">Format selected text</span>
@@ -402,7 +404,7 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign' }) {
             <button type="button" class="btn btn-sm btn-light" data-link aria-label="Add link" title="Add link"><i class="bi bi-link-45deg"></i></button>
             <button type="button" class="btn btn-sm btn-light" data-cmd="unlink" aria-label="Remove link" title="Remove link"><i class="bi bi-link"></i><i class="bi bi-x-lg small"></i></button>
           </div></div>
-          ${alignField(p.align)}${colorField('color', p.color, 'Text colour')}${numberField('size', p.size, 'Text size (px)', 12, 22)}${numberField('pad', p.pad, 'Spacing (px)', 0, 64)}${tagSelect()}${bgField(p)}`;
+          ${alignField(p.align)}${colorField('color', p.color, 'Text colour')}${numberField('size', p.size, 'Text size (px)', 12, 22)}${numberField('pad', p.pad, 'Spacing (px)', 0, 64)}${bgField(p)}`;
         break;
       case 'button':
         fields = html`<div class="col-12"><label class="form-label small">Link (https://…)</label><input type="url" class="form-control form-control-sm" data-prop="url" value="${p.url}" placeholder="https://example.co.za/offer"></div>
@@ -539,11 +541,6 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign' }) {
       setProp(selectedId, t.dataset.bgToggle, t.checked ? '#f4f6f9' : '');
       renderProps();
     }
-    if (t.matches('[data-tag-insert]') && t.value) {
-      const tag = `{{ ${t.value}${t.value === 'first_name' ? ' | "there"' : ''} }}`;
-      t.value = '';
-      insertIntoEditable(tag);
-    }
   });
   // Keep the text selection when pressing formatting buttons.
   props.addEventListener('mousedown', (e) => { if (e.target.closest('.bb-format button')) e.preventDefault(); });
@@ -579,22 +576,6 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign' }) {
       });
     }
   });
-
-  function insertIntoEditable(text) {
-    const el = selectedId && $(`.bb-block[data-id="${selectedId}"] .bb-edit`, canvas);
-    if (!el) return;
-    const sel = window.getSelection();
-    if (!el.contains(sel?.anchorNode)) {
-      el.focus();
-      const r = document.createRange();
-      r.selectNodeContents(el);
-      r.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(r);
-    }
-    document.execCommand('insertText', false, text);
-    syncEditable(el);
-  }
 
   // ---- Inline editing ------------------------------------------------------------------
   function syncEditable(el) {
@@ -792,11 +773,29 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign' }) {
     if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); restore(redo, undo); }
   });
 
+  /** The editable part of the selected block (heading, text, button label), if any. */
+  function selectedEditable() {
+    return selectedId ? $(`.bb-block[data-id="${selectedId}"] .bb-edit`, canvas) : null;
+  }
+
   function getDoc() { return { version: 1, ...(isTemplate ? { settings: { ...doc.settings } } : {}), blocks: clone(doc.blocks) }; }
 
   applyPage();
   renderAll();
-  return { getDoc };
+  /** Replaces the design (e.g. with a sample). Undo brings the previous one back. */
+  function setDoc(next) {
+    record();
+    doc.blocks = (next?.blocks || []).map((b) => {
+      const x = withDefaults(b);
+      if (x.type === 'columns') x.props.columns = [0, 1].map((i) => (x.props.columns?.[i] || []).map(withDefaults));
+      return x;
+    });
+    selectedId = null;
+    renderAll();
+    changed();
+  }
+
+  return { getDoc, selectedEditable, setDoc };
 }
 
 /** A document holding existing HTML as one block (switching from the HTML/visual editors). */

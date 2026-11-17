@@ -1,6 +1,8 @@
 import { get, put, post, del } from '../api.js';
 import { html, raw, mount, $, $$, num, loading, options, toast, errorToast, formModal, confirmModal, esc } from '../ui.js';
 import { createBuilder, documentFromHtml } from '../builder.js';
+import { tagBar, enableTagChips } from '../tags.js';
+import { pickSample, getSample } from '../samples.js';
 
 const TAGS = [
   ['first_name', 'First name'], ['last_name', 'Last name'], ['full_name', 'Full name'], ['company', 'Company'],
@@ -45,8 +47,9 @@ export async function render(el, ctx, [id]) {
         </div></div>
         <div class="card mb-3"><div class="card-header">2 · Envelope</div><div class="card-body"><div class="row g-2">
           <div class="col-12"><label class="form-label">Internal name</label><input class="form-control" name="name" maxlength="200" value="${c.name}" required></div>
-          <div class="col-12"><label class="form-label">Subject line</label><input class="form-control" name="subject" maxlength="300" value="${c.subject}" placeholder="e.g. {{ first_name | &quot;Hi&quot; }}, our November specials"></div>
-          <div class="col-12"><label class="form-label">Preview text <span class="text-muted-2 small">(shown after the subject in most inboxes)</span></label><input class="form-control" name="preheader" maxlength="300" value="${c.preheader}"></div>
+          <div class="col-12"><label class="form-label">Subject line</label><input class="form-control" name="subject" data-taggable maxlength="300" value="${c.subject}" placeholder="e.g. Thandi, our November specials"></div>
+          <div class="col-12"><label class="form-label">Preview text <span class="text-muted-2 small">(shown after the subject in most inboxes)</span></label><input class="form-control" name="preheader" data-taggable maxlength="300" value="${c.preheader}"></div>
+          <div class="col-12">${tagBar({ custom: facets.attributes || [], label: 'Personalise subject or preview text:', compact: true })}</div>
           <div class="col-md-6"><label class="form-label">From name</label><input class="form-control" name="from_name" maxlength="120" value="${c.from_name}"></div>
           <div class="col-md-6"><label class="form-label">From address</label><input class="form-control" name="from_email" type="email" value="${c.from_email}"></div>
           <div class="col-md-6"><label class="form-label">Reply-to <span class="text-muted-2 small">(optional)</span></label><input class="form-control" name="reply_to" type="email" value="${c.reply_to}"></div>
@@ -67,13 +70,15 @@ export async function render(el, ctx, [id]) {
       </div>
       <div class="col-12">
         <div class="card mb-3"><div class="card-header d-flex align-items-center gap-2 flex-wrap">3 · Content
-          <div class="nav nav-pills ms-auto" role="group" aria-label="Editor mode">
+          <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="use-sample"><i class="bi bi-collection me-1"></i>Samples</button>
+          <div class="nav nav-pills" role="group" aria-label="Editor mode">
             <button type="button" class="nav-link py-1 px-2" data-tab="builder" aria-pressed="false"><i class="bi bi-grid-1x2 me-1"></i>Builder</button>
             <button type="button" class="nav-link py-1 px-2" data-tab="visual" aria-pressed="false">Visual</button>
             <button type="button" class="nav-link py-1 px-2" data-tab="html" aria-pressed="false">HTML</button>
             <button type="button" class="nav-link py-1 px-2" data-tab="text" aria-pressed="false">Plain text</button>
           </div></div>
           <div id="builder" class="d-none"></div>
+          <div id="tagrow-classic" class="px-3 pt-2 border-bottom d-none">${tagBar({ custom: facets.attributes || [], label: 'Personalise:', compact: true })}</div>
           <div class="editor-toolbar border-bottom" id="toolbar" role="toolbar" aria-label="Formatting">
             <button type="button" class="btn btn-sm btn-light" data-cmd="bold" title="Bold" aria-label="Bold"><i class="bi bi-type-bold"></i></button>
             <button type="button" class="btn btn-sm btn-light" data-cmd="italic" title="Italic" aria-label="Italic"><i class="bi bi-type-italic"></i></button>
@@ -97,8 +102,8 @@ export async function render(el, ctx, [id]) {
                 <li><hr class="dropdown-divider"></li><li><span class="dropdown-item-text small text-muted-2">Fallback: {{ first_name | "there" }}<br>Custom field: {{ attribs.city }}</span></li></ul></div>
           </div>
           <div class="editor-surface" id="visual" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Email content"></div>
-          <textarea class="form-control mono editor-code d-none" id="htmlsrc" aria-label="HTML source" spellcheck="false"></textarea>
-          <div class="d-none" id="textwrap"><textarea class="form-control editor-code" id="textsrc" aria-label="Plain text version" placeholder="Leave empty to generate the plain-text version automatically from the content."></textarea></div>
+          <textarea class="form-control mono editor-code d-none" id="htmlsrc" data-taggable aria-label="HTML source" spellcheck="false"></textarea>
+          <div class="d-none" id="textwrap"><textarea class="form-control editor-code" id="textsrc" data-taggable aria-label="Plain text version" placeholder="Leave empty to generate the plain-text version automatically from the content."></textarea></div>
           <div class="card-footer small text-muted-2">The template adds the header and footer around this content. An unsubscribe link and your organisation's address are always included.</div>
         </div>
       </div>
@@ -112,7 +117,9 @@ export async function render(el, ctx, [id]) {
   let editor = c.editor;
   let builder = null;
   let lastHtml = c.body_html;
-  const startBuilder = (doc) => { builder = createBuilder($('#builder', el), doc, { onChange: () => changed() }); };
+  const startBuilder = (doc) => { builder = createBuilder($('#builder', el), doc, { onChange: () => changed(), customTags: facets.attributes || [] }); };
+  // Personalisation chips: insert at the cursor of the field last clicked into.
+  const stopTags = enableTagChips(el, { fallback: () => (editor === 'builder' ? builder?.selectedEditable() : null) });
   if (editor === 'builder') startBuilder(c.body_json || documentFromHtml(c.body_html));
   // Stored content is sanitised server-side. Builder output (inline styles) is not loaded into the
   // visual editor: the app's CSP blocks inline styles, so it would display wrongly there.
@@ -223,7 +230,22 @@ export async function render(el, ctx, [id]) {
   form.addEventListener('submit', (e) => e.preventDefault());
 
   // Editor modes
+  // Replace the design with a ready-made sample (undo restores the previous design).
+  $('#use-sample', el).addEventListener('click', () => pickSample({
+    title: 'Use a sample design', submitLabel: 'Use this design',
+    intro: 'This replaces the current content in the builder. Changed your mind? Press Undo above the email.',
+    onPick: async (sampleId) => {
+      const s = await getSample(sampleId);
+      if (editor !== 'builder') { startBuilder(s.doc); editor = 'builder'; showPane('builder'); } else builder.setDoc(s.doc);
+      if (!form.subject.value.trim() && s.subject) form.subject.value = s.subject;
+      if (!form.preheader.value.trim() && s.preheader) form.preheader.value = s.preheader;
+      changed();
+      toast('Sample loaded. Replace the [bracketed] text and add your images and links.');
+    },
+  }));
+
   function showPane(tab) {
+    $('#tagrow-classic', el).classList.toggle('d-none', tab === 'builder');
     $$('[data-tab]', el).forEach((x) => { const on = x.dataset.tab === tab; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });
     $('#builder', el).classList.toggle('d-none', tab !== 'builder');
     visual.classList.toggle('d-none', tab !== 'visual');
@@ -324,5 +346,5 @@ export async function render(el, ctx, [id]) {
   window.addEventListener('beforeunload', beforeUnload);
   renderReady(c);
   refreshPreview();
-  return () => { window.removeEventListener('beforeunload', beforeUnload); if (dirty) save(); };
+  return () => { window.removeEventListener('beforeunload', beforeUnload); stopTags(); if (dirty) save(); };
 }

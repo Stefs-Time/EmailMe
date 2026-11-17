@@ -74,7 +74,13 @@ function contactRoutes(deps) {
         `SELECT source AS v, COUNT(*)::int AS n FROM portal.contacts
           WHERE source <> '' GROUP BY 1 ORDER BY 2 DESC LIMIT 100`);
       const lists = await db.query(`SELECT id, name, optin FROM portal.lists ORDER BY name`);
-      return { sources: sources.rows, lists: lists.rows };
+      // Imported custom columns, for personalisation chips. Bounded: recent contacts only.
+      const attributes = await db.query(
+        `SELECT k, COUNT(*)::int AS n
+           FROM (SELECT attribs FROM portal.contacts WHERE jsonb_typeof(attribs) = 'object' ORDER BY id DESC LIMIT 5000) c,
+                jsonb_object_keys(c.attribs) AS k
+          GROUP BY k ORDER BY n DESC, k LIMIT 20`);
+      return { sources: sources.rows, lists: lists.rows, attributes: attributes.rows.map((r) => r.k) };
     });
     res.json({ success: true, data: { ...data, statuses: repo.STATUSES, consentMethods: CONSENT_METHODS } });
   });

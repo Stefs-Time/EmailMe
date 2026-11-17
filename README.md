@@ -27,7 +27,11 @@ in the app.
   - a visual editor or raw HTML as alternatives, plus a plain-text part;
   - templates (the frame: header, colours, width, font, footer) designed in the same drag-and-drop builder or in HTML,
     with a default template;
-  - personalisation `{{ first_name | "there" }}` and a preheader;
+  - **8 sample designs** to start from: simple message, marketing promotion, new product release, "Are you still
+    interested?", "Want to find out more?", monthly newsletter, event invitation, welcome;
+  - **one-click personalisation**: field buttons (First name, Full name, Company… plus imported columns) insert
+    `{{ first_name | "there" }}`-style tags at the cursor in the subject, preview text or any block;
+  - a preheader (inbox preview text);
   - preview as a sample contact, test sends;
   - a readiness checklist;
   - send now or schedule; pause, resume and cancel.

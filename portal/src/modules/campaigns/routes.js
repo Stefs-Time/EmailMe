@@ -12,6 +12,7 @@ const { withTransaction } = require('../../db/pool');
 const { audit } = require('../../lib/audit');
 const { renderMessage, sanitize, DEFAULT_TEMPLATE } = require('../../engine/render');
 const { renderDocument, documentSchema, starterDocument } = require('../../engine/blocks');
+const { listSamples, getSample, SAMPLE_IDS } = require('../../engine/samples');
 const { startCampaign } = require('../../engine/sender');
 const { countEligible } = require('../../engine/audience');
 const { isValidEmail, normalizeEmail } = require('../../lib/email');
@@ -120,6 +121,16 @@ function campaignRoutes({ pool, settings, worker }) {
     res.json({ success: true, data: rows.map(({ total, ...x }) => x), meta: { total: Number(rows[0]?.total || 0), page: q.page, perPage: q.per_page } });
   });
 
+  /** Ready-made designs for the "new campaign" gallery (defined before /:id). */
+  r.get('/samples', requirePermission('contacts:read'), (_req, res) => {
+    res.json({ success: true, data: listSamples() });
+  });
+  r.get('/samples/:sample', requirePermission('contacts:read'), (req, res) => {
+    const sample = getSample(String(req.params.sample));
+    if (!sample) throw notFound('Sample not found');
+    res.json({ success: true, data: sample });
+  });
+
   r.get('/:id', requirePermission('contacts:read'), async (req, res) => {
     const c = await loadCampaign(pool, parse(id, req.params.id));
     const eligible = await countEligible(pool, c.lists.map((l) => l.id));
@@ -128,7 +139,17 @@ function campaignRoutes({ pool, settings, worker }) {
   });
 
   r.post('/', requirePermission('campaigns:write'), async (req, res) => {
-    const body = parse(campaignBody.partial({ name: true }).extend({ name: z.string().trim().min(1).max(200).default('Untitled campaign') }), req.body);
+    const body = parse(campaignBody.partial({ name: true }).extend({
+      name: z.string().trim().min(1).max(200).default('Untitled campaign'),
+      sample: z.enum(SAMPLE_IDS).optional(), // start from a ready-made design
+    }), req.body);
+    if (body.sample) {
+      const sample = getSample(body.sample);
+      body.editor = 'builder';
+      body.body_json = sample.doc;
+      body.subject ||= sample.subject;
+      body.preheader ||= sample.preheader;
+    }
     const s = await settings.all();
     const { rows: tpl } = await pool.query('SELECT id FROM portal.templates WHERE is_default LIMIT 1');
     const editor = inferEditor(body);

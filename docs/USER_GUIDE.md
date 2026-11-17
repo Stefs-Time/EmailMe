@@ -70,7 +70,23 @@ For an opt-out request by phone or email, use **Actions → Unsubscribe** and no
 ## Campaigns
 
 ### Write
-1. Go to **Campaigns → New campaign** (or the button at the bottom-left). Give it an internal name and choose a template.
+1. Go to **Campaigns → New campaign** (or the button at the bottom-left) and pick a starting design:
+
+   | Sample | Use it for |
+   |---|---|
+   | Simple message | A greeting, a paragraph and a button |
+   | Marketing promotion | Specials: banner, headline offer, two featured products, call to action |
+   | New product release | Announcing something new: hero image, key features, "Find out more" |
+   | Are you still interested? | Re-engaging quiet contacts: one button to stay, an easy unsubscribe |
+   | Want to find out more? | Following up interest: benefits, a customer quote, "Book a call" |
+   | Monthly newsletter | A lead story, two stories side by side, quick news items |
+   | Event invitation | Date, time, venue and an RSVP button |
+   | Welcome new subscribers | Saying hello and setting expectations |
+
+   Every sample is fully editable. Replace the [bracketed] text and add your images and links; the *Ready to send*
+   checklist reminds you about buttons that still need a link. To switch an existing draft to a sample, use
+   **Samples** above the builder (Undo brings your previous design back). Give the campaign an internal name and
+   choose a template.
 2. Fill in:
    - **Subject**;
    - **Preheader**: the grey preview text next to the subject in the inbox;
@@ -82,10 +98,11 @@ For an opt-out request by phone or email, use **Actions → Unsubscribe** and no
 3. Design the content in the **Builder** (see *The drag-and-drop builder* below). The **Plain text** tab is generated
    automatically; edit it if you want. If you prefer to write or paste HTML, use the **Visual** or **HTML** editor.
    Converting a design to HTML is one-way: it comes back into the builder as a single HTML block.
-4. **Personalise** with tags such as `{{ first_name | "there" }}`. The text after `|` is used when the contact has no
-   first name. Available tags:
-   - `first_name`, `last_name`, `full_name`, `email`, `company`;
-   - any imported column, for example `{{ attribs.city }}`.
+4. **Personalise** with the quick-click field buttons: **First name**, **Full name**, **Last name**, **Company**,
+   **Email**, **Your organisation**, plus your own imported columns (for example **City**). Click where the name should go
+   (in the subject, preview text, a heading, text or a button), then click the field: it is inserted right there, as a
+   tag such as `{{ first_name | "there" }}`. The text after `|` is used when a contact has no first name. The buttons are
+   under the preview text (for the subject) and above the email (for the content). The Preview shows real names.
 5. MailHarbor saves as you type. **Preview** shows the email as a sample contact would see it.
 
 Every email automatically includes an unsubscribe link and your organisation's postal address. If you remove the

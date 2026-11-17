@@ -1,5 +1,6 @@
 import { get, post, qs, download } from '../api.js';
 import { html, mount, $, num, pct, datetime, loading, empty, pager, campStatus, options, errorToast } from '../ui.js';
+import { pickSample } from '../samples.js';
 
 export async function render(el, ctx) {
   const state = { q: '', status: '', page: 1 };
@@ -7,11 +8,16 @@ export async function render(el, ctx) {
 
   async function createNew() {
     try {
-      const r = await post('/campaigns', { name: `Campaign ${new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}` });
-      location.hash = `#/campaigns/${r.data.id}/edit`;
+      await pickSample({
+        onPick: async (sample, meta) => {
+          const date = new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
+          const name = sample === 'blank' ? `Campaign ${date}` : `${meta.name} ${date}`;
+          const r = await post('/campaigns', { name, sample });
+          location.hash = `#/campaigns/${r.data.id}/edit`;
+        },
+      });
     } catch (err) { errorToast(err); }
   }
-  if (ctx.query().get('new') && canWrite) { await createNew(); return; }
 
   mount(el, html`<div class="page-head"><div><h1>Campaigns</h1><p>Write, test, schedule and send emails. Suppressed, unsubscribed and held contacts are excluded automatically.</p></div>
     <div class="d-flex gap-2 flex-wrap">
@@ -60,5 +66,7 @@ export async function render(el, ctx) {
     return undefined;
   });
   await load();
+  // Sidebar "New campaign" links here with ?new=1: open the sample gallery.
+  if (ctx.query().get('new') && canWrite) createNew();
   return () => clearTimeout(t);
 }

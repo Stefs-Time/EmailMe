@@ -9,7 +9,7 @@ local SMTP server (`test/helpers/smtpSink.js`). That server rejects addresses by
 | `soft-` | 452 4.2.2 |
 | `policy-` | 550 5.7.1 |
 
-All 22 tests pass (17 Nov 2026).
+All 23 tests pass (17 Nov 2026).
 
 ```bash
 cd portal
@@ -53,7 +53,10 @@ Additional automated checks:
   personalisation and a click-tracked button; duplicating keeps the design;
 - the template builder: the built-in template is a builder design; templates without exactly one Campaign content
   block are rejected; a designed template (logo, page colour, width, footer) wraps a delivered campaign, with exactly
-  one unsubscribe link (the footer's).
+  one unsubscribe link (the footer's);
+- samples and personalisation: every sample creates a valid builder campaign (subject and preview text included);
+  unknown samples are rejected; sample buttons must be given a link before sending; imported columns are offered as
+  personalisation fields.
 
 **Unit tests** (`npm run test:unit`, 21 tests): configuration rules, secret encryption, rendering and personalisation,
 DSN/ARF/auto-reply parsing, bounce classification, SMTP error classification, and the builder renderer (defaults,

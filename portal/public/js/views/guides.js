@@ -60,13 +60,17 @@ const G = {
   campaigns: ['Sending a campaign', raw(`
     <h2>Sending a campaign</h2>
     <ol>
-      <li><a href="#/campaigns">Campaigns</a> → <strong>New campaign</strong>.</li>
+      <li><a href="#/campaigns">Campaigns</a> → <strong>New campaign</strong>, then pick a starting design: a simple message, a marketing
+        promotion, a new product release, "Are you still interested?", "Want to find out more?", a newsletter, an event invitation or a
+        welcome email. Replace the [bracketed] text and add your images and links. <strong>Samples</strong> above the builder swaps the
+        design of an existing draft (Undo brings it back).</li>
       <li><strong>Who receives it:</strong> tick one or more lists. The number of people who will actually receive it is shown underneath:
         suppressed, unsubscribed, unconfirmed and held contacts are left out automatically.</li>
       <li><strong>Envelope:</strong> subject line, preview text (the grey text inboxes show after the subject), sender and template.</li>
-      <li><strong>Content:</strong> design the email in the drag-and-drop <em>Builder</em> (see below). Insert personal fields such as
-        <code>{{ first_name }}</code>, with a fallback for empty values: <code>{{ first_name | "there" }}</code>. Custom CSV columns work too:
-        <code>{{ attribs.city }}</code>. The <em>Visual</em> and <em>HTML</em> editors are there if you prefer to write or paste HTML.</li>
+      <li><strong>Content:</strong> design the email in the drag-and-drop <em>Builder</em> (see below).</li>
+      <li><strong>Personalise:</strong> click where the name should go (subject, preview text, a heading, text or button), then click a field
+        button such as <em>First name</em>, <em>Full name</em> or <em>Company</em>. Your imported columns (e.g. <em>City</em>) appear as buttons too.
+        Names are inserted with a fallback for contacts without one: <code>{{ first_name | "there" }}</code>. The preview shows real names.</li>
       <li>Check the <strong>preview</strong> on desktop and mobile, then <strong>Send test</strong> to yourself.</li>
       <li><strong>Send now</strong>, or <strong>Schedule</strong> for later. Changes save automatically while you type.</li>
     </ol>

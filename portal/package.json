@@ -17,7 +17,8 @@
     "test:unit": "node --test \"test/unit/*.test.js\"",
     "test:integration": "node --test --test-concurrency=1 \"test/integration/*.test.js\"",
     "backup": "node scripts/backup.js",
-    "smtp-sink": "node test/helpers/smtpSink.js 2525"
+    "smtp-sink": "node test/helpers/smtpSink.js 2525",
+    "brochure": "node scripts/build-brochure.js"
   },
   "license": "UNLICENSED",
   "dependencies": {

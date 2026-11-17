@@ -1,0 +1,340 @@
+<!doctype html>
+<!--
+  MailHarbor product overview (source of portal/public/downloads/mailharbor-overview.pdf).
+  Rebuild the PDF after editing:  cd portal && npm run brochure
+  Only list features that exist in the product; the roadmap is indicative.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MailHarbor · Product overview</title>
+<link rel="stylesheet" href="../../portal/node_modules/bootstrap-icons/font/bootstrap-icons.css">
+<style>
+  @page { size: A4; margin: 0; }
+  :root {
+    --navy: #16365f; --navy2: #1f4e8c; --teal: #0f8f82; --teal-l: #2bb3a3; --teal-soft: #e6f5f3;
+    --ink: #1b2430; --muted: #5f6b7a; --line: #e2e7ee; --bg: #f4f6f9;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Inter, "Segoe UI", Arial, sans-serif; color: var(--ink); -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 10.5pt; line-height: 1.5; }
+  .page { width: 210mm; height: 297mm; position: relative; overflow: hidden; page-break-after: always; padding: 20mm 18mm 22mm; background: #fff; }
+  .page:last-child { page-break-after: auto; }
+  h1, h2, h3 { margin: 0; color: var(--navy); line-height: 1.15; letter-spacing: -.01em; }
+  h2 { font-size: 25pt; font-weight: 800; }
+  h3 { font-size: 12.5pt; font-weight: 700; margin-bottom: 4px; }
+  p { margin: 0 0 8px; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: 8.5pt; font-weight: 700; color: var(--teal); margin-bottom: 8px; }
+  .lead { font-size: 12.5pt; color: #33404f; max-width: 150mm; margin: 10px 0 18px; }
+  .muted { color: var(--muted); }
+  .foot { position: absolute; left: 18mm; right: 18mm; bottom: 10mm; display: flex; justify-content: space-between; font-size: 8pt; color: var(--muted); border-top: 1px solid var(--line); padding-top: 6px; }
+  .foot b { color: var(--navy); }
+  .wave { position: absolute; left: 0; right: 0; bottom: 0; height: 26mm; }
+
+  /* Cover */
+  .cover { background: radial-gradient(120% 80% at 85% 0%, #24548f 0%, #16365f 55%, #0f2846 100%); color: #fff; padding: 24mm 20mm; }
+  .cover .brand { display: flex; align-items: center; gap: 12px; font-size: 17pt; font-weight: 800; letter-spacing: -.01em; }
+  .cover .brand span { color: var(--teal-l); }
+  .cover h1 { color: #fff; font-size: 44pt; font-weight: 800; margin-top: 52mm; line-height: 1.04; letter-spacing: -.02em; }
+  .cover h1 em { font-style: normal; color: var(--teal-l); }
+  .cover .sub { font-size: 14pt; color: #d6e2f1; max-width: 140mm; margin-top: 14px; line-height: 1.45; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+  .chip { border: 1px solid rgba(255,255,255,.35); border-radius: 999px; padding: 5px 12px; font-size: 9.5pt; font-weight: 600; color: #fff; background: rgba(255,255,255,.08); }
+  .chip i { color: var(--teal-l); margin-right: 5px; }
+  .cover .tag { position: absolute; left: 20mm; bottom: 34mm; font-size: 10pt; color: #b9cbe2; }
+  .cover .tag b { color: #fff; }
+
+  /* Cards and grids */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 14px 15px; background: #fff; }
+  .card.soft { background: var(--bg); border-color: transparent; }
+  .icon { width: 34px; height: 34px; border-radius: 9px; background: var(--teal-soft); color: var(--teal); display: inline-flex; align-items: center; justify-content: center; font-size: 15pt; margin-bottom: 8px; }
+  .icon.navy { background: #e8eef7; color: var(--navy2); }
+  .card p { font-size: 9.6pt; color: #3a4757; margin: 0; }
+  ul.ticks { list-style: none; padding: 0; margin: 6px 0 0; }
+  ul.ticks li { position: relative; padding-left: 18px; margin: 3px 0; font-size: 9.6pt; color: #3a4757; }
+  ul.ticks li::before { content: "\F26E"; font-family: bootstrap-icons; position: absolute; left: 0; top: 0; color: var(--teal); font-size: 10pt; }
+
+  .hero-band { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; align-items: stretch; margin-bottom: 14px; }
+  .feature-hero { background: linear-gradient(135deg, var(--navy) 0%, var(--navy2) 100%); color: #fff; border-radius: 14px; padding: 18px 20px; }
+  .feature-hero h3 { color: #fff; font-size: 15pt; }
+  .feature-hero p { color: #d6e2f1; font-size: 10pt; }
+  .feature-hero ul.ticks li { color: #eaf1fa; }
+  .feature-hero ul.ticks li::before { color: var(--teal-l); }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0 18px; }
+  .stat { background: var(--bg); border-radius: 12px; padding: 12px 14px; }
+  .stat b { display: block; font-size: 22pt; color: var(--navy); font-weight: 800; line-height: 1.1; }
+  .stat span { font-size: 9pt; color: var(--muted); }
+
+  /* Mock UI illustrations */
+  .mock { border: 1px solid var(--line); border-radius: 12px; background: var(--bg); padding: 10px; font-size: 8.5pt; }
+  .mock .bar { display: flex; gap: 5px; margin-bottom: 8px; }
+  .mock .bar i { width: 7px; height: 7px; border-radius: 50%; background: #c9d4e2; display: inline-block; }
+  .mock .row { display: flex; gap: 8px; }
+  .mock .pal { width: 28%; display: flex; flex-direction: column; gap: 4px; }
+  .mock .pal div { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; color: var(--navy2); font-weight: 600; }
+  .mock .canvas { flex: 1; background: #fff; border-radius: 8px; padding: 10px; }
+  .mock .h { font-weight: 800; color: var(--navy); font-size: 11pt; margin-bottom: 4px; }
+  .mock .t { height: 6px; background: #e5eaf1; border-radius: 3px; margin: 4px 0; }
+  .mock .btn { display: inline-block; background: var(--navy2); color: #fff; border-radius: 5px; padding: 4px 10px; font-weight: 700; margin-top: 6px; }
+  .mock .img { height: 46px; border-radius: 6px; background: linear-gradient(135deg, #cfe0f3, #e6f5f3); margin-bottom: 6px; }
+  .mock .drop { height: 3px; background: var(--teal); border-radius: 2px; margin: 5px 0; box-shadow: 0 0 0 2px rgba(15,143,130,.2); }
+  .chipline { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .chipline span { background: var(--teal-soft); color: #0b5d55; border: 1px solid #b9d9d4; border-radius: 999px; padding: 1px 7px; font-weight: 600; font-size: 7.8pt; }
+
+  table.rules { width: 100%; border-collapse: collapse; font-size: 9.4pt; margin-top: 6px; }
+  table.rules th, table.rules td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); }
+  table.rules th { font-size: 8pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .pill { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 8pt; font-weight: 700; }
+  .pill.red { background: #fde8e7; color: #a32520; } .pill.amber { background: #fdf3dc; color: #7d5a00; }
+  .pill.blue { background: #e8eef7; color: var(--navy2); } .pill.purple { background: #f3e7f2; color: #7a2f76; }
+
+  /* Roadmap */
+  .road { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+  .lane { border-radius: 14px; padding: 14px; background: var(--bg); }
+  .lane h3 { display: flex; align-items: center; gap: 8px; font-size: 13pt; }
+  .lane .when { font-size: 8.5pt; color: var(--muted); margin-bottom: 8px; }
+  .lane.next { background: linear-gradient(180deg, #e6f5f3 0%, #f4faf9 100%); }
+  .lane.soon { background: linear-gradient(180deg, #e8eef7 0%, #f5f8fc 100%); }
+  .lane.later { background: linear-gradient(180deg, #f1edf7 0%, #f8f6fb 100%); }
+  .item { background: #fff; border-radius: 10px; padding: 9px 10px; margin-top: 8px; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+  .item b { display: block; color: var(--navy); font-size: 9.8pt; }
+  .item span { font-size: 8.6pt; color: #4a5767; }
+  .shipped { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+  .shipped div { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 8.6pt; font-weight: 600; color: var(--navy); }
+  .shipped div i { color: var(--teal); margin-right: 4px; }
+
+  /* Back cover */
+  .back { background: linear-gradient(160deg, #0f2846 0%, #16365f 60%, #1f4e8c 100%); color: #fff; }
+  .back h2 { color: #fff; font-size: 32pt; }
+  .steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 18px; }
+  .step { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16); border-radius: 14px; padding: 14px 16px; }
+  .step .n { display: inline-flex; width: 26px; height: 26px; border-radius: 50%; background: var(--teal-l); color: #0f2846; font-weight: 800; align-items: center; justify-content: center; margin-bottom: 6px; }
+  .step h3 { color: #fff; }
+  .step p { color: #cbd8ea; font-size: 9.8pt; }
+  .back .foot { border-top-color: rgba(255,255,255,.2); color: #b9cbe2; }
+  .back .foot b { color: #fff; }
+</style>
+</head>
+<body>
+
+<!-- 1. Cover -->
+<section class="page cover">
+  <div class="brand">
+    <svg width="44" height="44" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#ffffff"/><path d="M14 22.5c0-2 1.6-3.5 3.5-3.5h29c1.9 0 3.5 1.5 3.5 3.5v15c0 2-1.6 3.5-3.5 3.5h-29c-1.9 0-3.5-1.5-3.5-3.5z" fill="none" stroke="#16365f" stroke-width="3.2"/><path d="M15.5 21.5 32 33l16.5-11.5" fill="none" stroke="#16365f" stroke-width="3.2" stroke-linejoin="round"/><path d="M12 48c4 0 4-2.6 8-2.6s4 2.6 8 2.6 4-2.6 8-2.6 4 2.6 8 2.6 4-2.6 8-2.6" fill="none" stroke="#0f8f82" stroke-width="3.2" stroke-linecap="round"/></svg>
+    <div>Mail<span>Harbor</span></div>
+  </div>
+  <h1>Email marketing<br>you <em>own</em>.</h1>
+  <p class="sub">Design beautiful campaigns, keep every list clean and POPIA-compliant, and send through <b>your own SMTP server</b>, all from one simple portal.</p>
+  <div class="chips">
+    <span class="chip"><i class="bi bi-grid-1x2"></i>Drag-and-drop builder</span>
+    <span class="chip"><i class="bi bi-shield-check"></i>POPIA-ready</span>
+    <span class="chip"><i class="bi bi-hdd-network"></i>Your own SMTP</span>
+    <span class="chip"><i class="bi bi-graph-up-arrow"></i>Clear reporting</span>
+    <span class="chip"><i class="bi bi-cloud-check"></i>Runs on Railway</span>
+  </div>
+  <div class="tag">Product overview · <b>November 2026</b> · Your contacts, safely in harbour.</div>
+  <svg class="wave" viewBox="0 0 800 100" preserveAspectRatio="none" aria-hidden="true"><path d="M0 60 C 100 30, 200 90, 300 60 S 500 30, 600 60 S 750 90, 800 60 L 800 100 L 0 100 Z" fill="#2bb3a3" opacity=".25"/><path d="M0 75 C 120 50, 220 100, 340 75 S 560 50, 680 75 S 760 95, 800 80 L 800 100 L 0 100 Z" fill="#2bb3a3" opacity=".45"/></svg>
+</section>
+
+<!-- 2. Why MailHarbor -->
+<section class="page">
+  <div class="eyebrow">Why MailHarbor</div>
+  <h2>Everything your email marketing needs.<br>Nothing you don't.</h2>
+  <p class="lead">MailHarbor brings your contact database, campaign design, sending, compliance and reporting into one place, built for South African organisations that want control over their data and their deliverability.</p>
+  <div class="grid2">
+    <div class="card"><div class="icon"><i class="bi bi-hdd-network"></i></div><h3>Own your sending</h3><p>Campaigns go out through your own SMTP server or relay, at the speed you set. No shared IP pools, no per-contact pricing from MailHarbor, and your data stays in your own database.</p></div>
+    <div class="card"><div class="icon navy"><i class="bi bi-shield-check"></i></div><h3>Compliance built in</h3><p>Consent records, one-click unsubscribe, a preference centre and a suppression list that nothing can bypass. POPIA access and erasure requests take a click.</p></div>
+    <div class="card"><div class="icon"><i class="bi bi-palette"></i></div><h3>Design without a designer</h3><p>Drag-and-drop emails and templates, 8 ready-made designs and one-click personalisation. They look professional on every phone and inbox.</p></div>
+    <div class="card"><div class="icon navy"><i class="bi bi-graph-up-arrow"></i></div><h3>Know what works</h3><p>Opens, clicks, bounces, complaints, unsubscribes and re-engagement for every campaign, plus a live view of everything you send through your server.</p></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><b>8</b><span>ready-made campaign designs</span></div>
+    <div class="stat"><b>4</b><span>recipient pages handled for you</span></div>
+    <div class="stat"><b>3</b><span>ways to catch bounces</span></div>
+    <div class="stat"><b>2</b><span>variables to deploy: database &amp; SMTP</span></div>
+  </div>
+  <div class="card soft"><h3><i class="bi bi-stars" style="color:#0f8f82"></i> Built for the way marketing teams actually work</h3>
+    <ul class="ticks" style="columns:2; column-gap:18px">
+      <li>Import a spreadsheet and see exactly what will happen before anything is saved</li>
+      <li>Every unsubscribe and bounce is respected automatically, forever</li>
+      <li>Personalise subject lines and content in a click</li>
+      <li>Test-send to your phone, then send now or schedule</li>
+      <li>Pause, resume or cancel while a campaign is sending</li>
+      <li>Plain-English guides built into the app</li>
+    </ul></div>
+  <div class="foot"><span><b>MailHarbor</b> · Product overview</span><span>2</span></div>
+</section>
+
+<!-- 3. Create -->
+<section class="page">
+  <div class="eyebrow">Create</div>
+  <h2>Beautiful emails in minutes</h2>
+  <p class="lead">A real drag-and-drop builder: what you see is what your contacts get, on desktop and mobile.</p>
+  <div class="hero-band">
+    <div class="feature-hero"><h3><i class="bi bi-grid-1x2"></i> Drag-and-drop builder</h3>
+      <p>Drag blocks onto the email, type straight into it, and fine-tune colours, links and spacing in a side panel.</p>
+      <ul class="ticks">
+        <li>Headings, text, buttons, images, two-column layouts, dividers, spacers and HTML</li>
+        <li>Undo and redo, autosave, and a live preview with real names</li>
+        <li>Columns stack automatically on phones</li>
+        <li>Colour-contrast warnings keep every email readable</li>
+        <li>Keyboard and touch friendly</li>
+      </ul></div>
+    <div class="mock"><div class="bar"><i></i><i></i><i></i></div>
+      <div class="row"><div class="pal"><div>Heading</div><div>Text</div><div>Button</div><div>Image</div><div>Columns</div></div>
+        <div class="canvas"><div class="img"></div><div class="h">Hello Thandi,</div><div class="t"></div><div class="t" style="width:80%"></div><div class="drop"></div><div class="btn">Shop the specials</div>
+          <div class="chipline"><span>First name</span><span>Full name</span><span>Company</span><span>City</span></div></div></div></div>
+  </div>
+  <div class="grid3">
+    <div class="card"><div class="icon"><i class="bi bi-collection"></i></div><h3>8 ready-made designs</h3><p>Marketing promotion, new product release, "Are you still interested?", "Want to find out more?", newsletter, event invitation, welcome and a simple message.</p></div>
+    <div class="card"><div class="icon navy"><i class="bi bi-person-badge"></i></div><h3>One-click personalisation</h3><p>Click a field (first name, company, or any column you imported) and it lands at your cursor, with a friendly fallback when a name is missing.</p></div>
+    <div class="card"><div class="icon"><i class="bi bi-layout-text-window-reverse"></i></div><h3>Branded templates</h3><p>Design your header, colours, width, font and footer once in the same builder, and every campaign wears your brand.</p></div>
+    <div class="card"><div class="icon navy"><i class="bi bi-envelope-check"></i></div><h3>Test before you send</h3><p>Send tests to up to five inboxes, and preview desktop and mobile with sample data.</p></div>
+    <div class="card"><div class="icon"><i class="bi bi-list-check"></i></div><h3>Ready-to-send checklist</h3><p>MailHarbor won't let a campaign go out without a subject, sender, postal address, working links and eligible recipients.</p></div>
+    <div class="card"><div class="icon navy"><i class="bi bi-calendar-event"></i></div><h3>Send now or schedule</h3><p>Pick a time in South African time. Pause, resume or cancel at any point.</p></div>
+  </div>
+  <div class="foot"><span><b>MailHarbor</b> · Create</span><span>3</span></div>
+</section>
+
+<!-- 4. Audience -->
+<section class="page">
+  <div class="eyebrow">Audience</div>
+  <h2>A contact database you can trust</h2>
+  <p class="lead">One clean record per person, with their consent, lists, emails and history in one place.</p>
+  <div class="grid2" style="margin-bottom:12px">
+    <div class="card"><div class="icon"><i class="bi bi-cloud-arrow-up"></i></div><h3>Import wizard with a safety net</h3>
+      <p>Upload a CSV and MailHarbor matches your columns, checks every address, removes duplicates and skips anyone who unsubscribed, all <b>before</b> anything is saved.</p>
+      <ul class="ticks"><li>Custom columns become personalisation fields</li><li>A consent basis is required for every row</li><li>A downloadable report for every import</li></ul></div>
+    <div class="card"><div class="icon navy"><i class="bi bi-search"></i></div><h3>Find anyone, instantly</h3>
+      <p>Search by name, email or company; filter by status, list, source or consent; sort any column. Bulk-add to lists, unsubscribe or suppress thousands at once.</p>
+      <ul class="ticks"><li>"Eligible to receive" shows exactly who a campaign will reach</li><li>Full history per contact: every email, open, click and bounce</li></ul></div>
+  </div>
+  <div class="grid3">
+    <div class="card"><div class="icon"><i class="bi bi-card-list"></i></div><h3>Lists &amp; double opt-in</h3><p>Single or double opt-in lists, with automatic confirmation emails and a one-click confirm page.</p></div>
+    <div class="card"><div class="icon navy"><i class="bi bi-sliders"></i></div><h3>Preference centre</h3><p>Recipients choose which lists to keep, or leave everything. No login, no friction, all recorded.</p></div>
+    <div class="card"><div class="icon"><i class="bi bi-hand-thumbs-up"></i></div><h3>Win back quiet contacts</h3><p>A built-in "Stay subscribed" page turns "Are you still interested?" emails into measurable re-engagement.</p></div>
+    <div class="card"><div class="icon navy"><i class="bi bi-patch-check"></i></div><h3>Consent evidence</h3><p>How, when and why each person agreed: recorded on manual adds and imports, and exportable for audits.</p></div>
+    <div class="card"><div class="icon"><i class="bi bi-person-x"></i></div><h3>POPIA requests in a click</h3><p>Export everything held about a person, or erase them while keeping a one-way fingerprint so they're never emailed again.</p></div>
+    <div class="card"><div class="icon navy"><i class="bi bi-download"></i></div><h3>Excel-safe exports</h3><p>Contacts, eligible lists, suppressions, consent history, bounces and campaigns, all as CSV.</p></div>
+  </div>
+  <div class="foot"><span><b>MailHarbor</b> · Audience</span><span>4</span></div>
+</section>
+
+<!-- 5. Deliver & protect -->
+<section class="page">
+  <div class="eyebrow">Deliver &amp; protect</div>
+  <h2>Reach the inbox. Protect your reputation.</h2>
+  <p class="lead">A sending engine that plays by the rules Gmail, Yahoo and Microsoft expect, so your domain stays trusted.</p>
+  <div class="hero-band">
+    <div class="feature-hero"><h3><i class="bi bi-send-check"></i> Smart sending engine</h3>
+      <ul class="ticks">
+        <li>Sends through your own SMTP server at the pace you set, with an optional hourly cap</li>
+        <li>Temporary failures retried automatically (5, 30 and 120 minutes)</li>
+        <li>Mail server down? The campaign pauses itself, alerts you and resumes without losing anyone</li>
+        <li>Every person is re-checked against the suppression list a second before their email goes</li>
+        <li>Never sends the same email twice, even after a restart</li>
+      </ul></div>
+    <div class="card"><h3><i class="bi bi-envelope-x" style="color:#0f8f82"></i> Unsubscribe done right</h3>
+      <p>Every email carries an unsubscribe link and the one-click unsubscribe headers that Gmail and Yahoo require for bulk senders. Unsubscribe, preferences, stay-subscribed and view-online pages are built in: MailHarbor creates each person's link when it sends.</p></div>
+  </div>
+  <h3 style="margin-top:6px">Bounce intelligence from three sources</h3>
+  <p class="muted">Rejections at send time, your bounce mailbox and your provider's webhook are classified automatically:</p>
+  <table class="rules">
+    <thead><tr><th>Signal</th><th>Example</th><th>What MailHarbor does</th></tr></thead>
+    <tbody>
+      <tr><td><span class="pill red">Hard bounce</span></td><td>550 5.1.1 user unknown</td><td>Suppresses the address straight away</td></tr>
+      <tr><td><span class="pill amber">Soft bounce</span></td><td>452 mailbox full</td><td>Counts it and retries; suppresses after the limit you set</td></tr>
+      <tr><td><span class="pill blue">Policy / spam block</span></td><td>550 5.7.1 blocked</td><td>Holds the contact for review instead of wrongly removing them</td></tr>
+      <tr><td><span class="pill purple">Complaint</span></td><td>Marked as spam</td><td>Suppresses immediately and permanently</td></tr>
+    </tbody>
+  </table>
+  <div class="card soft" style="margin-top:14px"><h3><i class="bi bi-lock" style="color:#0f8f82"></i> A suppression list nothing can bypass</h3>
+    <p>Imports, list changes and manual edits can never quietly re-subscribe someone who unsubscribed, bounced or complained. Only an administrator can reactivate a contact, and only with a recorded reason and new consent.</p></div>
+  <div class="foot"><span><b>MailHarbor</b> · Deliver &amp; protect</span><span>5</span></div>
+</section>
+
+<!-- 6. Measure & run -->
+<section class="page">
+  <div class="eyebrow">Measure &amp; run</div>
+  <h2>Clear numbers. Calm operations.</h2>
+  <p class="lead">See what every campaign achieved and what your mail server is doing, with the controls IT expects.</p>
+  <div class="grid2" style="margin-bottom:12px">
+    <div class="card"><div class="icon"><i class="bi bi-bar-chart-line"></i></div><h3>Campaign reports</h3>
+      <ul class="ticks"><li>Recipients, sent, failures, hard and soft bounces, complaints</li><li>Unique opens and clicks, top links, activity timeline</li><li>Unsubscribes, preference changes and "stayed subscribed"</li><li>Export to CSV</li></ul></div>
+    <div class="card"><div class="icon navy"><i class="bi bi-envelope-paper"></i></div><h3>Mail usage</h3>
+      <ul class="ticks"><li>Emails sent today, this month and in the last hour</li><li>Hourly limit gauge and send queue</li><li>Volume per day by campaign, opt-in and test</li><li>SMTP rejections and recipient actions</li></ul></div>
+    <div class="card"><div class="icon"><i class="bi bi-people"></i></div><h3>Audience &amp; deliverability</h3>
+      <ul class="ticks"><li>Contacts by source, consent basis and email domain</li><li>12-month growth vs. suppressions</li><li>Bounce trends by day, code and domain</li></ul></div>
+    <div class="card"><div class="icon navy"><i class="bi bi-speedometer2"></i></div><h3>Dashboard</h3>
+      <ul class="ticks"><li>Every contact status at a glance</li><li>Recent campaigns and 30-day activity</li><li>Live alerts when something needs attention</li></ul></div>
+  </div>
+  <h3>Run it with confidence</h3>
+  <div class="grid3" style="margin-top:6px">
+    <div class="card soft"><div class="icon"><i class="bi bi-people-fill"></i></div><h3>Roles</h3><p>Viewer, manager and administrator, enforced on the server for every action.</p></div>
+    <div class="card soft"><div class="icon navy"><i class="bi bi-shield-lock"></i></div><h3>Security</h3><p>Argon2id passwords, account lockout, CSRF protection, a strict content policy and encrypted secrets.</p></div>
+    <div class="card soft"><div class="icon"><i class="bi bi-journal-check"></i></div><h3>Full audit log</h3><p>Who imported, exported, sent, suppressed or erased what, and when.</p></div>
+    <div class="card soft"><div class="icon navy"><i class="bi bi-heart-pulse"></i></div><h3>System health</h3><p>A go-live checklist: SMTP, SPF and DMARC records, bounce mailbox, public address and backups.</p></div>
+    <div class="card soft"><div class="icon"><i class="bi bi-database-check"></i></div><h3>Verified backups</h3><p>Nightly database backups, checked before upload, with an optional off-site copy.</p></div>
+    <div class="card soft"><div class="icon navy"><i class="bi bi-cloud-check"></i></div><h3>Simple hosting</h3><p>Runs on Railway or your own server. Two settings to start: a database and your SMTP details.</p></div>
+  </div>
+  <div class="foot"><span><b>MailHarbor</b> · Measure &amp; run</span><span>6</span></div>
+</section>
+
+<!-- 7. Roadmap -->
+<section class="page">
+  <div class="eyebrow">Roadmap</div>
+  <h2>Where we're sailing next</h2>
+  <p class="lead">MailHarbor keeps growing. Here's what's planned, shaped by the teams who use it every day.</p>
+  <div class="card soft"><h3><i class="bi bi-check2-circle" style="color:#0f8f82"></i> Shipped and ready today</h3>
+    <div class="shipped">
+      <div><i class="bi bi-check-lg"></i>Drag-and-drop builder</div><div><i class="bi bi-check-lg"></i>Template builder</div><div><i class="bi bi-check-lg"></i>8 sample designs</div><div><i class="bi bi-check-lg"></i>One-click personalisation</div>
+      <div><i class="bi bi-check-lg"></i>Preference centre</div><div><i class="bi bi-check-lg"></i>Stay-subscribed page</div><div><i class="bi bi-check-lg"></i>Bounce intelligence</div><div><i class="bi bi-check-lg"></i>Mail usage report</div>
+    </div></div>
+  <div class="road">
+    <div class="lane next"><h3><i class="bi bi-rocket-takeoff" style="color:#0f8f82"></i> Next up</h3><div class="when">Highest priority</div>
+      <div class="item"><b>Image library &amp; uploads</b><span>Drag your own images straight into the builder: no web hosting needed.</span></div>
+      <div class="item"><b>Sign-up forms</b><span>Hosted and embeddable forms for your website, with double opt-in.</span></div>
+      <div class="item"><b>Saved segments</b><span>Dynamic audiences by attribute, source or engagement, always up to date.</span></div>
+      <div class="item"><b>Automatic UTM tagging</b><span>See campaign traffic and conversions in Google Analytics.</span></div>
+      <div class="item"><b>Two-factor sign-in</b><span>Authenticator-app protection for every staff account.</span></div></div>
+    <div class="lane soon"><h3><i class="bi bi-diagram-3" style="color:#1f4e8c"></i> Coming soon</h3><div class="when">Being designed</div>
+      <div class="item"><b>Automations</b><span>Welcome series, drip journeys, birthday and anniversary emails.</span></div>
+      <div class="item"><b>A/B testing</b><span>Test subject lines and content; the winner goes to everyone else.</span></div>
+      <div class="item"><b>Brand kit &amp; saved blocks</b><span>Your logo, colours and favourite sections, one click away.</span></div>
+      <div class="item"><b>Scheduled reports</b><span>Campaign results in your inbox every week; compare campaigns side by side.</span></div>
+      <div class="item"><b>Automatic list hygiene</b><span>A sunset policy for long-term non-engagers protects your reputation.</span></div></div>
+    <div class="lane later"><h3><i class="bi bi-binoculars" style="color:#7a2f76"></i> On the horizon</h3><div class="when">Exploring</div>
+      <div class="item"><b>Send-time optimisation</b><span>Each contact receives the email when they're most likely to read it.</span></div>
+      <div class="item"><b>Single sign-on</b><span>Sign in with Microsoft 365 or Google Workspace.</span></div>
+      <div class="item"><b>API &amp; integrations</b><span>API keys and outgoing webhooks to connect your CRM and website.</span></div>
+      <div class="item"><b>Click maps &amp; scoring</b><span>See where people click, and who your most engaged contacts are.</span></div>
+      <div class="item"><b>Inbox preview &amp; spam check</b><span>See your email in popular inboxes before you send.</span></div></div>
+  </div>
+  <p class="muted" style="margin-top:12px; font-size:8.5pt">The roadmap is indicative and is prioritised with customer feedback; order and scope may change.</p>
+  <div class="foot"><span><b>MailHarbor</b> · Roadmap</span><span>7</span></div>
+</section>
+
+<!-- 8. Back cover -->
+<section class="page back">
+  <div class="eyebrow" style="color:#2bb3a3">Get started</div>
+  <h2>Ready to set sail?</h2>
+  <p class="lead" style="color:#d6e2f1">From an empty server to your first campaign in an afternoon.</p>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><h3>Deploy</h3><p>Add a PostgreSQL database and your SMTP details on Railway (or your own server). That's the whole configuration.</p></div>
+    <div class="step"><div class="n">2</div><h3>Set up</h3><p>Enter the one-time setup code, add your organisation's name, postal address and sender, and invite your team.</p></div>
+    <div class="step"><div class="n">3</div><h3>Import</h3><p>Upload your contacts with their consent basis. MailHarbor checks everything before it's saved.</p></div>
+    <div class="step"><div class="n">4</div><h3>Send</h3><p>Pick a sample design, personalise it in a click, send yourself a test, then send or schedule.</p></div>
+  </div>
+  <div style="margin-top:22mm; display:flex; align-items:center; gap:14px">
+    <svg width="54" height="54" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#ffffff"/><path d="M14 22.5c0-2 1.6-3.5 3.5-3.5h29c1.9 0 3.5 1.5 3.5 3.5v15c0 2-1.6 3.5-3.5 3.5h-29c-1.9 0-3.5-1.5-3.5-3.5z" fill="none" stroke="#16365f" stroke-width="3.2"/><path d="M15.5 21.5 32 33l16.5-11.5" fill="none" stroke="#16365f" stroke-width="3.2" stroke-linejoin="round"/><path d="M12 48c4 0 4-2.6 8-2.6s4 2.6 8 2.6 4-2.6 8-2.6 4 2.6 8 2.6 4-2.6 8-2.6" fill="none" stroke="#0f8f82" stroke-width="3.2" stroke-linecap="round"/></svg>
+    <div><div style="font-size:20pt; font-weight:800">Mail<span style="color:#2bb3a3">Harbor</span></div><div style="color:#b9cbe2">Your contacts, safely in harbour.</div></div>
+  </div>
+  <svg class="wave" viewBox="0 0 800 100" preserveAspectRatio="none" aria-hidden="true"><path d="M0 60 C 100 30, 200 90, 300 60 S 500 30, 600 60 S 750 90, 800 60 L 800 100 L 0 100 Z" fill="#2bb3a3" opacity=".25"/><path d="M0 75 C 120 50, 220 100, 340 75 S 560 50, 680 75 S 760 95, 800 80 L 800 100 L 0 100 Z" fill="#2bb3a3" opacity=".45"/></svg>
+  <div class="foot" style="bottom:30mm"><span><b>MailHarbor</b> · Product overview · November 2026</span><span>8</span></div>
+</section>
+
+</body>
+</html>

@@ -204,7 +204,9 @@ const G = {
 
 export async function render(el, ctx, [topic]) {
   const key = G[topic] ? topic : 'start';
-  mount(el, html`<div class="page-head"><div><h1>Guides</h1><p>Short, practical help for everyday tasks.</p></div></div>
+  mount(el, html`<div class="page-head"><div><h1>Guides</h1><p>Short, practical help for everyday tasks.</p></div>
+      <div class="d-flex gap-2 flex-wrap"><a class="btn btn-outline-primary" href="#/overview"><i class="bi bi-file-earmark-richtext me-1"></i>Product overview</a>
+        <a class="btn btn-primary" href="/downloads/mailharbor-overview.pdf" download="MailHarbor-product-overview.pdf"><i class="bi bi-file-earmark-arrow-down me-1"></i>Download PDF</a></div></div>
     <div class="row g-3"><div class="col-lg-3"><div class="card"><div class="card-body guide-nav p-2">
       ${Object.entries(G).map(([k, [t]]) => html`<a href="#/guides/${k}" class="${k === key ? 'active' : ''}">${t}</a>`)}</div></div></div>
     <div class="col-lg-9"><div class="card"><div class="card-body guide p-4">${G[key][1]}</div></div></div></div>`);

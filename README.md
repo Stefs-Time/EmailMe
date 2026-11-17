@@ -210,6 +210,7 @@ The SMTP sink simulates failures by address prefix:
 | `npm run migrate` | Apply migrations only (needs `DATABASE_URL`) |
 | `npm run create-admin -- email "Name"` | Create an admin or reset an admin password from the command line |
 | `npm run backup` | One backup run (see `scripts/backup.js`) |
+| `npm run brochure` | Rebuild the product overview PDF and page previews from `docs/brochure/mailharbor-overview.html` (needs Playwright; development only) |
 | `npm run test:unit` | Unit tests (no database) |
 | `TEST_DATABASE_URL=… npm run test:integration` | End-to-end acceptance tests. **Drops the `portal` schema** of that database, and refuses to run unless the database name contains `test` |
 
@@ -301,8 +302,11 @@ Do the [UAT checklist](docs/ACCEPTANCE_TESTS.md) on staging before go-live.
 | [SECURITY](docs/SECURITY.md) | Security controls and POPIA |
 | [ACCEPTANCE_TESTS](docs/ACCEPTANCE_TESTS.md) | UAT checklist mapped to the scope |
 | [UAT_AUDIT](docs/UAT_AUDIT.md) | UI/UX/UAT audit findings and fixes |
+| [Product overview](docs/brochure/mailharbor-overview.html) | Marketing brochure (features + roadmap), source of the PDF |
 
-The same how-to content is in the app under **Guides**.
+The same how-to content is in the app under **Guides**. The product overview brochure is in the app under
+**Product overview**, where it can be viewed and downloaded as a PDF. After changing features, update the brochure
+source and run `npm run brochure` so the PDF stays accurate.
 
 ## Licence
 

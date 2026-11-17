@@ -21,7 +21,11 @@ export const BLOCKS = [
   { type: 'divider', label: 'Divider', icon: 'dash-lg' },
   { type: 'spacer', label: 'Spacer', icon: 'arrows-vertical' },
   { type: 'html', label: 'HTML', icon: 'code-slash' },
+  // Templates only
+  { type: 'content', label: 'Campaign content', icon: 'body-text', templateOnly: true },
+  { type: 'footer', label: 'Footer', icon: 'layout-text-window-reverse', templateOnly: true },
 ];
+const TOP_ONLY = new Set(['columns', 'content']); // cannot go inside columns
 const LABEL = Object.fromEntries(BLOCKS.map((b) => [b.type, b.label]));
 
 const DEFAULTS = {
@@ -33,6 +37,16 @@ const DEFAULTS = {
   divider: { color: '#dde3ea', thickness: 1, pad: 12, bg: '' },
   spacer: { height: 24 },
   html: { html: '<p>Custom HTML</p>', pad: 12, bg: '' },
+  content: {},
+  footer: { text: 'You are receiving this because you subscribed or are a customer of {{ org_name }}.', align: 'center', color: '#5f6b7a', size: 12, pad: 16, bg: '' },
+};
+const PAGE_DEFAULTS = { page_bg: '#f4f6f9', body_bg: '#ffffff', width: 600, font: 'arial', radius: 8, body_pad: 28 };
+const FONTS = {
+  arial: ['Arial', 'Arial, Helvetica, sans-serif'],
+  helvetica: ['Helvetica', "'Helvetica Neue', Helvetica, Arial, sans-serif"],
+  verdana: ['Verdana', 'Verdana, Geneva, sans-serif'],
+  trebuchet: ['Trebuchet MS', "'Trebuchet MS', Arial, sans-serif"],
+  georgia: ['Georgia (serif)', "Georgia, 'Times New Roman', serif"],
 };
 const HEADING_SIZE = { 1: 28, 2: 22, 3: 18 };
 const TAGS = [['first_name', 'First name'], ['last_name', 'Last name'], ['full_name', 'Full name'], ['company', 'Company'], ['email', 'Email'], ['org_name', 'Organisation']];
@@ -56,14 +70,18 @@ const newBlock = (type) => ({ id: uid(), type, props: clone(DEFAULTS[type]) });
 /**
  * @param {HTMLElement} root
  * @param {object} initial  block document
- * @param {{ onChange: (doc) => void }} opts
+ * @param {{ onChange: (doc) => void, mode?: 'campaign' | 'template' }} opts
+ *   mode 'template' adds the Campaign content and Footer blocks and page settings.
  */
-export function createBuilder(root, initial, { onChange }) {
+export function createBuilder(root, initial, { onChange, mode = 'campaign' }) {
+  const isTemplate = mode === 'template';
   const doc = { version: 1, blocks: (initial?.blocks || []).map((b) => {
     const x = withDefaults(b);
     if (x.type === 'columns') x.props.columns = [0, 1].map((i) => (x.props.columns?.[i] || []).map(withDefaults));
     return x;
   }) };
+  if (isTemplate) doc.settings = { ...PAGE_DEFAULTS, ...(initial?.settings || {}) };
+  const palette = BLOCKS.filter((b) => isTemplate || !b.templateOnly);
   let selectedId = null;
   let drag = null; // { kind: 'new', type } | { kind: 'move', id }
   const undo = [];
@@ -74,7 +92,7 @@ export function createBuilder(root, initial, { onChange }) {
     <div class="bb">
       <div class="bb-palette" role="toolbar" aria-label="Blocks: drag onto the email, or press to add">
         <div class="bb-palette-inner"><div class="bb-palette-title">Blocks</div>
-        ${BLOCKS.map((b) => html`<div class="bb-tile" role="button" tabindex="0" draggable="true" data-new="${b.type}" title="Drag onto the email, or click to add" aria-label="Add ${b.label}">
+        ${palette.map((b) => html`<div class="bb-tile" role="button" tabindex="0" draggable="true" data-new="${b.type}" title="Drag onto the email, or click to add" aria-label="Add ${b.label}">
           <i class="bi bi-${b.icon}" aria-hidden="true"></i><span>${b.label}</span></div>`)}
       </div></div>
       <div class="bb-stage">
@@ -112,7 +130,7 @@ export function createBuilder(root, initial, { onChange }) {
     }
     return null;
   }
-  const snapshot = () => JSON.stringify(doc.blocks);
+  const snapshot = () => JSON.stringify({ blocks: doc.blocks, settings: doc.settings });
   function record() {
     undo.push(snapshot());
     if (undo.length > 60) undo.shift();
@@ -127,8 +145,11 @@ export function createBuilder(root, initial, { onChange }) {
   function restore(from, to) {
     if (!from.length) return;
     to.push(snapshot());
-    doc.blocks = JSON.parse(from.pop());
+    const state = JSON.parse(from.pop());
+    doc.blocks = state.blocks;
+    if (isTemplate) doc.settings = state.settings;
     if (selectedId && !locate(selectedId)) selectedId = null;
+    applyPage();
     renderAll();
     syncHistoryButtons();
     changed();
@@ -233,6 +254,26 @@ export function createBuilder(root, initial, { onChange }) {
         body.append(pre, note);
         break;
       }
+      case 'content': {
+        const slot = document.createElement('div');
+        slot.className = 'bb-slot';
+        const st = doc.settings || PAGE_DEFAULTS;
+        Object.assign(slot.style, { backgroundColor: st.body_bg, borderRadius: `${st.radius}px`, padding: `${Math.max(st.body_pad, 16)}px` });
+        slot.innerHTML = '<i class="bi bi-body-text"></i><strong>Campaign content</strong><span>Each campaign\'s design appears here.</span>';
+        body.append(slot);
+        break;
+      }
+      case 'footer': {
+        const f = document.createElement('div');
+        f.className = 'bb-footer';
+        Object.assign(f.style, { color: p.color, fontSize: `${p.size}px`, textAlign: p.align });
+        const line = (t) => { const d = document.createElement('div'); d.textContent = t; return d; };
+        const links = document.createElement('div');
+        links.innerHTML = '<u>Unsubscribe</u> &nbsp;·&nbsp; <u>View in browser</u>';
+        f.append(line('{{ org_name }} · {{ org_address }}'), ...(p.text.trim() ? [line(p.text)] : []), links);
+        body.append(f);
+        break;
+      }
       case 'columns': {
         const grid = document.createElement('div');
         grid.className = 'bb-cols';
@@ -277,8 +318,8 @@ export function createBuilder(root, initial, { onChange }) {
       <span class="bb-name">${LABEL[b.type]}</span>
       <button type="button" data-act="up" title="Move up" aria-label="Move ${LABEL[b.type]} up"><i class="bi bi-arrow-up"></i></button>
       <button type="button" data-act="down" title="Move down" aria-label="Move ${LABEL[b.type]} down"><i class="bi bi-arrow-down"></i></button>
-      <button type="button" data-act="dup" title="Duplicate" aria-label="Duplicate ${LABEL[b.type]}"><i class="bi bi-copy"></i></button>
-      <button type="button" data-act="del" title="Delete" aria-label="Delete ${LABEL[b.type]}"><i class="bi bi-trash3"></i></button>`);
+      ${b.type === 'content' ? '' : html`<button type="button" data-act="dup" title="Duplicate" aria-label="Duplicate ${LABEL[b.type]}"><i class="bi bi-copy"></i></button>
+      <button type="button" data-act="del" title="Delete" aria-label="Delete ${LABEL[b.type]}"><i class="bi bi-trash3"></i></button>`}`);
     el.append(tools, renderBody(b));
     return el;
   }
@@ -287,7 +328,26 @@ export function createBuilder(root, initial, { onChange }) {
     const list = $('[data-list="root"]', canvas);
     list.replaceChildren(...doc.blocks.map(renderBlock));
     if (!doc.blocks.length) list.append(emptyNote('Drag a block here to start, or click one on the left.'));
+    // Only one Campaign content block per template.
+    const contentTile = $('.bb-tile[data-new="content"]', root);
+    if (contentTile) {
+      const has = doc.blocks.some((b) => b.type === 'content');
+      contentTile.classList.toggle('disabled', has);
+      contentTile.setAttribute('aria-disabled', String(has));
+      contentTile.draggable = !has;
+      contentTile.title = has ? 'A template has one Campaign content block (already in the template)' : 'Drag onto the email, or click to add';
+    }
     renderProps();
+  }
+
+  /** Template page settings shown on the canvas: page colour, width and font. */
+  function applyPage() {
+    if (!isTemplate) return;
+    const st = doc.settings;
+    $('.bb-canvas-wrap', root).style.backgroundColor = st.page_bg;
+    canvas.classList.add('bb-canvas-page');
+    canvas.style.maxWidth = `${st.width}px`;
+    canvas.style.fontFamily = FONTS[st.font][1];
   }
 
   function rerender(id) {
@@ -316,6 +376,7 @@ export function createBuilder(root, initial, { onChange }) {
 
   function renderProps() {
     const loc = selectedId && locate(selectedId);
+    if (!loc && isTemplate) { renderPageProps(); return; }
     if (!loc) {
       mount(props, html`<div class="bb-props-empty"><i class="bi bi-hand-index-thumb"></i><p>Select a block in the email to change its text, colours, links and spacing.</p>
         <p class="small">Drag blocks from the Blocks panel. On a phone or with a keyboard, tap or press a block name to add it below the selected block.</p></div>`);
@@ -370,6 +431,15 @@ export function createBuilder(root, initial, { onChange }) {
       case 'spacer':
         fields = html`<div class="col-12"><label class="form-label small">Height: <span data-out="height">${p.height}</span>px</label><input type="range" class="form-range" data-prop="height" data-num min="4" max="120" step="4" value="${p.height}"></div>`;
         break;
+      case 'content':
+        fields = html`<div class="col-12 small text-muted-2">Every campaign that uses this template appears here. Move it to put a header above
+          and a footer below. Change the content area's colour, corners and padding under <button type="button" class="btn btn-link btn-sm p-0 align-baseline" data-deselect>Page settings</button>.</div>`;
+        break;
+      case 'footer':
+        fields = html`<div class="col-12"><label class="form-label small">Extra line (optional)</label><input class="form-control form-control-sm" data-prop="text" value="${p.text}" maxlength="300">
+            <div class="form-text">Your organisation name and postal address (Settings → General), the unsubscribe link and "View in browser" are always included.</div></div>
+          ${alignField(p.align)}${colorField('color', p.color, 'Text colour')}${numberField('size', p.size, 'Text size (px)', 10, 16)}${numberField('pad', p.pad, 'Spacing (px)', 0, 64)}${bgField(p)}`;
+        break;
       case 'html':
         fields = html`<div class="col-12"><label class="form-label small">HTML</label><textarea class="form-control form-control-sm mono bb-html-src" data-prop="html" spellcheck="false" rows="10">${p.html}</textarea>
           <div class="form-text">Scripts and unsafe content are removed when saved. Prefer the other blocks: they work in every email client.</div></div>${numberField('pad', p.pad, 'Spacing (px)', 0, 64)}`;
@@ -383,6 +453,23 @@ export function createBuilder(root, initial, { onChange }) {
     updateContrast();
   }
 
+  function renderPageProps() {
+    const st = doc.settings;
+    mount(props, html`<div class="bb-props-head"><strong>Page settings</strong></div>
+      <p class="small text-muted-2">Select a block to edit it. These settings apply to the whole email.</p>
+      <div class="row g-2">
+        <div class="col-6"><label class="form-label small">Page background</label><input type="color" class="form-control form-control-color w-100" data-page="page_bg" value="${st.page_bg}"></div>
+        <div class="col-6"><label class="form-label small">Content background</label><input type="color" class="form-control form-control-color w-100" data-page="body_bg" value="${st.body_bg}"></div>
+        <div class="col-12"><label class="form-label small">Email width: <span data-out="width">${st.width}</span>px</label><input type="range" class="form-range" data-page="width" min="480" max="720" step="20" value="${st.width}"></div>
+        <div class="col-12"><label class="form-label small">Font</label><select class="form-select form-select-sm" data-page="font">
+          ${Object.entries(FONTS).map(([k, [l]]) => html`<option value="${k}" ${st.font === k ? raw('selected') : ''}>${l}</option>`)}</select>
+          <div class="form-text">Email-safe fonts that every device has.</div></div>
+        <div class="col-6"><label class="form-label small">Content corners (px)</label><input type="number" class="form-control form-control-sm" data-page="radius" min="0" max="24" value="${st.radius}"></div>
+        <div class="col-6"><label class="form-label small">Content padding (px)</label><input type="number" class="form-control form-control-sm" data-page="body_pad" min="0" max="48" value="${st.body_pad}"></div>
+      </div>
+      <p class="small text-muted-2 mt-3 mb-0">Drag blocks from the Blocks panel above or below the Campaign content to build a header (logo, name) and footer.</p>`);
+  }
+
   /** Warns when text would be hard to read (WCAG AA: 4.5:1). */
   function updateContrast() {
     const box = $('[data-contrast]', props);
@@ -390,8 +477,9 @@ export function createBuilder(root, initial, { onChange }) {
     if (!box || !loc) return;
     const p = loc.block.props;
     let pair = null;
+    const behind = p.bg || (isTemplate && loc.key === 'root' ? doc.settings.page_bg : '#ffffff');
     if (loc.block.type === 'button') pair = [p.color, p.bg];
-    else if (loc.block.type === 'heading' || loc.block.type === 'text') pair = [p.color, p.bg || '#ffffff'];
+    else if (['heading', 'text', 'footer'].includes(loc.block.type)) pair = [p.color, behind];
     const ratio = pair ? contrast(...pair) : 99;
     box.classList.toggle('d-none', ratio >= 4.5);
     box.textContent = ratio < 4.5 ? `Low contrast (${ratio.toFixed(1)}:1): some readers will struggle to read this. Aim for at least 4.5:1, e.g. a darker colour.` : '';
@@ -408,6 +496,26 @@ export function createBuilder(root, initial, { onChange }) {
 
   props.addEventListener('input', (e) => {
     const t = e.target;
+    if (t.dataset.page) {
+      let v = t.value;
+      if (t.type === 'range' || t.type === 'number') {
+        v = Number(v);
+        if (Number.isNaN(v)) return;
+        v = Math.max(Number(t.min), Math.min(Number(t.max), v));
+      }
+      if (!typingSnapshot) record();
+      typingSnapshot = true;
+      clearTimeout(props.burstTimer);
+      props.burstTimer = setTimeout(() => { typingSnapshot = false; }, 800);
+      doc.settings[t.dataset.page] = v;
+      const out = $(`[data-out="${t.dataset.page}"]`, props);
+      if (out) out.textContent = v;
+      applyPage();
+      const slot = doc.blocks.find((b) => b.type === 'content');
+      if (slot) rerender(slot.id);
+      changed();
+      return;
+    }
     if (!t.dataset.prop || !selectedId) return;
     let v = t.type === 'checkbox' ? t.checked : t.value;
     if (t.type === 'number' || t.type === 'range' || 'num' in t.dataset) v = Number(v);
@@ -521,7 +629,7 @@ export function createBuilder(root, initial, { onChange }) {
   // ---- Selection and block tools -------------------------------------------------------------
   canvas.addEventListener('click', (e) => {
     const blockEl = e.target.closest('.bb-block');
-    if (!blockEl) { if (e.target === canvas || e.target.closest('.bb-canvas-wrap') === e.target) select(null); return; }
+    if (!blockEl) return; // empty space: handled on the whole canvas area below
     const act = e.target.closest('[data-act]');
     const id = blockEl.dataset.id;
     if (act) {
@@ -550,6 +658,11 @@ export function createBuilder(root, initial, { onChange }) {
     // innermost block wins (a column child rather than the columns block)
     if (selectedId !== id) select(id);
   });
+  // Clicking empty space (around or inside the email, outside any block) deselects:
+  // templates then show their page settings.
+  $('.bb-canvas-wrap', root).addEventListener('click', (e) => {
+    if (!e.target.closest('.bb-block') && selectedId) select(null);
+  });
   canvas.addEventListener('focusin', (e) => {
     const ed = e.target.closest('.bb-edit');
     const blockEl = ed?.closest('.bb-block');
@@ -574,9 +687,10 @@ export function createBuilder(root, initial, { onChange }) {
     const tile = e.target.closest('[data-new]');
     if (!tile) return;
     const type = tile.dataset.new;
+    if (tile.classList.contains('disabled')) { toast('A template has exactly one Campaign content block. Move the existing one instead.', 'info'); return; }
     const loc = selectedId && locate(selectedId);
-    if (loc && !(type === 'columns' && loc.key !== 'root')) insertNew(type, loc.key, loc.index + 1);
-    else if (loc && type === 'columns') { const top = locate(loc.key.split(':')[0]); insertNew(type, 'root', top.index + 1); }
+    if (loc && !(TOP_ONLY.has(type) && loc.key !== 'root')) insertNew(type, loc.key, loc.index + 1);
+    else if (loc && TOP_ONLY.has(type)) { const top = locate(loc.key.split(':')[0]); insertNew(type, 'root', top.index + 1); }
     else insertNew(type, 'root', doc.blocks.length);
   });
   $('.bb-palette', root).addEventListener('keydown', (e) => {
@@ -588,6 +702,7 @@ export function createBuilder(root, initial, { onChange }) {
     const tile = e.target.closest?.('[data-new]');
     const handle = e.target.closest?.('.bb-handle');
     if (tile) {
+      if (tile.classList.contains('disabled')) { e.preventDefault(); return; }
       drag = { kind: 'new', type: tile.dataset.new };
       e.dataTransfer.effectAllowed = 'copy';
       e.dataTransfer.setData('text/plain', tile.dataset.new);
@@ -612,7 +727,7 @@ export function createBuilder(root, initial, { onChange }) {
     const list = e.target.closest?.('.bb-list') || (stage.contains(e.target) ? rootList() : null);
     if (!list) return null;
     // Columns cannot be nested inside columns.
-    if (drag.type === 'columns' && list.dataset.list !== 'root') return null;
+    if (TOP_ONLY.has(drag.type) && list.dataset.list !== 'root') return null;
     const siblings = [...list.children].filter((c) => c.classList.contains('bb-block') && c.dataset.id !== drag.id);
     const before = siblings.find((c) => { const r = c.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
     return { list, before, index: before ? siblings.indexOf(before) : siblings.length };
@@ -677,8 +792,9 @@ export function createBuilder(root, initial, { onChange }) {
     if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); restore(redo, undo); }
   });
 
-  function getDoc() { return { version: 1, blocks: clone(doc.blocks) }; }
+  function getDoc() { return { version: 1, ...(isTemplate ? { settings: { ...doc.settings } } : {}), blocks: clone(doc.blocks) }; }
 
+  applyPage();
   renderAll();
   return { getDoc };
 }

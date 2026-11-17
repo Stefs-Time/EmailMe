@@ -43,7 +43,15 @@ const leafSchemas = {
   divider: z.object({ color: hex.default('#dde3ea'), thickness: z.coerce.number().int().min(1).max(8).default(1), ...common }),
   spacer: z.object({ height: z.coerce.number().int().min(4).max(120).default(24) }),
   html: z.object({ html: plain(100000).default(''), ...common }),
+  // Template-only blocks
+  content: z.object({}),
+  footer: z.object({
+    text: plain(300).default('You are receiving this because you subscribed or are a customer of {{ org_name }}.'),
+    align: align.default('center'), color: hex.default('#5f6b7a'), size: z.coerce.number().int().min(10).max(16).default(12),
+    pad: spacing.default(16), bg: z.union([hex, z.literal('')]).default(''),
+  }),
 };
+const TEMPLATE_ONLY = new Set(['content', 'footer']);
 
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,40}$/);
 const leaf = z.discriminatedUnion('type', Object.entries(leafSchemas).map(([type, props]) => z.object({ id, type: z.literal(type), props: props.prefault({}) })));
@@ -59,9 +67,44 @@ const columns = z.object({
 });
 const block = z.union([leaf, columns]);
 
+const allLeaves = (blocks) => blocks.flatMap((x) => (x.type === 'columns' ? x.props.columns.flat() : [x]));
+
+/** Campaign content. */
 const documentSchema = z.object({
   version: z.literal(1).default(1),
   blocks: z.array(block).max(200).default([]),
+}).superRefine((d, ctx) => {
+  if (allLeaves(d.blocks).some((b) => TEMPLATE_ONLY.has(b.type))) {
+    ctx.addIssue({ code: 'custom', path: ['blocks'], message: 'Campaign content and Footer blocks belong in templates' });
+  }
+});
+
+const FONTS = {
+  arial: 'Arial, Helvetica, sans-serif',
+  helvetica: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+  verdana: 'Verdana, Geneva, sans-serif',
+  trebuchet: "'Trebuchet MS', Arial, sans-serif",
+  georgia: "Georgia, 'Times New Roman', serif",
+};
+
+/** Template: the frame around every campaign; exactly one top-level Campaign content block. */
+const templateSchema = z.object({
+  version: z.literal(1).default(1),
+  settings: z.object({
+    page_bg: hex.default('#f4f6f9'),
+    body_bg: hex.default('#ffffff'),
+    width: z.coerce.number().int().min(480).max(720).default(600),
+    font: z.enum(Object.keys(FONTS)).default('arial'),
+    radius: z.coerce.number().int().min(0).max(24).default(8),
+    body_pad: z.coerce.number().int().min(0).max(48).default(28),
+  }).prefault({}),
+  blocks: z.array(block).max(200).default([]),
+}).superRefine((d, ctx) => {
+  const top = d.blocks.filter((b) => b.type === 'content').length;
+  const nested = d.blocks.some((b) => b.type === 'columns' && b.props.columns.flat().some((x) => x.type === 'content'));
+  if (top !== 1 || nested) {
+    ctx.addIssue({ code: 'custom', path: ['blocks'], message: 'A template needs exactly one Campaign content block (not inside columns): it marks where each campaign appears' });
+  }
 });
 
 // ---- Rich text ----------------------------------------------------------------
@@ -135,6 +178,12 @@ function renderLeaf(b, widthPx) {
       return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td height="${p.height}" style="height:${p.height}px;font-size:0;line-height:0">&nbsp;</td></tr></table>`;
     case 'html':
       return row(p.html, p); // sanitised with the campaign sanitiser afterwards
+    case 'footer': {
+      const link = `color:${p.color};text-decoration:underline`;
+      return row(`<p style="margin:0;font-size:${p.size}px;line-height:1.5;color:${p.color};text-align:${p.align}">{{ org_name }}{{ org_address_line }}`
+        + `${p.text.trim() ? `<br>${escText(p.text)}` : ''}<br><a href="{{ unsubscribe_url }}" style="${link}">Unsubscribe</a> &nbsp;&middot;&nbsp; `
+        + `<a href="{{ view_url }}" style="${link}">View in browser</a></p>`, p, p.align);
+    }
     default:
       return '';
   }
@@ -163,16 +212,61 @@ const MOBILE_CSS = '<style>@media only screen and (max-width:480px){td.mh-col{di
  */
 function renderDocument(input) {
   const doc = documentSchema.parse(input);
-  // Store cleaned content in the document too: editors load it back into the page.
-  const { sanitize } = require('./render');
-  for (const b of doc.blocks.flatMap((x) => (x.type === 'columns' ? x.props.columns.flat() : [x]))) {
-    if (b.type === 'text') b.props.html = cleanText(b.props.html);
-    if (b.type === 'html') b.props.html = sanitize(b.props.html);
-  }
+  cleanDocument(doc); // store cleaned content too: editors load it back into the page
   const parts = doc.blocks.map((b) => (b.type === 'columns' ? renderColumns(b, CONTENT_WIDTH) : renderLeaf(b, CONTENT_WIDTH)));
   const body = parts.join('\n');
   const needsCss = doc.blocks.some((b) => b.type === 'columns');
   return { doc, html: `${needsCss ? MOBILE_CSS : ''}<div class="mh-builder">${body}</div>` };
+}
+
+function cleanDocument(doc) {
+  const { sanitize } = require('./render');
+  for (const b of allLeaves(doc.blocks)) {
+    if (b.type === 'text') b.props.html = cleanText(b.props.html);
+    if (b.type === 'html') b.props.html = sanitize(b.props.html);
+  }
+}
+
+/**
+ * Validates a template document and renders the complete email document.
+ * The campaign is inserted where the template has {{ content }}.
+ */
+function renderTemplate(input) {
+  const doc = templateSchema.parse(input);
+  cleanDocument(doc);
+  const s = doc.settings;
+  const font = FONTS[s.font];
+  const outer = s.width - 16; // blocks outside the content card have 8px side padding
+  const rows = doc.blocks.map((b) => {
+    if (b.type === 'content') {
+      return `<tr><td class="mh-content" style="background-color:${s.body_bg};border-radius:${s.radius}px;padding:${s.body_pad}px;font-family:${font};font-size:16px;line-height:1.6;color:#1b2430">{{ content }}</td></tr>`;
+    }
+    const inner = b.type === 'columns' ? renderColumns(b, outer) : renderLeaf(b, outer);
+    return inner ? `<tr><td style="padding:0 8px;font-family:${font}">${inner}</td></tr>` : '';
+  }).join('\n');
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ subject }}</title>
+<style>body{margin:0;padding:0;-webkit-text-size-adjust:100%}img{max-width:100%;height:auto;border:0}
+@media only screen and (max-width:480px){td.mh-col{display:block!important;width:100%!important;padding-left:0!important;padding-right:0!important}td.mh-content{padding:20px 16px!important}}</style></head>
+<body style="margin:0;padding:0;background-color:${s.page_bg}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${s.page_bg}" style="background-color:${s.page_bg}"><tr><td align="center" style="padding:24px 12px">
+<table role="presentation" width="${s.width}" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:${s.width}px">
+${rows}
+</table></td></tr></table></body></html>`;
+  return { doc, html };
+}
+
+/** Starting point for a new template (matches the built-in look). */
+function starterTemplate() {
+  return {
+    version: 1,
+    settings: {},
+    blocks: [
+      { id: 't1', type: 'heading', props: { text: '{{ org_name }}', level: 3, pad: 16 } },
+      { id: 't2', type: 'content', props: {} },
+      { id: 't3', type: 'footer', props: {} },
+    ],
+  };
 }
 
 /** Starting point for a new campaign. */
@@ -192,4 +286,7 @@ function documentFromHtml(h) {
   return { version: 1, blocks: [{ id: 'b1', type: 'html', props: { html: String(h || ''), pad: 0 } }] };
 }
 
-module.exports = { renderDocument, documentSchema, starterDocument, documentFromHtml, cleanText, CONTENT_WIDTH };
+module.exports = {
+  renderDocument, documentSchema, starterDocument, documentFromHtml, cleanText, CONTENT_WIDTH,
+  renderTemplate, templateSchema, starterTemplate, FONTS,
+};

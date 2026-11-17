@@ -45,8 +45,9 @@ function sanitize(html) {
     keep.push(tag);
     return `${attr}="https://mh-tag.invalid/${keep.length - 1}"`;
   });
-  const clean = sanitizeHtml(protectedHtml, SANITIZE);
-  return clean.replace(/https:\/\/mh-tag\.invalid\/(\d+)/g, (m, i) => keep[Number(i)]);
+  const clean = sanitizeHtml(protectedHtml, SANITIZE).replace(/https:\/\/mh-tag\.invalid\/(\d+)/g, (m, i) => keep[Number(i)]);
+  // sanitize-html drops the doctype; without it some email clients render in quirks mode.
+  return /^\s*<!doctype html>/i.test(String(html || '')) ? `<!doctype html>\n${clean.replace(/^\s+/, '')}` : clean;
 }
 
 function escapeHtml(v) {

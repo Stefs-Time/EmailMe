@@ -16,7 +16,7 @@ There have been two rounds:
 | Browser walkthrough | Fresh database → first-run setup with the log code → settings (address, SMTP test, bounce tab) → list + contact → campaign editor (subject, preheader, personalisation tag, button, autosave, readiness) → test send → send now → report → templates → system health |
 | Role crawl | Signed in as **viewer** and **manager**, opened all 21 routes (including deep links to admin-only and edit screens), recorded the menu, every visible action, failed API calls and page errors |
 | Accessibility | axe-core (WCAG 2 A/AA) on every screen in the walkthrough and the role crawl |
-| Functional regression | 19 unit tests + 21 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)) |
+| Functional regression | 21 unit tests + 22 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)) |
 
 ## 2. Round 2 findings and fixes
 
@@ -75,6 +75,28 @@ How it was tested:
 
 Result: 15/15 pass, 0 console errors with the CSP enforced, axe 0 violations, no horizontal scroll at 390px.
 
+### Template builder (added 17 Nov 2026, from UAT feedback: "no drag and drop on the New template page")
+
+| # | Area | Sev. | Finding | Fix | Status |
+|---|---|---|---|---|---|
+| T1 | Templates | Medium | Templates could only be edited as raw HTML, unlike campaigns. | Template mode of the builder: Campaign content and Footer blocks, page settings (colours, width, font, corners, padding), live preview, Builder/HTML switch; the built-in template is now a builder design | Done, tested |
+| T2 | Builder | Medium | Clicking empty space beside the email did not deselect the block, so template Page settings were unreachable. | The whole canvas area deselects | Fixed, tested |
+| T3 | Email output | Low | The sanitiser dropped `<!doctype html>`, so some clients render in quirks mode. | The doctype is kept when the source had one | Fixed, unit test |
+
+The browser test passed all 10 steps:
+- a new template opens in the builder;
+- dragging a logo above the header;
+- page colour, width and font;
+- the content block cannot be deleted or added twice;
+- editing the footer and saving;
+- the server stored the design and rendered the HTML;
+- the preview shows the frame;
+- a campaign using the template is wrapped by it;
+- the list shows a Builder badge;
+- axe found no violations with page settings, the footer or the content block selected.
+
+There were no console errors with the CSP enforced.
+
 ## 3. Allocation matrix: scope requirement → screen → role
 
 ✔ = can do · 👁 = read only · – = hidden (direct link shows "no permission")
@@ -125,7 +147,7 @@ Role crawl (viewer, manager × 21 routes):
 - **Viewer:** no write controls on any screen; the admin-only and edit routes show the permission page; 0 API errors, 0 page errors, 0 axe violations.
 - **Manager:** campaign, template, import, list, contact, suppression and export actions present. Settings, Users, Audit and Lift are absent. 0 API errors, 0 page errors, 0 axe violations.
 
-Acceptance suite: 21/21 pass. Unit tests: 19/19 pass.
+Acceptance suite: 22/22 pass. Unit tests: 21/21 pass.
 
 ## 5. Round 1 (listmonk-based build): findings still relevant
 

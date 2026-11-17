@@ -89,7 +89,10 @@ const G = {
     <p>The campaign page updates every few seconds. You can <strong>pause</strong>, <strong>resume</strong> or <strong>cancel</strong>. If your email server
     stops accepting mail, sending pauses automatically and an alert appears. Fix the problem, then press Resume.</p>
     <h3>Templates</h3>
-    <p><a href="#/templates">Templates</a> hold your branding and footer. Campaign content goes where the template says <code>{{ content }}</code>.</p>
+    <p><a href="#/templates">Templates</a> are the frame around every campaign: logo, name, colours, width, font and footer. They use the same
+    drag-and-drop builder, with two extra blocks: <strong>Campaign content</strong> (where each campaign appears; exactly one per template) and
+    <strong>Footer</strong> (your organisation name, postal address, unsubscribe and "View in browser" links). Click empty space next to the email for
+    <em>Page settings</em>. Press <em>Save</em> when done: template changes affect every campaign that uses the template.</p>
     <div class="tip">Start a new or old list with a small batch. A high bounce rate in the first hour is a sign the list needs cleaning before you continue.</div>`)],
   bounces: ['Bounces explained', raw(`
     <h2>How bounces are handled</h2>

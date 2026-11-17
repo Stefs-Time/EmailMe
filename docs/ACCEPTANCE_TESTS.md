@@ -9,7 +9,7 @@ local SMTP server (`test/helpers/smtpSink.js`). That server rejects addresses by
 | `soft-` | 452 4.2.2 |
 | `policy-` | 550 5.7.1 |
 
-All 21 tests pass (17 Nov 2026).
+All 22 tests pass (17 Nov 2026).
 
 ```bash
 cd portal
@@ -50,11 +50,15 @@ Additional automated checks:
 - exports and the campaign report download as CSV;
 - the drag-and-drop builder: new campaigns start in the builder; unsafe designs are rejected (422) and rich text is
   cleaned before it is stored; a button without a link is flagged; the delivered email contains the rendered columns,
-  personalisation and a click-tracked button; duplicating keeps the design.
+  personalisation and a click-tracked button; duplicating keeps the design;
+- the template builder: the built-in template is a builder design; templates without exactly one Campaign content
+  block are rejected; a designed template (logo, page colour, width, footer) wraps a delivered campaign, with exactly
+  one unsubscribe link (the footer's).
 
-**Unit tests** (`npm run test:unit`, 19 tests): configuration rules, secret encryption, rendering and personalisation,
+**Unit tests** (`npm run test:unit`, 21 tests): configuration rules, secret encryption, rendering and personalisation,
 DSN/ARF/auto-reply parsing, bounce classification, SMTP error classification, and the builder renderer (defaults,
-rejection of unsafe URLs, colours and block types, escaping, tag links, column stacking, image widths, click tracking).
+rejection of unsafe URLs, colours and block types, escaping, tag links, column stacking, image widths, click tracking) and the template renderer (complete document, doctype kept,
+a single content slot, footer links, rules on template-only blocks).
 
 **Not automated:**
 - the IMAP layer against a real mailbox (the parser is tested; the connection layer only for failure);

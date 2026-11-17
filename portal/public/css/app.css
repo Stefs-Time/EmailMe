@@ -310,3 +310,10 @@ code { color: #22303f; background: #eef1f5; padding: .1rem .35rem; border-radius
   .bb-canvas-wrap { padding: .75rem; }
   .bb-canvas { padding: 16px; }
 }
+/* Template mode */
+.bb-canvas.bb-canvas-page { background: transparent; box-shadow: none; padding: 8px; border-radius: 0; }
+.bb-slot { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .25rem; min-height: 150px; border: 2px dashed #9db6d6; color: var(--mh-muted); text-align: center; font-family: var(--bs-body-font-family); }
+.bb-slot i { font-size: 1.6rem; color: var(--mh-navy-2); }
+.bb-slot strong { color: var(--mh-navy); }
+.bb-footer { line-height: 1.5; }
+.bb-tile.disabled { opacity: .45; cursor: not-allowed; }

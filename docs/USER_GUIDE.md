@@ -112,7 +112,7 @@ New campaigns open in the builder. It has three parts:
 - The builder warns when text and background colours are hard to read. The *Ready to send* checklist also warns about
   buttons without a link and images without a description.
 
-The template (Settings of the campaign → Template) adds the header and footer around the design; **Preview** shows both.
+The campaign's **Template** (in the envelope section) adds the header and footer around the design; **Preview** shows both.
 
 ### Test, then send
 1. Click **Send test** and enter up to 5 addresses. Check the email on your phone and on a computer, and click every link.
@@ -164,8 +164,21 @@ If many contacts at the same domain appear here, the problem is usually your sen
 Tell your administrator.
 
 ### Templates
-**Templates** holds the frame around your content (logo, colours, footer). Write campaign content where the template
-contains `{{ content }}`. Mark one template as the **default** for new campaigns.
+**Templates** are the frame around every campaign: logo, name, colours, width, font and footer. They are designed in
+the same drag-and-drop builder, with two extra blocks:
+
+- **Campaign content**: marks where each campaign's design appears. A template has exactly one, and it cannot be
+  deleted or put inside columns. Move it to place blocks above (header) and below (footer) it.
+- **Footer**: your organisation name and postal address (from Settings → General), an optional extra line, and the
+  unsubscribe and "View in browser" links.
+
+Click empty space next to the email for **Page settings**: page background, content background, email width, font,
+content corners and padding. The preview shows the template around sample content and refreshes as you work.
+Press **Save** to keep your changes. Unlike campaigns, templates do not save automatically, because a template change
+affects every campaign that uses it.
+
+Mark one template as the **default** for new campaigns. Templates written in HTML still work: use the **HTML** tab
+(the code must contain `{{ content }}`).
 
 ## Exports
 **Exports** offers:

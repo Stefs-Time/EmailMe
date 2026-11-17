@@ -469,6 +469,47 @@ t('drag-and-drop builder: new campaigns start in the builder; the server validat
   assert.equal(copy.data.body_json.blocks.length, 3, 'duplicate keeps the design');
 });
 
+t('template builder: default template is a builder design; templates are validated, rendered and wrap campaigns', async () => {
+  const list = await http('admin', 'GET', '/api/templates');
+  const def = list.data.find((x) => x.is_default);
+  assert.equal(def.editor, 'builder', 'built-in template is a drag-and-drop design');
+
+  const noContent = await http('admin', 'POST', '/api/templates', { name: 'Broken', editor: 'builder', body_json: { blocks: [{ id: 'f', type: 'footer' }] } });
+  assert.equal(noContent.status, 422);
+  const htmlNoContent = await http('admin', 'POST', '/api/templates', { name: 'Broken', html: '<p>no slot</p>' });
+  assert.equal(htmlNoContent.status, 422);
+
+  const design = { version: 1, settings: { page_bg: '#e8f1ef', width: 640 }, blocks: [
+    { id: 'l', type: 'image', props: { src: 'https://cdn.acme.example/logo.png', alt: 'Acme logo', width: 40 } },
+    { id: 'c', type: 'content' },
+    { id: 'f', type: 'footer', props: { text: 'Proudly South African.' } },
+  ] };
+  const created = await http('admin', 'POST', '/api/templates', { name: 'Spring brand', editor: 'builder', body_json: design });
+  assert.equal(created.status, 201, JSON.stringify(created));
+  const t = (await http('admin', 'GET', `/api/templates/${created.data.id}`)).data;
+  assert.equal(t.editor, 'builder');
+  assert.equal(t.body_json.settings.width, 640);
+  assert.match(t.html, /\{\{ content \}\}/);
+
+  await addContact('tpl-tom@ok.example');
+  const c = await http('admin', 'POST', '/api/campaigns', { name: 'Uses spring brand' });
+  c.data.body_json.blocks.find((b) => b.type === 'button').props.url = 'https://acme.example/spring';
+  const r = await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, {
+    name: 'Uses spring brand', subject: 'Spring', preheader: '', from_name: 'Acme', from_email: 'news@acme.example', reply_to: '',
+    template_id: created.data.id, editor: 'builder', body_json: c.data.body_json, body_text: '', track_opens: false, track_clicks: false, list_ids: [listId],
+  });
+  assert.equal(r.status, 200, JSON.stringify(r));
+  sink.messages.length = 0;
+  assert.equal((await http('admin', 'POST', `/api/campaigns/${c.data.id}/send`)).status, 200);
+  await drain();
+  const [m] = sinkTo('tpl-tom@ok.example');
+  assert.ok(m, 'delivered');
+  assert.match(m.parsed.html, /alt="Acme logo"/);
+  assert.match(m.parsed.html, /Proudly South African\./);
+  assert.match(m.parsed.html, /Hello tpl-tom/);
+  assert.equal((m.parsed.html.match(/\/u\/[0-9a-f-]{36}/g) || []).length, 1, 'one unsubscribe link (from the template footer)');
+});
+
 t('exports and campaign report download as CSV', async () => {
   const text = await (await http('admin', 'GET', '/api/exports/contacts.csv?status=suppressed', undefined, { raw: true })).text();
   assert.ok(text.includes('hard-dan@ok.example'));

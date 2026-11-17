@@ -25,7 +25,8 @@ in the app.
     blocks, edited directly on a WYSIWYG canvas, with undo/redo, colour-contrast warnings and phone-friendly output
     (columns stack). The server validates the design and renders email-safe HTML;
   - a visual editor or raw HTML as alternatives, plus a plain-text part;
-  - templates, with a default template;
+  - templates (the frame: header, colours, width, font, footer) designed in the same drag-and-drop builder or in HTML,
+    with a default template;
   - personalisation `{{ first_name | "there" }}` and a preheader;
   - preview as a sample contact, test sends;
   - a readiness checklist;

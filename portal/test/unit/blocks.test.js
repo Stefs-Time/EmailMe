@@ -77,3 +77,37 @@ test('builder: existing HTML becomes one HTML block', () => {
   const { html } = renderDocument(d);
   assert.match(html, /<p>Old content<\/p>/);
 });
+
+test('template builder: renders a complete document around {{ content }}', () => {
+  const { renderTemplate, starterTemplate } = require('../../src/engine/blocks');
+  const { sanitize } = require('../../src/engine/render');
+  const t = renderTemplate({ ...starterTemplate(), settings: { width: 640, font: 'georgia', page_bg: '#e8f1ef' } });
+  assert.equal((t.html.match(/\{\{ content \}\}/g) || []).length, 1);
+  assert.match(t.html, /max-width:640px/);
+  assert.match(t.html, /background-color:#e8f1ef/);
+  assert.match(t.html, /Georgia/);
+  const clean = sanitize(t.html);
+  assert.match(clean, /^<!doctype html>/, 'doctype kept after sanitising');
+  assert.match(clean, /href="\{\{ unsubscribe_url \}\}"/);
+
+  const { renderDocument, starterDocument } = require('../../src/engine/blocks');
+  const m = renderMessage({
+    campaign: { subject: 's', body_html: renderDocument(starterDocument()).html, track_clicks: false, track_opens: false },
+    templateHtml: clean, contact: { first_name: 'Thandi' }, token: 'tok',
+    settings: { org_name: 'Acme', org_address: '1 Road' }, publicUrl: 'https://mh.example',
+  });
+  assert.match(m.html, /Hello Thandi/);
+  assert.equal((m.html.match(/https:\/\/mh\.example\/u\/tok/g) || []).length, 1, 'footer link used; no second footer added');
+  assert.match(m.html, /Acme · 1 Road/);
+});
+
+test('template builder: needs exactly one top-level content block; campaigns cannot use template blocks', () => {
+  const { renderTemplate, renderDocument } = require('../../src/engine/blocks');
+  assert.throws(() => renderTemplate({ blocks: [{ id: 'f', type: 'footer' }] }));
+  assert.throws(() => renderTemplate({ blocks: [{ id: 'a', type: 'content' }, { id: 'b', type: 'content' }] }));
+  assert.throws(() => renderTemplate({ blocks: [{ id: 'c', type: 'columns', props: { columns: [[{ id: 'x', type: 'content' }], []] } }] }));
+  assert.throws(() => renderTemplate({ settings: { width: 2000 }, blocks: [{ id: 'a', type: 'content' }] }));
+  assert.throws(() => renderTemplate({ settings: { font: 'Comic Sans' }, blocks: [{ id: 'a', type: 'content' }] }));
+  assert.throws(() => renderDocument({ blocks: [{ id: 'a', type: 'content' }] }));
+  assert.throws(() => renderDocument({ blocks: [{ id: 'f', type: 'footer' }] }));
+});

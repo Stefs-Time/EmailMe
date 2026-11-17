@@ -10,7 +10,7 @@ export async function render(el, ctx) {
     const { data } = await get('/templates');
     if (!data.length) { mount($('#t', el), empty('layout-text-window', 'No templates')); return; }
     mount($('#t', el), html`<div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Template</th><th>Used by</th><th>Updated</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
-      ${data.map((t) => html`<tr><td><a class="fw-semibold text-decoration-none" href="${canWrite ? `#/templates/${t.id}` : `/api/templates/${t.id}`}">${t.name}</a>${t.is_default ? html` <span class="badge text-bg-primary">Default</span>` : ''}</td>
+      ${data.map((t) => html`<tr><td><a class="fw-semibold text-decoration-none" href="${canWrite ? `#/templates/${t.id}` : `/api/templates/${t.id}`}">${t.name}</a>${t.is_default ? html` <span class="badge text-bg-primary">Default</span>` : ''}${t.editor === 'builder' ? html` <span class="badge text-bg-light"><i class="bi bi-grid-1x2 me-1"></i>Builder</span>` : ''}</td>
         <td class="small">${t.used_by} campaign(s)</td><td class="small">${datetime(t.updated_at)}</td>
         <td class="text-end text-nowrap">${canWrite && !t.is_default ? html`<button class="btn btn-sm btn-light" data-default="${t.id}">Make default</button>
           <button class="btn btn-sm btn-light text-danger" data-del="${t.id}" aria-label="Delete ${t.name}"><i class="bi bi-trash3"></i></button>` : ''}</td></tr>`)}

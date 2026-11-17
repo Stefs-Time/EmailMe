@@ -24,7 +24,7 @@
 | `src/config.js` | Validates environment variables (zod); fails fast with a list of problems |
 | `src/lib/settings.js` | Typed settings with defaults, 5 s cache, partial updates, encrypted bounce-mailbox password |
 | `src/lib/secrets.js` | Generated secrets; AES-256-GCM encrypt/decrypt with an HKDF-derived key |
-| `src/engine/blocks.js` | Drag-and-drop builder documents: validation (zod), cleaning, and rendering to table-based, inline-styled email HTML with phone stacking |
+| `src/engine/blocks.js` | Drag-and-drop builder documents for campaigns and templates: validation (zod), cleaning, and rendering to table-based, inline-styled email HTML with phone stacking |
 | `src/engine/render.js` | Template + content merge, personalisation tags (HTML-escaped, no logic), link rewriting, open pixel, compliance footer, `List-Unsubscribe` headers, plain-text part, HTML sanitising |
 | `src/engine/sender.js` | Campaign start (recipient snapshot + link table), rate-limited sending, retries, error handling, completion, opt-in confirmation emails |
 | `src/engine/mailer.js` | Pooled nodemailer transport (TLS 1.2+), SMTP error classification |
@@ -49,6 +49,15 @@ On every save the server:
 2. cleans rich text (inline formatting, links, lists only) and HTML blocks, and stores the **cleaned** document;
 3. renders table-based HTML with inline styles (what email clients support), plus a small `@media` rule that stacks
    columns on phones.
+
+**Templates** use the same builder in template mode (`renderTemplate()`):
+- Two extra block types: `content`, the `{{ content }}` slot (exactly one, top level, cannot be deleted), and `footer`
+  (organisation name and address plus unsubscribe and view-online links).
+- Page `settings`: page and content background, width 480–720px, an email-safe font, corner radius and content padding.
+- The server renders a complete HTML document with a centred, fixed-width layout. Campaign documents may not contain
+  template-only blocks.
+- Migration 003 adds `templates.editor` and `templates.body_json`. An untouched copy of the old built-in HTML template
+  is upgraded to a builder design on startup; any template someone has edited by hand is left as HTML.
 
 The browser's own rendering is never stored or sent. The canvas styles elements through the CSSOM, because the app's
 CSP blocks inline style attributes. Switching a design to the HTML editor uses the server-rendered HTML. Switching

@@ -18,8 +18,8 @@ export async function render(el, ctx, [tabArg]) {
       <div class="col-md-6"><label class="form-label">Postal address <span class="text-danger">*</span></label><input class="form-control" name="org_address" value="${s.org_address}" maxlength="300" placeholder="12 Main Road, Rosebank, Johannesburg, 2196">
         <div class="form-text">Required before sending: every marketing email must identify the sender.</div></div>
       <div class="col-12"><label class="form-label">Public web address</label>
-        <input class="form-control" name="public_url" type="url" value="${s.public_url}" ${s.public_url_locked ? raw('disabled') : ''}>
-        <div class="form-text">${s.public_url_locked ? html`Set automatically by the hosting platform: <strong>${s.effective_public_url}</strong>.` : 'Used in unsubscribe, tracking and "view in browser" links. Must be https:// in production.'}</div></div>
+        <input class="form-control" name="public_url" type="url" value="${s.public_url}" placeholder="${s.effective_public_url || 'https://mail.example.co.za'}" ${s.public_url_locked ? raw('disabled') : ''}>
+        <div class="form-text">${s.public_url_locked ? html`Fixed by the PUBLIC_URL variable: <strong>${s.effective_public_url}</strong>.` : s.public_url || !s.effective_public_url ? 'Used in unsubscribe, tracking and "view in browser" links. Must be https:// in production.' : html`Leave empty to use the hosting platform's address (<strong>${s.effective_public_url}</strong>), or enter your custom domain.`}</div></div>
     </div></div></div>`,
     sending: html`<div class="card mb-3"><div class="card-header">Sender</div><div class="card-body"><div class="row g-3">
       <div class="col-md-6"><label class="form-label">From name</label><input class="form-control" name="from_name" value="${s.from_name}" maxlength="120"></div>

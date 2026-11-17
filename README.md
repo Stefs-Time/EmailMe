@@ -1,258 +1,292 @@
 # MailHarbor
 
-**Your contacts, safely in harbour.** MailHarbor is a contact-management, compliance and reporting portal built on top of
-[listmonk](https://listmonk.app) (v6.2.0), the open-source, self-hosted newsletter and mailing-list manager.
+**Your contacts, safely in harbour.** MailHarbor is a self-contained email-marketing and contact-management portal for
+a South African organisation. It handles the whole job in one application: contacts, lists, imports and exports,
+campaigns, sending, open and click tracking, unsubscribes, bounce processing, suppression, POPIA consent evidence and reports.
 
-listmonk already does campaign sending well, so MailHarbor reuses it rather than rebuilding it. MailHarbor adds what this
-organisation needs around listmonk: simple contact management, safe CSV imports, exports, permanent suppression, consent
-evidence, bounce classification and clear reports. It also includes in-app guides for non-technical staff.
-
-| Need | Where it happens |
-|---|---|
-| Import, search, sort, edit contacts; manage lists | **MailHarbor** |
-| Suppression list, consent records, POPIA access/erasure requests | **MailHarbor** |
-| Bounce classification, review queue, health alerts | **MailHarbor** (reading listmonk's bounce data) |
-| Campaign, audience and bounce reports; CSV exports | **MailHarbor** |
-| Templates, writing and sending campaigns, SMTP and bounce-mailbox settings | **listmonk** (unmodified, not forked) |
+It needs only two things from outside: a **PostgreSQL database** and an **SMTP server**. Every other setting is managed
+in the app.
 
 ---
 
 ## Features
 
-- **Dashboard:** recipient status breakdown (active, unconfirmed, soft/hard bounced, unsubscribed, complaint,
-  blocklisted, pending review), campaigns, emails sent, bounce activity, 30-day growth and live operational alerts.
+- **Dashboard:** recipient status breakdown (active, unconfirmed, soft/hard bounced, complaint, unsubscribed,
+  blocklisted, pending review), recent campaigns, emails sent, bounce activity, 30-day growth and live alerts.
 - **Contacts:** search by email/name/company; filter by status, list, source or consent; sortable columns; bulk
-  add/remove from lists, unsubscribe, suppress; a full contact page with consent evidence, bounces and status history.
-- **Import wizard:** CSV upload (comma, semicolon or tab), automatic column matching, custom attributes, syntax
-  validation, in-file duplicate detection, matching against existing contacts, suppression check, a required
-  consent basis, a **preview before anything is saved**, then a downloadable row-by-row report.
-- **Suppression that cannot be bypassed:** imports, list changes and manual adds never reactivate an
-  unsubscribed, bounced, complained or blocklisted address. If someone re-enables a suppressed contact directly in
-  listmonk, MailHarbor blocks it again within a minute and raises an alert. Reactivation is admin-only and needs a
-  documented new permission basis.
-- **Bounce rules (scope §3.6.2):** 5.1.1 and 550 → hard (suppressed); 4.x.x and mailbox full → soft; **5.7.x policy and
-  spam rejections → review queue** (held from sending, not wrongly suppressed); complaints → suppressed at once.
-- **Global unsubscribe:** an unsubscribe from any list suppresses the person from all marketing by default.
-- **Reports:** per-campaign targeted, sent, failures, hard/soft bounces, complaints, unsubscribes, opens and clicks,
-  plus top links and an activity timeline; audience by source, consent and domain; bounce trends.
-- **Exports (CSV, Excel-safe):** contacts (any filter), eligible contacts, suppression list, consent and unsubscribe
-  history, status history, bounces, campaigns, audit log. Per-contact JSON export for POPIA access requests.
+  add/remove from lists, unsubscribe, suppress; a contact page with every email sent, opens, clicks, bounces, consent
+  evidence and status history.
+- **Lists:** single or double opt-in (confirmation email with a one-click confirm page).
+- **Import wizard:** CSV (comma, semicolon or tab), automatic column matching, custom attributes, validation, duplicate
+  detection, matching against existing contacts, suppression check, a required consent basis and a
+  **preview before anything is saved**. After the import you get a downloadable row-by-row report.
+- **Campaigns:**
+  - a visual editor (headings, formatting, links, images, buttons, alignment) or raw HTML, plus a plain-text part;
+  - templates, with a default template;
+  - personalisation `{{ first_name | "there" }}` and a preheader;
+  - preview as a sample contact, test sends;
+  - a readiness checklist;
+  - send now or schedule; pause, resume and cancel.
+- **Sending engine:**
+  - pooled SMTP with a per-second rate and an optional hourly cap;
+  - temporary failures retried at 5, 30 and 120 minutes;
+  - an SMTP outage auto-pauses the campaign and raises an alert;
+  - every recipient is re-checked against the suppression list immediately before their email is sent;
+  - a restart never sends an email twice.
+- **Compliance built in:**
+  - every email carries an unsubscribe link and RFC 8058 one-click `List-Unsubscribe` headers (required by Gmail and Yahoo for bulk senders);
+  - the organisation's postal address goes in the footer;
+  - an unsubscribe from any list suppresses the person globally (default).
+- **Bounce handling** from three sources:
+  - SMTP rejections at send time;
+  - an IMAP bounce mailbox, with DSN and ARF complaint parsing;
+  - a provider webhook.
+
+  Classification follows the scope (§3.6.2):
+
+  | Signal | Action |
+  |---|---|
+  | 5.1.1 / 550 | hard bounce → suppressed |
+  | 4.x.x | soft bounce, counted; suppressed at the limit (default 3) |
+  | **5.7.x policy/spam rejection** | **held for review**, not wrongly suppressed |
+  | Complaint | suppressed immediately |
+- **Suppression that cannot be bypassed:** imports, list changes and manual adds never reactivate an unsubscribed,
+  bounced, complained or blocklisted address. Reactivation is admin-only and needs a documented new permission basis.
+- **Reports:**
+  - per campaign: recipients, sent, failed, hard and soft bounces, complaints, unsubscribes, unique opens and clicks, top links, a timeline;
+  - audience by source, consent and domain;
+  - bounce trends.
+- **Exports (CSV, Excel-safe):** contacts for any filter, eligible contacts, suppression list, consent and unsubscribe
+  history, status history, bounces, campaigns and the audit log. Per-contact JSON export for POPIA access requests.
 - **POPIA erasure:** deletes the contact and keeps only a SHA-256 hash on the suppression list.
-- **Operations:** a system-health page with a go-live checklist (SMTP, TLS, bounce processing, bounce actions,
-  List-Unsubscribe header, HTTPS root URL), alerts for bounce-mailbox errors, SMTP errors, sync failures and listmonk
-  downtime; nightly verified backups.
-- **Security:** roles (viewer / manager / admin), Argon2id passwords, account lockout, server-side sessions, CSRF
-  tokens, strict CSP, rate limiting, full audit log. Database access is least-privilege and **read-only on listmonk's tables**.
+- **Operations:** a System health page with a go-live checklist (SMTP connection, sender, public URL, postal
+  address, bounce processing, SPF/DMARC/MX DNS checks, worker heartbeat, queue, backups) and alerts.
+- **Security:**
+  - roles (viewer / manager / admin) and Argon2id passwords;
+  - account lockout after repeated failed sign-ins;
+  - server-side sessions, CSRF tokens, a strict CSP, rate limiting and a full audit log;
+  - the bounce-mailbox password is encrypted (AES-256-GCM) at rest.
+- **In-app guides** for non-technical staff.
 
 ## Architecture
 
 ```
-                 Internet (443)
-                      │
-                ┌─────▼─────┐   automatic HTTPS (Let's Encrypt)
-                │   Caddy   │
-                └──┬─────┬──┘
-   mail.example    │     │   lists.example  (admin UI + unsubscribe/tracking links)
-           ┌───────▼─┐ ┌─▼────────┐
-           │MailHarbor│ │ listmonk │──► your SMTP server (587/465)
-           │  portal  │ │  v6.2.0  │◄── POP3 bounce mailbox (995) / provider webhooks
-           └──┬────▲──┘ └────┬─────┘
-   writes via │    │ reads   │
-  listmonk API└────┼─────────┘
-                   │ (SELECT only)
-             ┌─────▼──────────────────────────┐
-             │ PostgreSQL                      │
-             │  public.*  listmonk (unchanged) │
-             │  portal.*  suppression, consent,│
-             │            events, imports,     │
-             │            audit, alerts        │
-             └─────────────────────────────────┘
+          Internet (HTTPS)
+                │
+       ┌────────▼─────────┐  web UI + public pages (unsubscribe, confirm, view online, tracking, bounce webhook)
+       │    MailHarbor    │
+       │  Node.js/Express │──► your SMTP server (587 STARTTLS / 465 TLS)
+       │  + worker loops  │◄── IMAP bounce mailbox (993), optional
+       └────────┬─────────┘
+                │
+       ┌────────▼─────────┐
+       │    PostgreSQL    │  schema "portal": contacts, lists, campaigns, messages, tracking,
+       │                  │  bounces, suppressions, consent, audit, settings, sessions
+       └──────────────────┘
 ```
 
-- **Writes** to subscribers and lists always go through the **listmonk API**, so listmonk's own rules apply.
-- **Reads** for fast search, sorting and reporting query listmonk's tables in `READ ONLY` transactions using a
-  database role that only has `SELECT` on them.
-- A **sync worker** inside the portal runs every 60 s. It classifies new bounces, captures unsubscribes, records
-  blocklists made in listmonk, enforces suppressions and checks health.
+A single Node.js process serves the web app and runs the background worker:
+
+| Worker loop | Interval | Job |
+|---|---|---|
+| sender | 1 s | Claims queued messages with `FOR UPDATE SKIP LOCKED`; rate-limited |
+| scheduler | 15 s | Starts scheduled campaigns that are due |
+| bounce mailbox | configurable, default 5 min | Polls the IMAP mailbox |
+| upkeep | 60 s | Heartbeat, configuration alerts, backup freshness |
+
+Each campaign recipient is a row in `portal.messages` with a random token. That token drives the unsubscribe,
+tracking and view-online links and bounce matching, so links never expose an email address or a database ID.
 
 Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Repository layout
 
 ```
-├── docker-compose.yml        Full stack: caddy, portal, listmonk, postgres, backup
-├── setup.sh                  One-command first-time setup (Docker Compose)
-├── .env.example              Stack configuration template
-├── deploy/
-│   ├── caddy/Caddyfile       Reverse proxy + HTTPS
-│   ├── postgres/             Least-privilege portal role (init + manual SQL)
-│   ├── backup/               Restore script (backups run via portal/scripts/backup.js)
-│   └── railway/listmonk/     listmonk service for Railway (Dockerfile + railway.json)
-├── portal/                   MailHarbor (Node.js 22, Express 5, PostgreSQL)
-│   ├── src/
-│   │   ├── server.js         Startup, migrations, graceful shutdown
-│   │   ├── app.js            Express app, security middleware, routes
-│   │   ├── config.js         Validated environment configuration
-│   │   ├── db/               Pool, migration runner, SQL migrations
-│   │   ├── lib/              listmonk client, CSV, email, audit helpers
-│   │   └── modules/          auth, users, contacts, imports, exports, lists,
-│   │                         suppression, reports, sync (worker + bounce rules), system
-│   ├── public/               Single-page UI (Bootstrap 5, Chart.js, no build step)
-│   ├── scripts/              backup.js, bootstrap-listmonk.js, create-admin.js
-│   ├── test/                 Unit + integration (acceptance) tests
-│   ├── Dockerfile, railway.json, .env.example
-└── docs/                     Admin, user, architecture, Railway, security, acceptance tests
+portal/                    the application (deploy this folder)
+  src/
+    server.js              startup: migrations → secrets → settings → admin → worker → HTTP
+    config.js              environment variables (validated at startup)
+    engine/                sender, renderer, SMTP, bounce parsing/rules, IMAP mailbox, worker
+    modules/               REST API by feature (contacts, lists, imports, campaigns, templates,
+                           settings, reports, exports, suppression, users, system, public pages)
+    db/migrations/         SQL schema
+  public/                  single-page web app (Bootstrap 5, no build step)
+  scripts/                 backup.js, create-admin.js
+  test/                    unit + end-to-end acceptance tests (with a local SMTP test server)
+  Dockerfile, railway.json
+docker-compose.yml         self-hosted stack: Caddy + MailHarbor + PostgreSQL + backups
+deploy/                    Caddyfile, restore script
+docs/                      guides (see below)
 ```
 
 ## Deploy on Railway (recommended hosted option)
 
-Four services from this one repository; **only variables, no scripts**:
+Two services, plus an optional backup cron:
 
-| Service | Source | Key variables |
-|---|---|---|
-| Postgres | Railway template | – |
-| listmonk | root dir `deploy/railway/listmonk` | `LISTMONK_db__*` from Postgres, `LISTMONK_ADMIN_USER/PASSWORD` |
-| MailHarbor | root dir `portal` | `DATABASE_URL`, `SESSION_SECRET`, `LISTMONK_URL` (private), `LISTMONK_PUBLIC_URL`, `LISTMONK_ADMIN_USER/PASSWORD` (references), **`ADMIN_EMAIL` / `ADMIN_PASSWORD`** |
-| Backups (cron) | root dir `portal`, start `node scripts/backup.js` | `BACKUP_DATABASE_URL`, `BACKUP_S3_*` |
+1. **New Project → Deploy PostgreSQL.**
+2. **+ New → GitHub Repo →** this repository. Set *Root Directory* to `portal`, then generate a public domain.
+3. Set these variables on the MailHarbor service:
 
-On first start the portal creates your administrator from `ADMIN_EMAIL` / `ADMIN_PASSWORD`. It also creates its own
-least-privilege listmonk API user, stored encrypted, and applies the recommended listmonk settings (bounce actions,
-List-Unsubscribe header, public root URL). Step-by-step: **[docs/DEPLOY_RAILWAY.md](docs/DEPLOY_RAILWAY.md)**.
+   | Variable | Value |
+   |---|---|
+   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+   | `SMTP_HOST` | your SMTP server |
+   | `SMTP_PORT` | `587` (or `465`) |
+   | `SMTP_USER` / `SMTP_PASSWORD` | SMTP credentials |
+   | `SMTP_FROM` | optional default sender, e.g. `"Example News <news@example.co.za>"` |
 
-### Administrator credentials from variables
-`ADMIN_EMAIL` + `ADMIN_PASSWORD` (+ optional `ADMIN_NAME`) define an **environment-managed administrator**. On every
-start the portal makes sure that account exists, is an active administrator and has exactly that password. To rotate
-the password or recover a lost login, change the variable and redeploy. In the app the account shows as
-*Environment-managed*, and its role, status and password are locked there. Create personal accounts for everyone else
-under **Users**.
+4. Deploy. In **Deploy Logs**, find `FIRST-RUN SETUP: … enter setup code XXXXXXXXXX`. Open the public domain, enter
+   the code and create the first administrator.
+5. Work through **Settings**: organisation and postal address, sender, bounce handling. Then fix anything red on
+   **System health**.
 
-## Quick start: self-hosted (Ubuntu Server + Docker)
+> **Railway plan:** Railway allows outbound SMTP only on the **Pro plan and above**. Free, Trial and Hobby plans block
+> SMTP ports. MailHarbor sends over SMTP, so use a Pro workspace. Then redeploy the service after upgrading.
 
-**Prerequisites:** Ubuntu 22.04/24.04 with Docker Engine and the Compose plugin; two DNS names pointing at the server
-(e.g. `mail.example.co.za` for MailHarbor, `lists.example.co.za` for listmonk); ports 80 and 443 open; an SMTP account for
-sending; a **dedicated** POP3 mailbox for bounces.
+Full guide with backups, custom domain and troubleshooting: **[docs/DEPLOY_RAILWAY.md](docs/DEPLOY_RAILWAY.md)**.
+
+## Self-hosted (Ubuntu Server + Docker Compose)
+
+Requirements:
+- a server with Docker and the Compose plugin;
+- a DNS name pointing at the server, with ports 80 and 443 open;
+- SMTP credentials.
 
 ```bash
 git clone <this-repo> mailharbor && cd mailharbor
-cp .env.example .env
-nano .env                 # replace every value; generate secrets with: openssl rand -base64 36
-./setup.sh                # builds and starts everything; the portal configures listmonk itself
+cp .env.example .env && nano .env      # DOMAIN, ACME_EMAIL, POSTGRES_PASSWORD, SMTP_*
+docker compose up -d --build
+docker compose logs portal | grep "setup code"
 ```
 
-Then:
-
-1. Sign in to **listmonk** (`https://lists…/admin`) → **Settings**:
-   - **SMTP:** host, port 587 (STARTTLS) or 465 (TLS), credentials → *Test connection*.
-   - **Bounces:** enable, add the POP3 bounce mailbox (port 995, TLS), set the Return-Path to that mailbox.
-     The portal has already applied the recommended actions (hard 1→blocklist, complaint 1→blocklist, soft 3→blocklist).
-   - **General:** default *From* address.
-2. Sign in to **MailHarbor** (`https://mail…`) with `PORTAL_ADMIN_EMAIL` / `PORTAL_ADMIN_PASSWORD` → **System health**.
-   Fix anything red on the go-live checklist.
-3. Configure SPF, DKIM, DMARC and reverse DNS for your sending domain ([admin guide](docs/ADMIN_GUIDE.md#5-dns-and-deliverability)).
-4. Create user accounts, create lists, import contacts, send a test campaign to yourself.
-
-Full walkthrough, upgrades, backups and monitoring: **[docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md)**.
+Open `https://<DOMAIN>`, enter the setup code and continue as in steps 4–5 above. Caddy obtains the HTTPS certificate
+automatically. Backups are written nightly to `./backups`; restore with `deploy/backup/restore.sh`. See
+[docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md).
 
 ## Local development
 
 ```bash
-# 1. PostgreSQL 13+ and listmonk v6.2.0 running locally, e.g.:
-docker run -d --name lm -p 9000:9000 -e LISTMONK_db__host=host.docker.internal \
-  -e LISTMONK_db__user=listmonk -e LISTMONK_db__password=listmonk -e LISTMONK_db__database=listmonk \
-  -e LISTMONK_ADMIN_USER=admin -e LISTMONK_ADMIN_PASSWORD=adminpass123 \
-  listmonk/listmonk:v6.2.0 sh -c "./listmonk --install --idempotent --yes --config '' && ./listmonk --config ''"
+# PostgreSQL 14+ (example)
+docker run -d --name mh-db -p 5432:5432 -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=mailharbor postgres:17-alpine
 
-# 2. Portal (creates its own listmonk API user from the admin credentials)
 cd portal
 npm ci
-cp .env.example .env      # DATABASE_URL, SESSION_SECRET, LISTMONK_URL, LISTMONK_ADMIN_*, ADMIN_EMAIL/PASSWORD
-npm run dev               # http://localhost:3000
+npm run smtp-sink &                 # local SMTP test server on port 2525 (accepts everything, prints messages)
+cat > .env <<'EOF'
+DATABASE_URL=postgres://postgres:dev@localhost:5432/mailharbor
+SMTP_HOST=127.0.0.1
+SMTP_PORT=2525
+SMTP_REQUIRE_TLS=false
+NODE_ENV=development
+PUBLIC_URL=http://localhost:3000
+EOF
+npm run dev                         # http://localhost:3000, setup code in the console
 ```
+
+The SMTP sink simulates failures by address prefix:
+- `hard-…@` is rejected with 550 5.1.1;
+- `soft-…@` with 452 4.2.2;
+- `policy-…@` with 550 5.7.1.
 
 | Command (in `portal/`) | Purpose |
 |---|---|
-| `npm start` | Start the portal (runs migrations automatically) |
-| `npm run dev` | Start with auto-reload |
-| `npm run migrate` | Apply database migrations only (needs `DATABASE_URL`) |
-| `npm run create-admin -- you@co.za "Your Name"` | Create an admin or reset an admin's password (shell access) |
-| `npm run bootstrap-listmonk -- [--recommended-settings] [--replace]` | Manually create the listmonk API user (optional) |
-| `npm run backup` | One backup to `BACKUP_DIR` and/or S3 (needs `pg_dump`) |
-| `npm run test:unit` | Unit tests (no services needed) |
-| `npm run test:integration` | Acceptance tests against a **non-production** listmonk + PostgreSQL |
+| `npm start` | Start (runs migrations automatically) |
+| `npm run dev` | Start with auto-reload, reading `.env` if present |
+| `npm run migrate` | Apply migrations only (needs `DATABASE_URL`) |
+| `npm run create-admin -- email "Name"` | Create an admin or reset an admin password from the command line |
+| `npm run backup` | One backup run (see `scripts/backup.js`) |
+| `npm run test:unit` | Unit tests (no database) |
+| `TEST_DATABASE_URL=… npm run test:integration` | End-to-end acceptance tests. **Drops the `portal` schema** of that database, and refuses to run unless the database name contains `test` |
 
-## Environment variables (portal)
+## Environment variables
 
-| Variable | Required | Default | Purpose |
+Only the first two are required. Everything else, including organisation details, sender, reply-to, bounce mailbox,
+sending speed, tracking and soft-bounce limit, is set in **Settings** and stored in the database.
+
+| Variable | Required | Default | Notes |
 |---|---|---|---|
-| `DATABASE_URL` | yes | – | PostgreSQL shared with listmonk (ideally the `mailharbor` role) |
-| `SESSION_SECRET` | yes | – | ≥ 32 random characters; signs sessions and encrypts the stored listmonk token |
-| `LISTMONK_URL` | yes | – | Internal listmonk URL for API calls, e.g. `http://listmonk:9000` |
-| `LISTMONK_PUBLIC_URL` | no | `LISTMONK_URL` | Public listmonk URL (links in the UI; set as listmonk's root URL) |
-| `LISTMONK_ADMIN_USER` / `LISTMONK_ADMIN_PASSWORD` | one of these… | – | Lets the portal create/renew its own API user |
-| `LISTMONK_API_TOKEN` | …or this | – | Use a token you created yourself instead |
-| `LISTMONK_API_USER` | no | `mailharbor` | Name of the portal's listmonk API user |
-| `LISTMONK_APPLY_RECOMMENDED` | no | `true` | Apply recommended listmonk settings once (needs admin credentials) |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | recommended | – | Environment-managed administrator, enforced on every start |
-| `ADMIN_NAME` | no | `Administrator` | Display name for that account |
-| `PORT` / `HOST` | no | `3000` / `0.0.0.0` | Listen address (Railway sets `PORT`) |
-| `NODE_ENV` | no | `development` | `production` enables secure cookies and HSTS |
-| `GLOBAL_UNSUBSCRIBE` | no | `true` | Unsubscribe from any list = suppressed from all |
-| `SYNC_INTERVAL_SECONDS` / `SYNC_STALE_MINUTES` | no | `60` / `15` | Sync worker interval / stale alert |
-| `BACKUP_STALE_HOURS` | no | `0` (off) | Alert when no successful backup within this many hours |
-| `IMPORT_MAX_ROWS` / `IMPORT_MAX_MB` | no | `100000` / `25` | Import limits |
-| `DATABASE_SSL`, `DATABASE_SSL_VERIFY` | no | `false`, `true` | TLS to PostgreSQL |
-| `DATABASE_POOL_MAX` | no | `10` | Connection pool size (use 5 on small Railway plans) |
-| `SESSION_MAX_AGE_HOURS` | no | `8` | Idle session lifetime (rolling) |
-| `COOKIE_SECURE` / `TRUST_PROXY` | no | `auto` / `1` | Secure cookies in production; reverse-proxy hops |
-| `ORG_NAME` / `LOG_LEVEL` | no | `MailHarbor` / `info` | UI name; pino log level |
+| `DATABASE_URL` | **yes** | | PostgreSQL connection URL |
+| `SMTP_HOST` | **yes** | | SMTP server host |
+| `SMTP_PORT` | | `587` | `465` turns on implicit TLS automatically |
+| `SMTP_USER`, `SMTP_PASSWORD` | | | Both or neither |
+| `SMTP_FROM` | | | Default sender, e.g. `"Name <news@example.co.za>"` (overridden by Settings) |
+| `SMTP_SECURE` | | auto | Force implicit TLS on/off |
+| `SMTP_REQUIRE_TLS` | | `true` | Refuse to send credentials without STARTTLS. Set `false` only for a local test server |
+| `SMTP_POOL_MAX` | | `3` | Concurrent SMTP connections |
+| `PORT` | | `3000` | Railway sets this |
+| `PUBLIC_URL` | | | Base URL for links in emails. On Railway the public domain is detected; otherwise set it here or in Settings |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME` | | | Optional break-glass admin, created or repaired on every start (password min. 12 chars) |
+| `NODE_ENV` | | `production` | `development` allows non-secure cookies over plain http |
+| `DATABASE_SSL`, `DATABASE_SSL_VERIFY` | | `false`, `true` | TLS to PostgreSQL (not needed on Railway's private network) |
+| `DATABASE_POOL_MAX` | | `10` | |
+| `SESSION_SECRET` | | generated | Generated and stored in the database if unset |
+| `WORKERS` | | `true` | `false` runs the web app without the sending/bounce worker |
+| `IMPORT_MAX_ROWS`, `IMPORT_MAX_MB` | | `100000`, `25` | Import limits |
+| `TRUST_PROXY` | | `1` | Proxy hops in front of the app |
+| `LOG_LEVEL` | | `info` | |
 
-Backup job variables (`BACKUP_DATABASE_URL`, `BACKUP_DIR`, `BACKUP_S3_*`, `BACKUP_RETENTION_DAYS`, `BACKUP_HOUR`) are
-documented at the top of `portal/scripts/backup.js` and in [docs/DEPLOY_RAILWAY.md](docs/DEPLOY_RAILWAY.md#5-backups-cron-service).
+The session secret and the settings encryption key are generated on first start and stored in `portal.app_secrets`.
+Back up the database, and you back up both.
 
 ## Testing status
 
-| Suite | Result | Notes |
-|---|---|---|
-| Unit (`test/unit`) | 10/10 pass | Bounce rules, email validation, CSV formula-injection guard, CSV parsing/mapping, dates, config (incl. Railway-style variables), secret encryption |
-| Integration (`test/integration`) | 23/23 pass | Real listmonk v6.2.0 + PostgreSQL 16, **as the least-privilege role**, using the self-bootstrap. Covers TC02, 03, 05, 06, 08–14, CSRF, RBAC, login failure/lockout, env-managed admin, review hold, reactivation, erasure, token renewal |
-| Railway dry run | Pass | Railway listmonk image on `$PORT` + empty database + portal configured only by variables |
-| Backups | Pass | Local and S3-compatible upload (moto), retention, heartbeat; restore verified at DB level |
-| UI/UX/UAT audit | Pass | 3 roles × 17 screens + modals: no console errors, no denied requests, **0 axe WCAG 2 AA violations**; scripted UAT. See [docs/UAT_AUDIT.md](docs/UAT_AUDIT.md) |
+Verified in the build environment:
+- **Unit tests:** config, secrets encryption, rendering and personalisation, DSN/ARF bounce parsing, bounce rules and
+  SMTP error classification.
+- **Acceptance tests** (`test/integration`), against real PostgreSQL 16 and a local SMTP server. They cover:
+  - first-run setup with the log code;
+  - import, then a personalised send;
+  - hard bounce → suppressed;
+  - 5.7.1 → review queue;
+  - soft-bounce retries and the soft-bounce limit;
+  - open/click tracking and one-click unsubscribe attributed to the campaign;
+  - complaint via webhook;
+  - re-import that keeps suppressed contacts suppressed, and exclusion from the next campaign;
+  - double opt-in;
+  - reactivation and POPIA erasure;
+  - SMTP outage → auto-pause → resume.
+- **Browser walkthrough (Playwright):** setup, settings, lists, contacts, the campaign editor, test send, send, report,
+  templates, system health. An axe accessibility scan found no violations on those pages.
 
-Not verified in the build environment:
-- **Portal Docker image build:** Docker Hub rate limit. The identical `npm ci --omit=dev` and boot were verified, and the
-  PostgreSQL apt packages were confirmed to exist.
-- **Real SMTP delivery** (TC01, TC04).
-- **POP3 bounce-mailbox scanning:** bounces were injected through listmonk's bounce API instead.
-- **Caddy certificates.**
-- **A live Railway project.**
+**Not verified here:**
+- the IMAP connection against a real mailbox (only the parser is tested);
+- real SMTP providers and DNS checks against a real domain;
+- a live Railway deployment.
 
-See [docs/ACCEPTANCE_TESTS.md](docs/ACCEPTANCE_TESTS.md) for the go-live test plan.
+The Docker image was built and smoke-tested. The build needed only the sandbox's proxy certificate added; the
+Dockerfile is unchanged. In the container:
+- it runs as the non-root user;
+- `/healthz` returns 200;
+- the SMTP connection is verified;
+- `scripts/backup.js` produces a verified dump with pg_dump 18.
+
+Do the [UAT checklist](docs/ACCEPTANCE_TESTS.md) on staging before go-live.
 
 ## Known limitations
 
-- listmonk does not log individual sends, so a contact's "last campaign" is an estimate based on list membership.
-- listmonk does not link unsubscribes to campaigns. Campaign unsubscribes count list unsubscribes within 7 days of the send.
-- Opens are indicative (privacy proxies, image blocking, scanners). Per-contact opens and clicks need listmonk's
-  *individual tracking* setting, which is off by default for privacy.
-- listmonk reads bounces over POP3 only. An IMAP-only mailbox needs a provider webhook or an adapter.
-- A contact held for review is blocklisted in listmonk while held, because that is the only state listmonk excludes from sends.
-  Releasing the hold restores the lists it removed.
-- Search and filtering compute statuses on the fly. This is fast for typical SME databases (≈100k contacts). Much larger
-  databases may need a materialised status table.
-- The portal and listmonk have separate logins (listmonk is used for writing campaigns).
+- One application instance. The sender is safe with more than one (it uses row locks), but scheduling and alerting
+  are designed for one; keep Railway replicas at 1.
+- No built-in DKIM signing. Use an SMTP provider that signs with DKIM for your domain.
+- Images are linked by URL; there is no media library or upload.
+- Open tracking is approximate. Apple Mail Privacy Protection pre-loads images, and many clients block them. Treat clicks
+  as the reliable engagement signal.
+- No A/B testing, automations or drip sequences.
 
 ## Documentation
 
-- [Administrator guide](docs/ADMIN_GUIDE.md): install, listmonk configuration, DNS, users, backups, upgrades, monitoring
-- [User guide](docs/USER_GUIDE.md): day-to-day use (also available in the app under **Guides**)
-- [Architecture](docs/ARCHITECTURE.md): design decisions, data model, status logic, sync and enforcement
-- [Deploying on Railway](docs/DEPLOY_RAILWAY.md)
-- [UI / UX / UAT audit](docs/UAT_AUDIT.md): findings, fixes and the requirement-to-screen allocation matrix
-- [Security & POPIA](docs/SECURITY.md)
-- [Acceptance tests](docs/ACCEPTANCE_TESTS.md): TC01–TC16 status and the go-live test script
+| Guide | For |
+|---|---|
+| [USER_GUIDE](docs/USER_GUIDE.md) | Staff: contacts, imports, campaigns, reports |
+| [ADMIN_GUIDE](docs/ADMIN_GUIDE.md) | Administrators: setup, settings, deliverability, backups, operations |
+| [DEPLOY_RAILWAY](docs/DEPLOY_RAILWAY.md) | Railway deployment |
+| [ARCHITECTURE](docs/ARCHITECTURE.md) | Developers: design, data model, engine |
+| [SECURITY](docs/SECURITY.md) | Security controls and POPIA |
+| [ACCEPTANCE_TESTS](docs/ACCEPTANCE_TESTS.md) | UAT checklist mapped to the scope |
+| [UAT_AUDIT](docs/UAT_AUDIT.md) | UI/UX/UAT audit findings and fixes |
+
+The same how-to content is in the app under **Guides**.
 
 ## Licence
 
-The portal code is proprietary to its owner unless stated otherwise. listmonk is AGPL-3.0 and runs unmodified as a
-separate service.
+Proprietary to the commissioning organisation unless agreed otherwise. Third-party packages keep their own licences
+(see `portal/package.json`).

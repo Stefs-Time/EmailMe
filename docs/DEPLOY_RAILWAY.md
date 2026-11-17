@@ -1,120 +1,148 @@
 # Deploying on Railway
 
-MailHarbor runs on Railway as **three services plus one optional cron job**, all from this repository. You only set
-variables: there are no scripts to run on your own machine. The portal creates its own listmonk API user, applies the
-recommended listmonk settings and creates your administrator on first start.
+MailHarbor runs on Railway as **one application service plus a PostgreSQL database**. An optional cron service adds
+off-site backups. You only set variables; there is nothing to run on your own machine.
 
 ```
 Railway project
-├── Postgres            (Railway database template)
-├── listmonk            repo, root directory: deploy/railway/listmonk   → public domain, e.g. lists.example.co.za
-├── MailHarbor          repo, root directory: portal                    → public domain, e.g. mail.example.co.za
-└── Backups (cron)      repo, root directory: portal, start: node scripts/backup.js   → daily, to S3-compatible storage
+├── Postgres          Railway database template
+├── MailHarbor        this repo, root directory: portal   → public domain, e.g. mail.example.co.za
+└── Backups (cron)    this repo, root directory: portal, start: node scripts/backup.js   (optional, recommended)
 ```
 
-> **Verification status.** These steps follow Railway's documented model: monorepo root directories,
-> config-as-code (`railway.json`), `${{Service.VAR}}` reference variables, private networking, cron schedules.
-> Everything in this repo they rely on was tested locally:
-> - the listmonk Railway image starting on `$PORT` against an empty database;
-> - the portal configuring itself from variables only;
-> - the backup job uploading to an S3-compatible server.
+> **Plan requirement: Railway Pro.** According to Railway's
+> [outbound networking documentation](https://docs.railway.com/networking/outbound-networking), outbound SMTP is
+> available only on the **Pro plan and above**. Free, Trial and Hobby plans block SMTP ports. MailHarbor sends over
+> SMTP, so deploy in a Pro workspace. If you upgrade an existing project, **redeploy** the service afterwards.
 >
-> A live Railway deployment has **not** been performed from the build environment. Railway's UI labels may differ slightly.
+> **Verification status:** these steps follow Railway's documented model:
+> - monorepo root directories;
+> - config-as-code (`portal/railway.json`: Dockerfile build, `/healthz` health check, 1 replica);
+> - `${{Service.VAR}}` references;
+> - `RAILWAY_PUBLIC_DOMAIN`;
+> - cron schedules.
+>
+> The application was tested locally against PostgreSQL 16 and a test SMTP server, and the Docker image was built and
+> smoke-tested (health check, SMTP verify, backup). A live Railway deployment has
+> **not** been performed from the build environment, and Railway's UI labels may differ slightly.
 
 ---
 
-## 1. Create the project and database
-1. Railway → **New Project** → **Deploy PostgreSQL**.
-2. Rename the database service to `Postgres` if Railway named it differently. The reference variables below use that name.
+## Before you start
 
-## 2. listmonk service
-1. **+ New → GitHub Repo →** this repository. Rename the service to **`listmonk`**.
-2. *Settings → Source → Root Directory:* `deploy/railway/listmonk`. Railway uses that folder's `Dockerfile` and
-   `railway.json` (health check `/health`).
-3. *Variables:*
+You need:
 
-   | Variable | Value |
-   |---|---|
-   | `LISTMONK_db__host` | `${{Postgres.PGHOST}}` |
-   | `LISTMONK_db__port` | `${{Postgres.PGPORT}}` |
-   | `LISTMONK_db__user` | `${{Postgres.PGUSER}}` |
-   | `LISTMONK_db__password` | `${{Postgres.PGPASSWORD}}` |
-   | `LISTMONK_db__database` | `${{Postgres.PGDATABASE}}` |
-   | `LISTMONK_db__ssl_mode` | `disable` (private network) |
-   | `LISTMONK_db__max_open` | `20` |
-   | `LISTMONK_ADMIN_USER` | `admin` |
-   | `LISTMONK_ADMIN_PASSWORD` | a strong password (password manager) |
+- **A Railway Pro workspace** (see above).
+- **SMTP credentials** for a sending service that allows bulk or marketing mail. Examples: Amazon SES, Mailgun, SendGrid,
+  Brevo, Postmark (broadcast stream), SMTP2GO, or your own mail server. Check the provider's acceptable-use policy and
+  sending limits. A normal Microsoft 365 or Google Workspace mailbox is **not** suitable for bulk sending.
+- **A sending domain you control**, to set SPF, DKIM and DMARC records.
+- **Optional but strongly recommended:** a dedicated mailbox for bounces (for example `bounces@example.co.za`) with IMAP
+  access, or a provider that can send bounce webhooks.
 
-4. *Settings → Networking:* **Generate Domain**, or add your custom domain (`lists.example.co.za`). This public address
-   appears in every unsubscribe and tracking link, so it must stay stable.
-5. *Media uploads (images in emails):* add a **Volume** mounted at `/listmonk/uploads`, or configure S3 storage in
-   listmonk → Settings → Media.
+## 1. Database
 
-## 3. MailHarbor (portal) service
-1. **+ New → GitHub Repo →** this repository again. Rename the service to **`MailHarbor`**.
-2. *Settings → Source → Root Directory:* `portal`. This uses `portal/Dockerfile` and `portal/railway.json`
-   (health check `/healthz`).
-3. *Variables:*
+Railway → **New Project** → **Deploy PostgreSQL**. Keep the service name `Postgres`, which the reference below uses.
 
-   | Variable | Value | Notes |
-   |---|---|---|
-   | `NODE_ENV` | `production` | |
-   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` | See §6 to use a least-privilege role instead |
-   | `SESSION_SECRET` | 48 random characters | `openssl rand -base64 36`. Also encrypts the stored listmonk token |
-   | `LISTMONK_URL` | `http://${{listmonk.RAILWAY_PRIVATE_DOMAIN}}:${{listmonk.PORT}}` | Private network. If `PORT` isn't defined on listmonk, set `PORT=9000` there |
-   | `LISTMONK_PUBLIC_URL` | `https://${{listmonk.RAILWAY_PUBLIC_DOMAIN}}` | Or your custom domain |
-   | `LISTMONK_ADMIN_USER` | `${{listmonk.LISTMONK_ADMIN_USER}}` | Lets the portal create and renew its own API user |
-   | `LISTMONK_ADMIN_PASSWORD` | `${{listmonk.LISTMONK_ADMIN_PASSWORD}}` | |
-   | `ADMIN_EMAIL` | your email | **Environment-managed administrator** (below) |
-   | `ADMIN_PASSWORD` | strong password | ≥ 12 characters, letters and a number |
-   | `ADMIN_NAME` | e.g. `Thandi Nkosi` | optional |
-   | `ORG_NAME` | your organisation | shown in the UI |
-   | `DATABASE_POOL_MAX` | `5` | Keeps total connections within the Postgres plan |
-   | `BACKUP_STALE_HOURS` | `26` | Alert if no successful backup for 26 h (set once §5 is done) |
+## 2. MailHarbor service
 
-4. *Settings → Networking:* **Generate Domain**, or add `mail.example.co.za`.
-5. Deploy. In the deploy logs you should see, in order:
-   `created administrator from ADMIN_EMAIL / ADMIN_PASSWORD` → `MailHarbor portal listening` →
-   `creating listmonk API user for the portal` → `applied recommended listmonk settings` → `connected to listmonk API`.
-
-> **Private networking and ports.** The portal reaches listmonk over Railway's private network, on the port listmonk
-> listens on. Setting `PORT=9000` on the listmonk service makes this explicit and stable.
-
-### The environment-managed administrator
-`ADMIN_EMAIL` / `ADMIN_PASSWORD` define a break-glass administrator. On **every** start the portal makes sure this
-account exists, is an **active administrator** and has **exactly this password**.
-- **Locked out?** Change `ADMIN_PASSWORD` in Railway and redeploy.
-- In the app the account is marked *Environment-managed*. Its role, status and password cannot be changed there,
-  because the next restart would overwrite them.
-- **Hand over ownership:** change `ADMIN_EMAIL`. The old account stays as a normal admin you can then disable.
-- Remove both variables to stop managing an account this way. Existing accounts are kept.
-
-## 4. Finish the setup in the apps
-1. Sign in to **MailHarbor** with `ADMIN_EMAIL` / `ADMIN_PASSWORD` → **System health**.
-2. Sign in to **listmonk** (`https://<listmonk domain>/admin`) → **Settings**:
-   - **SMTP:** your mail server → *Test connection* (TC01).
-   - **Bounces:** enable, and add the dedicated POP3 bounce mailbox (or a provider webhook).
-   - **General:** default *From* address. (The root URL was already set by MailHarbor.)
-3. Back in MailHarbor → System health: every **critical** check must be green.
-4. Create personal accounts for your team under **Users**.
-5. Set up DNS for your sending domain (SPF, DKIM, DMARC). See the [admin guide](ADMIN_GUIDE.md#5-dns-and-deliverability).
-
-**Outbound mail ports:** confirm your Railway plan allows outbound SMTP (587/465) and POP3 (995) to your providers.
-If it doesn't, use your mail provider's HTTP relay or bounce webhook.
-
-## 5. Backups (cron service)
-Railway's own Postgres backups are a useful first line, but keep an **off-site** copy too.
-
-1. Create a bucket on any S3-compatible store. Cloudflare R2, AWS S3, Backblaze B2 and Railway storage buckets all work.
-   Create an access key limited to that bucket.
-2. **+ New → GitHub Repo →** this repository. Name it **`Backups`**. Root directory `portal`.
-3. *Settings → Deploy:* **Custom Start Command** `node scripts/backup.js`, **Cron Schedule** `0 0 * * *`
-   (cron runs in UTC; this is 02:00 in South Africa).
+1. **+ New → GitHub Repo →** this repository. Name the service **MailHarbor**.
+2. *Settings → Source → Root Directory:* `portal`. Railway uses `portal/Dockerfile` and `portal/railway.json`.
+3. *Settings → Networking:* **Generate Domain** (or add your custom domain, see §5).
 4. *Variables:*
 
    | Variable | Value |
    |---|---|
-   | `BACKUP_DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (must be the owner/superuser URL) |
+   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+   | `SMTP_HOST` | e.g. `email-smtp.af-south-1.amazonaws.com` |
+   | `SMTP_PORT` | `587` (STARTTLS) or `465` (TLS) |
+   | `SMTP_USER` | SMTP username |
+   | `SMTP_PASSWORD` | SMTP password |
+   | `SMTP_FROM` | optional, e.g. `"Example News <news@example.co.za>"` |
+
+   That is the whole configuration:
+   - Railway sets `PORT` and `RAILWAY_PUBLIC_DOMAIN`, and MailHarbor uses the latter for links in emails;
+   - the session secret and encryption key are generated and stored in the database;
+   - every other setting lives in the app.
+
+5. Deploy. Startup:
+   - applies database migrations;
+   - generates its secrets;
+   - creates the default email template;
+   - starts the sending and bounce worker;
+   - passes the `/healthz` health check.
+
+### Optional: administrator from variables
+
+To have an administrator account that always exists (break-glass access), also set the following:
+
+| Variable | Value |
+|---|---|
+| `ADMIN_EMAIL` | administrator email |
+| `ADMIN_PASSWORD` | at least 12 characters, letters and a number |
+| `ADMIN_NAME` | optional display name |
+
+On every start, MailHarbor creates this account if it is missing. Otherwise it resets the account's password to the
+variable, unlocks it and restores the admin role. In the app the account is marked *managed by environment*: it cannot be
+edited, disabled or deleted there. To rotate the password, change the variable and redeploy. To retire the account,
+remove both variables. The account then becomes an ordinary user that an administrator can disable.
+
+## 3. First sign-in
+
+If you did **not** set `ADMIN_EMAIL`/`ADMIN_PASSWORD`:
+
+1. Open the service's **Deploy Logs** and find:
+   `FIRST-RUN SETUP: open MailHarbor in your browser and enter setup code XXXXXXXXXX`
+2. Open the public domain. MailHarbor shows the setup screen. Enter the code, then your organisation name, your name,
+   email and a password. You are signed in as the first administrator. The code then stops working.
+
+The code is required so that nobody who finds the URL before you can claim the installation. It is printed again on every
+restart until the first administrator exists.
+
+## 4. Configure in the app
+
+Work through **Settings**, then **System health**. Every red item there names the setting that fixes it.
+
+| Settings tab | Set |
+|---|---|
+| **General** | Organisation name; **postal address** (in every email footer); public web address (detected on Railway; set your custom domain here once you add one) |
+| **Sending** | From name and address (on your verified sending domain); reply-to; **emails per second** (start at 2–5 on a new domain, within your provider's limits); optional hourly cap; open/click tracking defaults. **Send test email** checks SMTP end to end |
+| **Bounces** | Bounce address (Return-Path); soft-bounce limit (default 3); **bounce mailbox** (IMAP host, port 993, username, password, folder): use **Test connection**; or copy the **webhook URL** into your provider's bounce/complaint notifications |
+| **Compliance & backups** | Unsubscribe scope (global by default); backup alert threshold (set after §6) |
+
+Then:
+1. Add DNS records for your sending domain: SPF and DKIM as your SMTP provider instructs, plus a DMARC record.
+   System health checks SPF, DMARC and MX.
+2. **Users:** create accounts for staff (viewer / manager / admin).
+3. **Lists → Import → Campaigns:** send a test to yourself before the first real campaign.
+
+> **Return-Path note:** MailHarbor sets the envelope sender to the bounce address. Some providers (for example Amazon
+> SES and SendGrid) replace it with their own domain and report bounces through their own notifications. With those
+> providers, use the **webhook** for bounces. SMTP rejections at send time are always recorded either way.
+
+## 5. Custom domain
+
+*MailHarbor → Settings → Networking → Custom Domain*, add for example `mail.example.co.za`, and create the CNAME record
+Railway shows. Once the certificate is active, set **Settings → General → Public web address** in MailHarbor to
+`https://mail.example.co.za`. You can instead set the `PUBLIC_URL` variable, which then locks the field.
+
+Links in emails already sent keep the address they were sent with, so keep the old Railway domain working for a few months.
+
+## 6. Backups (cron service)
+
+Railway's own Postgres backups are a useful first line, but keep an **off-site** copy too.
+
+1. Create a bucket on any S3-compatible store (Cloudflare R2, AWS S3, Backblaze B2, Railway storage buckets) and an
+   access key limited to that bucket.
+2. **+ New → GitHub Repo →** this repository. Name it **Backups** and set *Root Directory* to `portal`.
+3. *Settings → Deploy:* set **Custom Start Command** to `node scripts/backup.js` and **Cron Schedule** to `0 0 * * *`.
+   Cron runs in UTC, so this is 02:00 in South Africa. Remove the HTTP health check for this service, because it
+   inherits `railway.json`.
+4. *Variables:*
+
+   | Variable | Value |
+   |---|---|
+   | `BACKUP_DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
    | `BACKUP_S3_BUCKET` | bucket name |
    | `BACKUP_S3_ENDPOINT` | e.g. `https://<account>.r2.cloudflarestorage.com` (omit for AWS S3) |
    | `BACKUP_S3_REGION` | `auto` (R2) or the AWS region |
@@ -122,43 +150,49 @@ Railway's own Postgres backups are a useful first line, but keep an **off-site**
    | `BACKUP_S3_PREFIX` | `mailharbor/` (optional) |
    | `BACKUP_RETENTION_DAYS` | `30` |
 
-5. Trigger it once (*Deploy*) and check MailHarbor → System health → **Backups**: "Last backup … off-site (S3)".
-   Each run verifies the archive is readable before uploading. A failed run raises a critical alert. With
-   `BACKUP_STALE_HOURS` set on the portal, a missed run raises a warning.
+5. Run it once (*Deploy*). Then check MailHarbor → System health → **Backups**. Each run checks that the archive is
+   readable before uploading, and a failed run raises a critical alert. Set **Settings → Compliance & backups → Alert
+   when no successful backup in** to `26` hours so that a missed run also raises an alert.
 
-> Because this service also has `railway.json` from the `portal` folder, disable its HTTP health check in the service settings.
+### Restore
 
-### Restore (TC16)
-Download the `.dump` from the bucket, then from any machine with PostgreSQL 18 client tools:
-```bash
-pg_restore --clean --if-exists --no-owner --dbname "<Postgres public connection URL>" mailharbor-YYYYMMDD-HHMMSS.dump
-```
-Then redeploy the listmonk and MailHarbor services. Practise on a separate Railway environment first.
+1. Download the `.dump` from the bucket.
+2. From any machine with PostgreSQL client tools of the server's major version or newer, run:
 
-## 6. Optional hardening: least-privilege database role
-By default the portal uses the Postgres owner URL. It only ever reads listmonk's tables in `READ ONLY` transactions,
-but the database itself does not enforce that. To have the database enforce it, run once using the Postgres public URL:
+   ```bash
+   pg_restore --clean --if-exists --no-owner --dbname "<Postgres public connection URL>" mailharbor-YYYYMMDD-HHMMSS.dump
+   ```
 
-```bash
-psql "<Postgres public URL>" -v pw='<strong password>' -v owner=postgres -f deploy/postgres/portal-role.sql
-```
+3. Redeploy MailHarbor.
 
-Then set the portal's `DATABASE_URL` to
-`postgresql://mailharbor:<password>@${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/${{Postgres.PGDATABASE}}`.
-The script also grants the role access to any portal tables created earlier, so it can be run before or after the first deploy.
+Practise this on a separate Railway environment first. The backup includes the generated secrets, so the encrypted
+bounce-mailbox password and the existing unsubscribe links keep working after a restore.
 
 ## 7. Upgrades
-- **listmonk:** change the tag in `deploy/railway/listmonk/Dockerfile`, then commit. Railway rebuilds, and the start script
-  runs `--upgrade`. Read listmonk's release notes first, and test major versions on a staging environment.
-- **MailHarbor:** push to the branch Railway watches. Migrations run automatically on start.
 
-## Railway troubleshooting
+Push to the branch Railway watches. Migrations run automatically on start.
+
+Railway runs the new deployment before stopping the old one. When the old one stops:
+- it receives `SIGTERM`;
+- it finishes the email in flight and stops claiming new ones;
+- campaigns continue in the new deployment.
+
+A message that was mid-send during a hard crash is marked **unknown** rather than sent twice. It is listed on the
+campaign report.
+
+Keep **replicas at 1** (set in `railway.json`).
+
+## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| Portal log: `Invalid configuration` | The message names each missing or invalid variable |
-| `listmonk not ready; retrying` repeats | Check the listmonk service is healthy and `LISTMONK_URL` uses the private domain and the right port |
-| `listmonk admin login failed` | `LISTMONK_ADMIN_USER` / `LISTMONK_ADMIN_PASSWORD` don't match the listmonk service |
-| System health: *Recipient sync has not run* | The portal can't reach listmonk; see the two rows above |
-| Can't sign in | Set or change `ADMIN_PASSWORD` and redeploy |
-| Backup job fails: `pg_dump … server version mismatch` | The image ships pg_dump 18; for a newer server, set build arg `PG_CLIENT_VERSION` in the Dockerfile |
+| Deploy log: `Invalid configuration` | The message names each missing or invalid variable |
+| System health: SMTP *connection timeout* | Workspace is not on Pro (SMTP blocked), or wrong host/port. Redeploy after upgrading |
+| SMTP *authentication failed* | Check `SMTP_USER`/`SMTP_PASSWORD`. Some providers need an app-specific or SMTP-specific password |
+| *Greeting never received* on port 465/587 | Port and TLS mode mismatch: 465 is implicit TLS, 587 is STARTTLS (set automatically from the port; override with `SMTP_SECURE`) |
+| Campaign **paused** with "SMTP connection failed" | MailHarbor paused it during an SMTP outage. Fix the cause (System health → SMTP *Re-check*), then **Resume** |
+| Lost the setup code | Redeploy or restart. It is printed on every start until the first administrator exists |
+| Can't sign in / locked out | Set `ADMIN_EMAIL` + `ADMIN_PASSWORD` and redeploy (see §2) |
+| Unsubscribe links point to the wrong address | Settings → General → Public web address (or `PUBLIC_URL`) |
+| Backup job fails: `pg_dump … server version mismatch` | The image ships a recent pg_dump. For a newer server, set build arg `PG_CLIENT_VERSION` in `portal/Dockerfile` |
+| Bounce mailbox alert | Settings → Bounces → *Test connection* shows the IMAP error (wrong password, IMAP disabled, app password needed) |

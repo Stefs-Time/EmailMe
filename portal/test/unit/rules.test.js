@@ -99,7 +99,9 @@ test('configuration: only the database and SMTP are required', () => {
   assert.equal(c.ADMIN_EMAIL, undefined);
   assert.equal(c.PORT, 3000);
   assert.equal(loadConfig({ DATABASE_URL: 'x', SMTP_HOST: 'h', SMTP_PORT: '465' }).SMTP_SECURE, true);
-  assert.equal(loadConfig({ DATABASE_URL: 'x', SMTP_HOST: 'h', RAILWAY_PUBLIC_DOMAIN: 'mh.up.railway.app' }).envPublicUrl, 'https://mh.up.railway.app');
+  const rw = loadConfig({ DATABASE_URL: 'x', SMTP_HOST: 'h', RAILWAY_PUBLIC_DOMAIN: 'mh.up.railway.app' });
+  assert.equal(rw.platformPublicUrl, 'https://mh.up.railway.app');
+  assert.equal(rw.envPublicUrl, undefined); // fallback only: a custom domain can still be set in Settings
   assert.throws(() => loadConfig({ DATABASE_URL: 'x', SMTP_HOST: 'h', SMTP_USER: 'u' }), /SMTP_PASSWORD/);
   assert.throws(() => loadConfig({ DATABASE_URL: 'x', SMTP_HOST: 'h', ADMIN_EMAIL: 'a@b.co' }), /both ADMIN_EMAIL and ADMIN_PASSWORD/);
   assert.throws(() => loadConfig({ DATABASE_URL: 'x', SMTP_HOST: 'h', ADMIN_EMAIL: 'a@b.co', ADMIN_PASSWORD: 'onlyletterslong' }), /letters and at least one number/);

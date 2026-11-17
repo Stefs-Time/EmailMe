@@ -2,7 +2,7 @@
 'use strict';
 
 /**
- * PostgreSQL backup for MailHarbor + listmonk (one database, both schemas).
+ * PostgreSQL backup for MailHarbor (the whole database: the portal schema and session store).
  *
  *   node scripts/backup.js           run one backup and exit   (Railway cron service)
  *   node scripts/backup.js --loop    run daily at BACKUP_HOUR   (Docker Compose service)
@@ -13,8 +13,7 @@
  *   [BACKUP_S3_ENDPOINT] [BACKUP_S3_REGION=auto] [BACKUP_S3_PREFIX=mailharbor/]
  *                                             any S3-compatible store (R2, S3, B2, MinIO…)
  * Database:
- *   BACKUP_DATABASE_URL (defaults to DATABASE_URL). Must be the database owner /
- *   superuser: the portal's read-only role cannot dump listmonk's sequences.
+ *   BACKUP_DATABASE_URL (defaults to DATABASE_URL).
  * Retention: BACKUP_RETENTION_DAYS (default 14).
  *
  * Every run records a heartbeat (portal.sync_state 'backup_heartbeat') that the

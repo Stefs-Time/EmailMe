@@ -50,7 +50,7 @@ async function main() {
 
   const app = createApp({ pool, config, logger, settings, transport, worker, track, sessionSecret });
   const server = app.listen(config.PORT, config.HOST, () => {
-    logger.info({ port: config.PORT, publicUrl: config.envPublicUrl || '(from Settings)' }, 'MailHarbor listening');
+    logger.info({ port: config.PORT, publicUrl: config.envPublicUrl || config.platformPublicUrl || '(from Settings)' }, 'MailHarbor listening');
   });
   server.requestTimeout = 10 * 60 * 1000; // large exports
   server.headersTimeout = 65 * 1000;

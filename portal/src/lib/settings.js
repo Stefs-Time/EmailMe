@@ -85,7 +85,7 @@ class Settings {
   async publicUrl() {
     if (this.config?.envPublicUrl) return this.config.envPublicUrl;
     const s = await this.all();
-    return (s.public_url || '').replace(/\/+$/, '');
+    return (s.public_url || '').replace(/\/+$/, '') || this.config?.platformPublicUrl || '';
   }
 
   /** Bounce mailbox settings with the password decrypted (server use only). */

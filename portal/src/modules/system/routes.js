@@ -52,11 +52,23 @@ async function dnsChecks(fromEmail, bounceAddress) {
   ];
 }
 
+/** Turns an SMTP verify error into an actionable hint. */
+function smtpHelp(error) {
+  const e = String(error || 'Not checked yet');
+  if (/timeout|ETIMEDOUT|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH/i.test(e)) {
+    return `${e}. The server could not be reached: check SMTP_HOST/SMTP_PORT. Some hosts block outbound SMTP `
+      + '(on Railway it requires the Pro plan; redeploy after upgrading).';
+  }
+  if (/auth|535|534|credentials|login/i.test(e)) return `${e}. Check SMTP_USER and SMTP_PASSWORD (some providers need an SMTP-specific password).`;
+  if (/greeting|wrong version number|ssl|tls/i.test(e)) return `${e}. Port and TLS mode may not match: 465 uses TLS from the start, 587 uses STARTTLS.`;
+  return `${e}. Check the SMTP_* variables.`;
+}
+
 function configChecks(s, publicUrl, mailboxState) {
   const checks = [];
   const add = (id, ok, title, help, severity = 'warning') => checks.push({ id, ok: Boolean(ok), title, help, severity });
   add('public_url', /^https:\/\//.test(publicUrl || ''), 'Public URL uses HTTPS',
-    'Settings → General → Public URL. Unsubscribe and tracking links use it (Railway sets this automatically).', 'critical');
+    'Settings → General → Public URL. Unsubscribe and tracking links use it (on Railway the generated domain is used until you set one).', 'critical');
   add('from_email', s.from_email, 'Default sender address set', 'Settings → Sending → From address.', 'critical');
   add('org_address', s.org_address, 'Postal address for email footers', 'Settings → General → Postal address. Shown in every email (sender identity).', 'critical');
   add('bounce_mailbox', s.bounce_mailbox.enabled && mailboxState?.ok !== false, 'Bounce mailbox connected',
@@ -98,7 +110,7 @@ function systemRoutes({ pool, settings, transport, config, worker }) {
     out.sending = { ratePerSecond: s.send_rate_per_second, maxPerHour: s.send_max_per_hour };
     out.checks = [
       { id: 'smtp', ok: out.smtp.ok, severity: 'critical', title: `SMTP server ${config.SMTP_HOST}:${config.SMTP_PORT} reachable and accepts login`,
-        help: out.smtp.ok ? '' : `${out.smtp.error || 'Not checked yet'}. Check the SMTP_* variables.` },
+        help: out.smtp.ok ? '' : smtpHelp(out.smtp.error) },
       ...configChecks(s, publicUrl, out.mailbox),
       ...(s.from_email ? await dnsChecks(s.from_email, s.bounce_address) : []),
     ];

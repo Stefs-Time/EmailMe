@@ -1,134 +1,124 @@
 # UI / UX / UAT audit
 
-**Date:** 16 Nov 2026 · **Build:** branch `ccr-65691816-bwuwkk` · **Stack under test:** listmonk v6.2.0, PostgreSQL 16, Chromium (Playwright)
+**Latest run:** 17 Nov 2026 · **Build:** branch `ccr-65691816-bwuwkk`, built-in sending engine (no listmonk)
+**Stack under test:** PostgreSQL 16, local SMTP test server, Chromium (Playwright), axe-core 4.x (WCAG 2 A/AA)
+
+There have been two rounds:
+- **Round 2 (current):** after MailHarbor was rebuilt with its own campaign, sending, tracking and bounce engine. It
+  covers the new screens (setup, campaigns, editor, templates, settings, system health) and re-checks role allocation.
+- **Round 1:** the earlier listmonk-based build. Its fixes to sign-in, imports, contacts and accessibility carried into
+  the current code. Findings that only concerned listmonk no longer apply and are listed at the end for the record.
 
 ## 1. Method
 
 | Pass | What was done |
 |---|---|
-| Role crawl | Signed in as **admin**, **manager** and **viewer**. Opened all 17 screens and recorded the navigation, every visible action and every failed API call. Any control a role can see but not use counts as a defect. |
-| Accessibility | axe-core 4.14 (WCAG 2 A/AA + best practice) on every screen for every role, and on each modal while open. |
-| Visual review | Desktop (1366 px) and phone (390 px) screenshots: layout, hierarchy, truncation, focus states. |
-| Scripted UAT | End-to-end browser workflows per role: import, filter, select all matching, bulk list change, unsubscribe, export, keyboard use, read-only checks (§4). |
-| Functional regression | 33 automated tests: 10 unit, 23 integration against real listmonk, run as the least-privilege database role. |
+| Browser walkthrough | Fresh database → first-run setup with the log code → settings (address, SMTP test, bounce tab) → list + contact → campaign editor (subject, preheader, personalisation tag, button, autosave, readiness) → test send → send now → report → templates → system health |
+| Role crawl | Signed in as **viewer** and **manager**, opened all 21 routes (including deep links to admin-only and edit screens), recorded the menu, every visible action, failed API calls and page errors |
+| Accessibility | axe-core (WCAG 2 A/AA) on every screen in the walkthrough and the role crawl |
+| Functional regression | 12 unit tests + 20 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)) |
 
-## 2. Findings and fixes
+## 2. Round 2 findings and fixes
 
-Severity: **High** means a function is broken or blocked, or the data or compliance outcome is wrong. **Medium** means
-a role or allocation error, an accessibility failure, or a misleading UI. **Low** is polish.
+Severity:
+- **High:** a function is broken, or the data or compliance outcome is wrong.
+- **Medium:** a role or allocation error, an accessibility failure, or a misleading UI.
+- **Low:** polish.
 
 | # | Area | Sev. | Finding | Fix | Status |
 |---|---|---|---|---|---|
-| F1 | Sign-in | **High** | A wrong password returned **HTTP 500** instead of "Incorrect email or password". The failed-login query had ambiguous parameter types. | Typed parameters; regression test added | Fixed, tested |
-| F2 | Sign-in | **High** | Account lockout **never triggered**: the counter reset to 0 before the lock check. | Lock decided in code before the reset; test "10 failures lock the account" | Fixed, tested |
-| F3 | Import | **High** | With no list selected, the preview said "ready to import" but listmonk refused the commit, so the import failed only after confirmation. | Preview requires at least one list and says so; field marked required | Fixed, tested in UAT |
-| F4 | Alerts | Medium | False "re-enabled in listmonk" alert when an unsubscribe from listmonk's own page was suppressed and blocked in the same cycle. | Alert only when the suppression was already confirmed as blocked (`enforced_at`) | Fixed, tested |
-| F5 | Role allocation | Medium | **Viewers** saw "New campaign in listmonk" and "Open in listmonk", but campaign writing belongs to managers and admins. | New `campaigns:compose` permission (manager, admin) gates those links | Fixed, verified by crawl |
-| F6 | Role allocation | Medium | **Viewers** could read Import history but had no route to it (the Import menu item is for writers). | "Import history" menu item for roles without import rights | Fixed, verified |
-| F7 | Env admin | Medium | New requirement: an administrator defined by environment variables. | `ADMIN_EMAIL` / `ADMIN_PASSWORD` enforced on every start; account badged *Environment-managed*; role, status and password locked in the UI and API, with an explanation | Done, tested |
-| F8 | Accessibility | Medium | Contrast below 4.5:1 on menu section labels (3.0), teal buttons (4.0), table headers (4.3), "No lists" badge, danger text, pager label and `<code>` text. | Darker tokens; all now ≥ 4.5:1 | Fixed: **0 violations** |
-| F9 | Accessibility | Medium | Modal form labels were not linked to their inputs, so screen readers did not announce field names. | Labels linked automatically to the following control on every render | Fixed |
-| F10 | Accessibility | Medium | Dialogs had no accessible name. | `aria-labelledby` points at the modal title | Fixed |
-| F11 | Accessibility | Medium | The whole app was an `aria-live` region, so every re-render would be read aloud. | Removed; toasts keep their own status/alert roles | Fixed |
-| F12 | Navigation | Medium | "Skip to content" changed the URL hash, which the router treated as an unknown page. | Skip link moves focus without changing the hash | Fixed |
-| F13 | Keyboard | Medium | Contact rows could only be opened with a mouse. Scrollable tables could not be reached by keyboard. | Email is a real link; scrollable tables are focusable and labelled | Fixed, tested in UAT |
-| F14 | Bulk work | Medium | Bulk actions only covered the visible page, which is impractical for sorting large databases. | "Select all N matching contacts" (up to 5,000) and a rows-per-page selector (25–200) | Added, tested |
-| F15 | Layout | Low | The top bar repeated each page's title. | Replaced by a global quick search (email, name or company) | Done |
-| F16 | Mobile | Low | Menu drawer had no backdrop and could not be closed by tapping outside or pressing Esc. | Backdrop + Esc close | Fixed, tested |
-| F17 | System health | Low | Open alerts were buried under resolved history. | Open alerts first; resolved ones collapsed | Fixed |
-| F18 | System health | Low | No backup status (scope §8 "backup execution status"). | Backup card + alerts for failed or overdue backups | Added |
-| F19 | Focus | Low | A dark outline framed the main area after every navigation (programmatic focus). | Outline removed for the programmatic focus target only | Fixed |
-| F20 | Permission page | Low | "No permission" pages had no heading. | Page title as `<h1>` with a clear message | Fixed |
-| F22 | Feedback | Medium | Error toasts appeared bottom-right **on top of the page's primary button** (found in UAT: after the "choose a list" error, "Check my data" could not be clicked until the toast closed). Messages also repeated themselves ("…to — lists: Choose at least one list"). | Toasts moved top-right under the top bar; repeated details removed; the import form highlights and focuses the missing field | Fixed, UAT re-run |
-| F21 | Soft bounces | Low | Docs promised soft 3 → blocklist, but a fresh listmonk keeps "2 → none". | Recommended settings now set 3 → blocklist unless someone already chose a policy | Fixed, verified |
-
-Railway-specific findings (setup, not UI):
-
-| # | Finding | Fix |
-|---|---|---|
-| R1 | First deploy needed a locally run script to create the listmonk token. | Portal creates and renews its own least-privilege API user (token stored AES-GCM encrypted). |
-| R2 | The Compose backup container has no equivalent on Railway. | `scripts/backup.js` (pg_dump → verify → S3-compatible upload → retention → heartbeat) as a Railway cron service. |
-| R3 | listmonk needs to listen on Railway's `$PORT` and be configured from variables. | `deploy/railway/listmonk` image (tested against an empty database). |
-| R4 | Railway can define empty variables. | Empty values are treated as unset. |
-| R5 | The health check could fail while listmonk boots. | HTTP server starts first; listmonk connection retries in the background. |
+| N1 | Settings | **High** | Saving one tab reset the other tabs' settings to defaults (a schema library filled defaults for omitted keys on partial updates). | Only keys actually sent are written | Fixed, tested |
+| N2 | Bounces | **High** | A delivery-status notification reporting *successful* delivery was treated as a bounce by the fallback heuristic. | DSNs where every recipient was delivered are ignored | Fixed, unit test |
+| N3 | Navigation | **High** | Clicking quickly between pages could show the previous page's content under the new URL (a slow module load overwrote the newer page). | Navigation counter; stale renders are discarded; each page renders into a fresh container | Fixed, re-tested |
+| N4 | Templates | **High** | Template *Preview* failed: a form POST into a new tab had no CSRF token. | Draft sent with fetch (CSRF), then shown from a one-time sandboxed GET | Fixed, re-tested |
+| N5 | Editor | Medium | Some elements used inline `style=` attributes, which the strict CSP blocks, so alignment and spacing did not apply. | Replaced with classes; email output is inlined server-side | Fixed |
+| N6 | Settings | Medium | Bounce-mailbox fields (port 993, folder INBOX, interval) showed empty on a new installation. | Defaults parsed explicitly | Fixed, verified in UI |
+| N7 | Hosting | Medium | On Railway the detected domain **locked** the Public web address, so a custom domain could only be set through a variable. | The detected domain is now a fallback; `PUBLIC_URL` alone locks the field; the help text explains which applies | Fixed, unit test |
+| N8 | Accessibility | Medium | The editor's Visual/HTML/Plain-text switch used tab roles without tab panels. | A labelled button group with `aria-pressed` | Fixed: 0 violations |
+| N9 | Accessibility | Medium | The red outline *Delete* button was below 4.5:1 contrast. | Neutral outline button; the confirmation dialog carries the danger colour | Fixed |
+| N10 | Feedback | Medium | Toasts appeared over the top-right primary actions (Send, Save) on campaign and template screens. | Toasts moved bottom-left | Fixed, re-tested |
+| N11 | Setup | Low | After first-run setup the sidebar showed the default organisation name until the page was reloaded. | Session reloaded after setup | Fixed, verified |
+| N12 | Testing | Low | Scope TC14 (bounce mailbox unavailable → alert) was only a manual check. | Automated test against an unreachable IMAP server; also checks the password is encrypted at rest and never returned | Added, passing |
+| N13 | Deployment | **High** (docs) | Railway allows outbound SMTP only on the Pro plan and above. A Hobby deployment would start but could never send. | Stated prominently in README and DEPLOY_RAILWAY; System health shows an SMTP timeout with that hint | Documented |
 
 ## 3. Allocation matrix: scope requirement → screen → role
 
-✔ = can do · 👁 = read only · – = hidden
+✔ = can do · 👁 = read only · – = hidden (direct link shows "no permission")
 
 | Scope § | Requirement | Where | Viewer | Manager | Admin |
 |---|---|---|---|---|---|
-| 3.1 | SMTP configuration, test, rate | listmonk → Settings (checked on **System health**) | – | 👁 health | 👁 health |
-| 3.2 | Central recipient record (all fields) | **Contacts** list + **Contact** page | 👁 | ✔ | ✔ |
+| 3.1 | SMTP configuration, test, rate | Variables (host/credentials) + **Settings → Sending** (test, rate, hourly cap) + **System health** | – | 👁 health | ✔ |
+| 3.2 | Central recipient record | **Contacts** + **Contact** page (details, lists, consent, emails sent, bounces, history) | 👁 | ✔ | ✔ |
 | 3.2 | Sort and filter recipients | **Contacts**: search, status/list/source/consent filters, sortable columns, quick search | ✔ | ✔ | ✔ |
-| 3.3 | Recipient status model | Status badges everywhere; dashboard tiles; *Eligible to receive* filter | 👁 | 👁 | 👁 |
-| 3.4 | CSV import with validation, dedupe, suppression, preview, report | **Import** (4-step wizard) + **Import history** | 👁 history | ✔ | ✔ |
-| 3.5 | Campaign creation, templates, test, schedule, pause | listmonk (link in menu footer and campaign reports) | – | ✔ link | ✔ link |
-| 3.6 | Bounce processing and classification | Automatic (sync); **Review queue** for 5.7.x; contact bounce table | 👁 | ✔ resolve | ✔ resolve |
-| 3.7 | Unsubscribe and global suppression | listmonk links + **Contact → Unsubscribe**; **Suppression list** | 👁 | ✔ add | ✔ add / lift |
-| 3.8 | Campaign reporting (all 9 metrics) | **Campaign reports** + campaign page | 👁 | 👁 + export | 👁 + export |
-| 4 | Suppression rules, history | **Suppression list**, contact **History** timeline | 👁 | ✔ | ✔ |
-| 4 | Reactivation only with authorisation and permission basis | **Suppression list → Lift…** | – | – | ✔ |
+| 3.3 | Recipient status model | Status badges; dashboard tiles; *Eligible to receive* filter | 👁 | 👁 | 👁 |
+| 3.4 | CSV import: validation, dedupe, suppression, preview, report | **Import** wizard + **Import history** | 👁 history | ✔ | ✔ |
+| 3.5 | Campaigns: create, templates, personalise, test, schedule, pause/resume/cancel | **Campaigns**, campaign editor, **Templates** | 👁 | ✔ | ✔ |
+| 3.6 | Bounce processing and classification | Automatic (SMTP, IMAP mailbox, webhook); **Settings → Bounces**; **Review queue**; contact bounce table | 👁 | ✔ resolve | ✔ + configure |
+| 3.7 | Unsubscribe and global suppression | Link + one-click header in every email; **Contact → Unsubscribe**; **Suppression list**; Settings → Compliance | 👁 | ✔ add | ✔ add / lift / configure |
+| 3.8 | Campaign reporting | Campaign page (metrics, top links, timeline, failures) + campaigns CSV | 👁 | 👁 + export | 👁 + export |
+| 4 | Suppression rules, history | **Suppression list**, contact **History** | 👁 | ✔ | ✔ |
+| 4 | Reactivation only with authorisation and permission basis | **Suppression list → Lift** | – | – | ✔ |
 | 5 | Consent date, method, purpose, evidence | Add contact, import, **Record consent**, contact **Consent** card | 👁 | ✔ | ✔ |
+| 5 | Double opt-in | List setting; confirmation email and confirm page | 👁 | ✔ | ✔ |
 | 5 | Export consent and unsubscribe history | **Exports** | – | ✔ | ✔ |
 | 5 | Access request (s23) | **Contact → Data export** | – | ✔ | ✔ |
 | 5 | Erasure / anonymisation | **Contact → Erase** | – | – | ✔ |
-| 5 | Restrict access to personal information | Roles; exports manager+; audit | – | – | ✔ users |
-| 7 | Admin authentication, RBAC, audit trail | Sign-in, **Users**, **Audit log**, env-managed admin | – | – | ✔ |
-| 8 | Overview totals (all 9 items) | **Dashboard** | 👁 | 👁 | 👁 |
-| 8 | Monitoring (SMTP, bounce mailbox, sync, availability, backups) | Dashboard alerts + **System health** | – | ✔ | ✔ |
+| 7 | Admin authentication, RBAC, audit trail | Setup code, sign-in, **Users**, **Audit log**, environment-managed admin | – | – | ✔ |
+| 8 | Overview totals | **Dashboard** | 👁 | 👁 | 👁 |
+| 8 | Monitoring (SMTP, bounce mailbox, worker, queue, DNS, backups) | Dashboard alerts + **System health** | – | ✔ | ✔ |
 | 10 | Acceptance tests | `docs/ACCEPTANCE_TESTS.md`, automated suite | – | – | – |
 
-Each role's menu after the audit:
-- **Viewer:** Dashboard · Contacts · Import history · Lists · Review queue · Suppression list · Campaign reports · Audience & bounces · Guides
-- **Manager:** + Import · Exports · System health · *New campaign in listmonk*. Minus Import history (reached from Import).
-- **Admin:** + Users · Audit log
+Menus observed in the role crawl:
+- **Viewer:** Dashboard · Contacts · Import history · Lists · Review queue · Suppression list · Campaigns · Templates · Audience & bounces · Guides
+- **Manager:** Dashboard · Contacts · Import · Lists · Review queue · Suppression list · Campaigns · Templates · Audience & bounces · Exports · Guides · System health, plus the *New campaign* button
+- **Admin:** everything a manager has, plus Settings · Users · Audit log
 
-## 4. Scripted UAT results
+## 4. Run log (17 Nov 2026)
 
-See §5 for the run log. Each step is an end-to-end browser workflow.
-
-| ID | Role | Scenario | Result |
-|---|---|---|---|
-| M1 | Manager | Import 30 contacts with consent from file; no list chosen → clear message; then imported | **PASS** |
-| M2 | Manager | Filter by source, "Select all 30 matching" across pages | **PASS** |
-| M3 | Manager | Bulk add the selection to a double opt-in list | **PASS** |
-| M4 | Manager | Open a contact from the list, Actions → Unsubscribe → status *Unsubscribed* | **PASS** |
-| M5 | Manager | "Export view" downloads a CSV with every filtered row | **PASS** |
-| M6 | Manager | No Users, Audit log, Lift or Erase controls | **PASS** |
-| M7 | Manager | Keyboard: focus a contact link, Enter opens it | **PASS** |
-| V1 | Viewer | Contacts visible; no add, export, selection or contact actions | **PASS** |
-| V2 | Viewer | Import history reachable from the menu | **PASS** |
-
-## 5. UAT run log
-
-Final run, 16 Nov 2026: **9/9 PASS, no page errors.**
-
-The first two runs failed at M1, and M2–M5, M7 and V1 then failed because they depend on M1's data. Those runs found
-F3 (import with no list failed only at commit) and F22 (toast covering the retry button). Both were fixed before the final run.
+Browser walkthrough on a fresh database:
 
 ```
-PASS M1 import 30 contacts (no list → clear error; then imported)
-PASS M2 filter by source and select all matching (beyond one page)
-PASS M3 bulk add selection to a list
-PASS M4 unsubscribe one contact from its page (status becomes Unsubscribed)
-PASS M5 export current view downloads a CSV
-PASS M6 manager cannot see Users / Audit / Lift / Erase
-PASS M7 keyboard: Tab reaches a contact link and Enter opens it
-PASS V1 viewer sees contacts but no write controls
-PASS V2 viewer reaches Import history from the menu
-PASS no page errors
+PASS setup screen                       (setup code from server log; first admin created)
+PASS settings: address + SMTP test      (test email delivered to the SMTP test server)
+PASS list + contact
+PASS campaign editor                    (personalisation tag, button, autosave, "Ready to send")
+PASS test send + send now               (report shows the send)
+PASS campaign list + templates + system
+ERRORS: none            axe: 0 violations on every screen
 ```
 
-Accessibility (axe-core, all roles, all screens and modals): **0 violations** after fixes, down from 9 distinct
-contrast failures plus unlabelled dialogs, labels not linked to inputs and empty table headers.
+Role crawl (viewer, manager × 21 routes):
+- **Viewer:** no write controls on any screen; the admin-only and edit routes show the permission page; 0 API errors, 0 page errors, 0 axe violations.
+- **Manager:** campaign, template, import, list, contact, suppression and export actions present. Settings, Users, Audit and Lift are absent. 0 API errors, 0 page errors, 0 axe violations.
+
+Acceptance suite: 20/20 pass. Unit tests: 12/12 pass.
+
+## 5. Round 1 (listmonk-based build): findings still relevant
+
+These fixes live in code the current build kept:
+
+| # | Finding | Fix |
+|---|---|---|
+| F1 | A wrong password returned HTTP 500 | Typed query parameters; regression test |
+| F2 | Account lockout never triggered | Lock decided before the counter reset; test "10 failures lock" |
+| F3 | An import with no list failed only at commit | Preview requires a list |
+| F8–F13 | Contrast, unlabelled modal fields, unnamed dialogs, app-wide live region, skip link, keyboard access to contact rows | Fixed; carried forward |
+| F14 | Bulk actions only covered the visible page | "Select all N matching" (up to 5,000) and page-size selector |
+| F16 | Mobile menu could not be closed by tapping outside or pressing Esc | Backdrop + Esc |
+| F18 | No backup status | Backup card and alerts |
+
+Obsolete with the rebuild (listmonk-specific): F4, F5, F21 and R1–R5 (listmonk sync alerts, listmonk links, listmonk
+bounce-action defaults, listmonk API user, listmonk Railway image).
 
 ## 6. Recommendations (not done: need a decision or external access)
 
-1. **Run the go-live script** in `ACCEPTANCE_TESTS.md` on the real infrastructure: SMTP, POP3 bounce mailbox, DNS and
-   Railway. Those parts could not be exercised from the build environment.
-2. **Accessibility sign-off:** automated checks catch roughly a third of WCAG issues. A 30-minute screen-reader
-   pass (NVDA or VoiceOver) through Import and Contact is worthwhile before go-live.
-3. **listmonk UI:** campaign writers still use listmonk's own interface and logins. Single sign-on would mean modifying
-   listmonk, which the scope rules out.
-4. **Very large databases** (≫ 100k contacts): consider a materialised status table if contact search slows down.
+1. **Run the go-live script** in [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) on the real infrastructure: your SMTP
+   provider, the IMAP bounce mailbox, DNS and Railway (Pro). None of these could be reached from the build environment.
+2. **Warm up the sending domain:** start at 2–5 emails per second and small campaigns, and watch bounces and
+   complaints in Reports.
+3. **Accessibility sign-off:** automated checks catch roughly a third of WCAG issues. A 30-minute screen-reader
+   pass (NVDA or VoiceOver) through Import, Contact and the campaign editor is worthwhile before go-live.
+4. **Phone-width check of the campaign editor:** it works on narrow screens but is designed for desktop use. Confirm
+   that this matches how staff will work.
+5. **Very large databases** (≫ 100k contacts): measure contact search and report times. Consider a materialised
+   status table only if they slow down.

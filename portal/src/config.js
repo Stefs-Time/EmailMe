@@ -78,12 +78,15 @@ function loadConfig(env = process.env) {
     throw err;
   }
   const c = parsed.data;
-  const envPublicUrl = c.PUBLIC_URL || (c.RAILWAY_PUBLIC_DOMAIN ? `https://${c.RAILWAY_PUBLIC_DOMAIN}` : undefined);
+  const trim = (u) => (u ? u.replace(/\/+$/, '') : undefined);
   return Object.freeze({
     ...c,
     isProd: c.NODE_ENV === 'production',
     SMTP_SECURE: c.SMTP_SECURE ? c.SMTP_SECURE === 'true' : c.SMTP_PORT === 465,
-    envPublicUrl: envPublicUrl ? envPublicUrl.replace(/\/+$/, '') : undefined,
+    // PUBLIC_URL overrides (and locks) the Settings value; the Railway domain is only a fallback,
+    // so a custom domain can be entered in Settings.
+    envPublicUrl: trim(c.PUBLIC_URL),
+    platformPublicUrl: c.RAILWAY_PUBLIC_DOMAIN ? trim(`https://${c.RAILWAY_PUBLIC_DOMAIN}`) : undefined,
   });
 }
 

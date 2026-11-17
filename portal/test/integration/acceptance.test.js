@@ -401,6 +401,28 @@ t('TC14: SMTP unavailable pauses the campaign, raises a critical alert, and lose
   assert.equal(a.length, 0, 'alert resolves after a successful send');
 });
 
+t('TC14 (scope): bounce mailbox unavailable raises a critical alert; password stored encrypted', async () => {
+  const closed = require('node:net').createServer();
+  await new Promise((r) => closed.listen(0, '127.0.0.1', r));
+  const port = closed.address().port;
+  await new Promise((r) => closed.close(r)); // nothing listens there now
+  const put = await http('admin', 'PUT', '/api/settings', {
+    bounce_mailbox: { enabled: true, host: '127.0.0.1', port, secure: false, user: 'bounces', password: 'secret-pw-123' },
+  });
+  assert.equal(put.status, 200, JSON.stringify(put));
+  assert.equal(put.data.bounce_mailbox.password, undefined, 'password never returned');
+  assert.equal(put.data.bounce_mailbox.password_set, true);
+  const { rows: raw } = await pool.query(`SELECT value::text AS v FROM portal.settings WHERE key = 'bounce_mailbox'`);
+  assert.ok(!raw[0].v.includes('secret-pw-123'), 'password encrypted at rest');
+  const poll = await http('admin', 'POST', '/api/settings/mailbox-poll');
+  assert.ok(poll.data.error, JSON.stringify(poll));
+  const { rows } = await pool.query(`SELECT severity FROM portal.alerts WHERE key = 'bounce_mailbox_error' AND resolved_at IS NULL`);
+  assert.equal(rows[0]?.severity, 'critical');
+  const health = await http('admin', 'GET', '/api/system/health');
+  assert.equal(health.status, 200);
+  await http('admin', 'PUT', '/api/settings', { bounce_mailbox: { enabled: false } });
+});
+
 t('exports and campaign report download as CSV', async () => {
   const text = await (await http('admin', 'GET', '/api/exports/contacts.csv?status=suppressed', undefined, { raw: true })).text();
   assert.ok(text.includes('hard-dan@ok.example'));

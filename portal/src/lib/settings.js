@@ -42,7 +42,8 @@ const SCHEMA = z.object({
   backup_stale_hours: z.coerce.number().min(0).max(744).default(0),
 });
 
-const DEFAULTS = SCHEMA.parse({});
+// zod 4 returns .default({}) objects as-is, so build nested defaults explicitly.
+const DEFAULTS = { ...SCHEMA.parse({}), bounce_mailbox: mailbox.parse({}) };
 const CACHE_MS = 5000;
 
 class Settings {

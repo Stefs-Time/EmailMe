@@ -148,6 +148,8 @@ const viewCache = {};
 async function route() {
   if (!state.session?.user) return;
   const path = location.hash.replace(/^#/, '').split('?')[0] || '/';
+  state.nav = (state.nav || 0) + 1;
+  const navId = state.nav;
   let match;
   const r = ROUTES.find((x) => (match = x.path.exec(path)));
   const main = $('#main');
@@ -164,10 +166,18 @@ async function route() {
   $$('.side-nav a').forEach((a) => a.classList.toggle('active', r.view === a.dataset.match || (r.view.startsWith(a.dataset.match) && !$$('.side-nav a').some((x) => x.dataset.match === r.view))));
   try {
     const mod = viewCache[r.view] || (viewCache[r.view] = await import(`./views/${r.view}.js`));
-    state.cleanup = await mod.render(main, ctx, match.slice(1));
+    // Each navigation renders into its own container: if the user moves on
+    // before a slow page finishes loading, its late output lands nowhere.
+    if (navId !== state.nav) return; // a newer navigation started while this page's code loaded
+    const view = document.createElement('div');
+    main.replaceChildren(view);
+    const cleanup = await mod.render(view, ctx, match.slice(1));
+    if (view.isConnected) state.cleanup = cleanup;
+    else if (typeof cleanup === 'function') cleanup();
   } catch (err) {
     console.error(err);
     if (err.status === 401) return;
+    if (navId !== state.nav) return; // the user already moved on
     mount(main, errorBox(err));
   }
   main.focus({ preventScroll: true });
@@ -200,12 +210,11 @@ async function boot() {
   }
   if (!state.session.user && state.session.setupNeeded) {
     const { renderSetup } = await import('./views/setup.js');
-    renderSetup($('#root'), async (session) => {
-      state.session = { ...state.session, ...session, setupNeeded: false };
-      setCsrf(session.csrfToken);
+    renderSetup($('#root'), async () => {
+      await loadSession(); // picks up the organisation name just saved
       renderShell();
-      location.hash = '#/settings';
-      await route();
+      if (location.hash === '#/settings') await route();
+      else location.hash = '#/settings';
     });
     return;
   }

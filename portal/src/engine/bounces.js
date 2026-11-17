@@ -128,7 +128,9 @@ async function parseBounceEmail(raw) {
   const reports = [];
   const dsnRe = /Final-Recipient:\s*(?:rfc822;)?\s*<?([^\s>;]+@[^\s>;]+)>?([\s\S]*?)(?=Final-Recipient:|$)/gi;
   let m;
+  let sawDsn = false;
   while ((m = dsnRe.exec(all))) {
+    sawDsn = true;
     const block = m[2];
     const action = (/^\s*Action:\s*(\w+)/im.exec(block) || [])[1]?.toLowerCase();
     if (action && !['failed', 'delayed'].includes(action)) continue;
@@ -144,6 +146,9 @@ async function parseBounceEmail(raw) {
     const seen = new Set();
     return reports.filter((r) => !seen.has(r.email.toLowerCase()) && seen.add(r.email.toLowerCase()));
   }
+
+  // A standard report whose recipients were all delivered/relayed: not a bounce.
+  if (sawDsn) return [];
 
   // Not a standard report. Treat it as a bounce only if it clearly is one.
   const subject = mail.subject || '';

@@ -221,7 +221,7 @@ code { color: #22303f; background: #eef1f5; padding: .1rem .35rem; border-radius
 .resolved-alerts summary { cursor: pointer; padding: .6rem 1rem; color: #475467; font-size: .85rem; }
 
 /* Toasts below the top bar, clear of page footers and primary actions */
-.toast-stack { margin-top: 56px; z-index: 1090; }
+.toast-stack { z-index: 1090; max-width: 100vw; }
 
 /* Campaign editor */
 .list-pick { max-height: 220px; overflow-y: auto; }

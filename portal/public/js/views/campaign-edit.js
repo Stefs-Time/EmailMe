@@ -56,11 +56,11 @@ export async function render(el, ctx, [id]) {
           </div>
         </div></div></div>
         <div class="card mb-3"><div class="card-header d-flex align-items-center gap-2">3 · Content
-          <ul class="nav nav-pills nav-sm ms-auto" role="tablist">
-            <li class="nav-item"><button type="button" class="nav-link py-1 px-2 ${c.editor === 'visual' ? 'active' : ''}" data-tab="visual">Visual</button></li>
-            <li class="nav-item"><button type="button" class="nav-link py-1 px-2 ${c.editor === 'html' ? 'active' : ''}" data-tab="html">HTML</button></li>
-            <li class="nav-item"><button type="button" class="nav-link py-1 px-2" data-tab="text">Plain text</button></li>
-          </ul></div>
+          <div class="nav nav-pills ms-auto" role="group" aria-label="Editor mode">
+            <button type="button" class="nav-link py-1 px-2 ${c.editor === 'visual' ? 'active' : ''}" data-tab="visual" aria-pressed="${c.editor === 'visual'}">Visual</button>
+            <button type="button" class="nav-link py-1 px-2 ${c.editor === 'html' ? 'active' : ''}" data-tab="html" aria-pressed="${c.editor === 'html'}">HTML</button>
+            <button type="button" class="nav-link py-1 px-2" data-tab="text" aria-pressed="false">Plain text</button>
+          </div></div>
           <div class="editor-toolbar border-bottom" id="toolbar" role="toolbar" aria-label="Formatting">
             <button type="button" class="btn btn-sm btn-light" data-cmd="bold" title="Bold" aria-label="Bold"><i class="bi bi-type-bold"></i></button>
             <button type="button" class="btn btn-sm btn-light" data-cmd="italic" title="Italic" aria-label="Italic"><i class="bi bi-type-italic"></i></button>
@@ -217,7 +217,7 @@ export async function render(el, ctx, [id]) {
     if (tab === 'html' && editor === 'visual') htmlsrc.value = visual.innerHTML;
     if (tab === 'visual' && editor === 'html') visual.innerHTML = htmlsrc.value;
     if (tab !== 'text') { if (editor !== tab) changed(); editor = tab; }
-    $$('[data-tab]', el).forEach((x) => x.classList.toggle('active', x === t));
+    $$('[data-tab]', el).forEach((x) => { x.classList.toggle('active', x === t); x.setAttribute('aria-pressed', String(x === t)); });
     visual.classList.toggle('d-none', tab !== 'visual');
     $('#toolbar', el).classList.toggle('d-none', tab !== 'visual');
     htmlsrc.classList.toggle('d-none', tab !== 'html');

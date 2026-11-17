@@ -70,7 +70,7 @@ export async function render(el, ctx, [tabArg]) {
     <div class="card"><div class="card-header">Provider webhook (optional)</div><div class="card-body small">
       <p>If your email provider can post bounce or complaint events, point it at this address (POST, JSON: <code>{"email","type":"hard|soft|complaint","reason","message_id"}</code>):</p>
       <div class="input-group"><input class="form-control mono" readonly value="${webhookUrl}" aria-label="Webhook URL"><button class="btn btn-outline-secondary" type="button" id="wh-copy">Copy</button>
-        <button class="btn btn-outline-danger" type="button" id="wh-rotate">New token</button></div>
+        <button class="btn btn-outline-secondary" type="button" id="wh-rotate">New token</button></div>
     </div></div>`,
     compliance: html`<div class="card mb-3"><div class="card-header">Unsubscribes</div><div class="card-body">
       <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="gu" name="global_unsubscribe" ${check(s.global_unsubscribe)}><label class="form-check-label" for="gu">An unsubscribe stops <strong>all</strong> marketing (recommended under POPIA)</label></div>

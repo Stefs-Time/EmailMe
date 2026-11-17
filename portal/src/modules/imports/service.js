@@ -5,19 +5,20 @@
  *   upload  -> parse and stage raw rows
  *   preview -> map columns, validate, detect duplicates, check suppression,
  *              match existing contacts, require a consent basis
- *   commit  -> new contacts go through listmonk's bulk importer (never
- *              overwriting), existing contacts are only added to lists they
- *              have never been on; consent evidence is recorded per contact.
+ *   commit  -> new contacts are inserted and existing contacts are only
+ *              added to lists they have never been on (never overwritten);
+ *              consent evidence is recorded per contact. Batched transactions.
  *
  * Importing can never reactivate an unsubscribed, bounced or blocklisted
- * contact: suppressed rows are excluded before anything reaches listmonk.
+ * contact: suppressed rows are excluded before anything is written.
  */
 
 const { withTransaction } = require('../../db/pool');
 const { emailHash } = require('../../lib/email');
 const { audit, recipientEvent } = require('../../lib/audit');
 const { conflict, notFound, badRequest, validation } = require('../../lib/errors');
-const { row: csvRow } = require('../../lib/csv');
+const { addMemberships } = require('../contacts/service');
+const { queueOptin } = require('../../engine/sender');
 const { parseCsv, suggestMapping, mapRow } = require('./mapping');
 
 const CHUNK = 2000;
@@ -84,13 +85,12 @@ async function preview(ctx, id, { mapping, options }) {
   for (const h of Object.keys(mapping)) if (!headers.includes(h)) throw validation(`Unknown column "${h}"`);
   const emailCols = Object.values(mapping).filter((f) => f === 'email').length;
   if (emailCols !== 1) throw validation('Map exactly one column to Email');
-  // listmonk's importer only creates subscribers into at least one list, and a
-  // contact on no list never receives anything: require a list up front.
+  // A contact on no list never receives anything: require a list up front.
   if (!options.listIds.length) {
     throw validation('Choose at least one list to add these contacts to', [{ field: 'lists', message: 'Choose at least one list' }]);
   }
   {
-    const { rows } = await ctx.pool.query('SELECT id FROM lists WHERE id = ANY($1::int[])', [options.listIds]);
+    const { rows } = await ctx.pool.query('SELECT id FROM portal.lists WHERE id = ANY($1::int[])', [options.listIds]);
     if (rows.length !== options.listIds.length) throw validation('One or more selected lists do not exist');
   }
 
@@ -109,9 +109,9 @@ async function preview(ctx, id, { mapping, options }) {
       ctx.pool.query(
         `SELECT email_hash, reason FROM portal.suppressions WHERE lifted_at IS NULL AND email_hash = ANY($1::text[])`, [hashes]),
       ctx.pool.query(
-        `SELECT s.id, LOWER(s.email) AS email, s.status,
+        `SELECT s.id, LOWER(s.email) AS email,
                 COALESCE(ARRAY_AGG(x.list_id) FILTER (WHERE x.list_id IS NOT NULL), '{}') AS lists
-           FROM subscribers s LEFT JOIN subscriber_lists x ON x.subscriber_id = s.id AND x.list_id = ANY($2::int[])
+           FROM portal.contacts s LEFT JOIN portal.list_members x ON x.contact_id = s.id AND x.list_id = ANY($2::int[])
           WHERE LOWER(s.email) = ANY($1::text[]) GROUP BY s.id`, [emails, options.listIds]),
     ]);
     const supMap = new Map(sup.map((s) => [s.email_hash, s.reason]));
@@ -135,10 +135,6 @@ async function preview(ctx, id, { mapping, options }) {
       } else if (supMap.has(emailHash(r.email))) {
         cls = 'suppressed';
         msg = `Suppressed (${supMap.get(emailHash(r.email)).replace('_', ' ')}); will not be re-activated`;
-      } else if (ex && ex.status === 'blocklisted') {
-        cls = 'suppressed';
-        msg = 'Blocklisted in listmonk; will not be re-activated';
-        subId = ex.id;
       } else if (r.problems.length) {
         cls = 'invalid_data';
         msg = r.problems.join('; ');
@@ -168,7 +164,7 @@ async function preview(ctx, id, { mapping, options }) {
       out.sub.push(subId);
     }
     await ctx.pool.query(
-      `UPDATE portal.import_rows ir SET email = t.e, data = t.d, classification = t.c, message = t.m, subscriber_id = t.s
+      `UPDATE portal.import_rows ir SET email = t.e, data = t.d, classification = t.c, message = t.m, contact_id = t.s
          FROM UNNEST($2::int[], $3::text[], $4::jsonb[], $5::text[], $6::text[], $7::int[]) AS t(n, e, d, c, m, s)
         WHERE ir.import_id = $1 AND ir.row_no = t.n`,
       [id, out.nos, out.emails, out.data, out.cls, out.msg, out.sub],
@@ -204,139 +200,63 @@ async function commit(ctx, id) {
   return { id, status: 'committing' };
 }
 
-async function waitForListmonkImport(lm, timeoutMs = 15 * 60 * 1000) {
-  const start = Date.now();
-  for (;;) {
-    const s = await lm.importStatus();
-    if (s.status === 'finished') return s;
-    if (s.status === 'failed') {
-      const logs = await lm.importLogs().catch(() => '');
-      throw new Error(`listmonk import failed: ${String(logs).split('\n').filter(Boolean).slice(-3).join(' | ').slice(0, 300)}`);
-    }
-    if (Date.now() - start > timeoutMs) throw new Error('listmonk import timed out');
-    await new Promise((r) => setTimeout(r, 1500));
-  }
-}
-
 async function runCommit(ctx, id) {
   const imp = await loadImport(ctx.pool, id);
   const opts = imp.options;
-  const subStatus = opts.subscriptionStatus || 'confirmed';
+  const confirmed = (opts.subscriptionStatus || 'confirmed') === 'confirmed';
+  const { rows: lists } = await ctx.pool.query('SELECT id, name, optin FROM portal.lists WHERE id = ANY($1::int[])', [opts.listIds]);
   const results = { imported: 0, added_to_lists: 0, failed: 0 };
+  const evidence = opts.consent?.evidence || `CSV import ${imp.filename}`;
 
-  // Re-check suppression at commit time in case something changed since preview.
-  await ctx.pool.query(
-    `UPDATE portal.import_rows ir SET classification = 'suppressed', message = 'Suppressed since preview'
-      WHERE ir.import_id = $1 AND ir.classification IN ('new', 'existing_add')
-        AND EXISTS (SELECT 1 FROM portal.suppressions p WHERE p.lifted_at IS NULL
-                     AND p.email_hash = encode(sha256(convert_to(LOWER(ir.email), 'UTF8')), 'hex'))`, [id]);
+  for (let after = 0; ;) {
+    const { rows } = await ctx.pool.query(
+      `SELECT row_no, email, data, classification FROM portal.import_rows
+        WHERE import_id = $1 AND classification IN ('new', 'existing_add') AND row_no > $2 ORDER BY row_no LIMIT $3`,
+      [id, after, CHUNK]);
+    if (!rows.length) break;
+    after = rows[rows.length - 1].row_no;
 
-  // --- New contacts via listmonk's bulk importer --------------------------
-  const { rows: newRows } = await ctx.pool.query(
-    `SELECT row_no, email, data FROM portal.import_rows WHERE import_id = $1 AND classification = 'new' ORDER BY row_no`, [id]);
-  // Contacts created by someone else between preview and commit are left alone.
-  const { rows: nowExisting } = await ctx.pool.query(
-    `SELECT LOWER(email) AS email FROM subscribers WHERE LOWER(email) = ANY($1::text[])`, [newRows.map((r) => r.email)]);
-  const existsNow = new Set(nowExisting.map((r) => r.email));
-  const toCreate = newRows.filter((r) => !existsNow.has(r.email));
-
-  if (toCreate.length) {
-    const status = await ctx.lm.importStatus();
-    if (status.status === 'importing' || status.status === 'stopping') {
-      throw new Error('listmonk is already running another import. Try again when it has finished.');
-    }
-    let csv = csvRow(['email', 'name', 'attributes']);
-    for (const r of toCreate) {
-      const d = r.data;
-      const attribs = {
-        ...d.attribs,
-        first_name: d.first_name || '',
-        last_name: d.last_name || '',
-        company: d.company || '',
-        source: d.source,
-        consent: { status: 'granted', method: d.consent_method, purpose: d.consent_purpose || '',
-          date: d.consent_date || null, source: d.source },
-        import_id: id,
-      };
-      const name = [d.first_name, d.last_name].filter(Boolean).join(' ');
-      // Raw CSV for listmonk (no formula escaping: this file is machine-read).
-      csv += [r.email, name, JSON.stringify(attribs)].map((v) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)).join(',') + '\r\n';
-    }
-    await ctx.lm.startImport({ csv, listIds: opts.listIds, subscriptionStatus: subStatus });
-    await waitForListmonkImport(ctx.lm);
-    await ctx.lm.request('DELETE', '/api/import/subscribers').catch(() => {}); // clear importer state
-  }
-
-  // Map created emails back to subscriber ids.
-  const { rows: created } = await ctx.pool.query(
-    `SELECT id, LOWER(email) AS email FROM subscribers WHERE LOWER(email) = ANY($1::text[])`, [toCreate.map((r) => r.email)]);
-  const createdMap = new Map(created.map((c) => [c.email, c.id]));
-
-  await withTransaction(ctx.pool, async (db) => {
-    for (const r of newRows) {
-      const subId = createdMap.get(r.email);
-      if (existsNow.has(r.email)) {
-        await db.query(`UPDATE portal.import_rows SET classification = 'existing_unchanged', message = 'Created by someone else before commit; left unchanged' WHERE import_id = $1 AND row_no = $2`, [id, r.row_no]);
-        continue;
-      }
-      if (!subId) {
-        results.failed += 1;
-        await db.query(`UPDATE portal.import_rows SET classification = 'failed', message = 'listmonk did not import this row (see listmonk import log, e.g. domain blocklist)' WHERE import_id = $1 AND row_no = $2`, [id, r.row_no]);
-        continue;
-      }
-      results.imported += 1;
-      const hash = emailHash(r.email);
-      await db.query(`UPDATE portal.import_rows SET classification = 'imported', subscriber_id = $3 WHERE import_id = $1 AND row_no = $2`, [id, r.row_no, subId]);
-      await db.query(
-        `INSERT INTO portal.consent_records (subscriber_id, email, email_hash, action, method, purpose, source, obtained_at, evidence, import_id, recorded_by)
-         VALUES ($1, $2, $3, 'granted', $4, $5, $6, $7, $8, $9, $10)`,
-        [subId, r.email, hash, r.data.consent_method, r.data.consent_purpose || '', r.data.source,
-          r.data.consent_date || null, opts.consent?.evidence || `CSV import ${imp.filename}`, id, imp.created_by]);
-      await recipientEvent(db, { subscriberId: subId, emailHash: hash, type: 'imported', to: 'active',
-        details: { import_id: id, lists: opts.listIds }, actorType: 'user', actorId: imp.created_by });
-    }
-  });
-
-  // --- Existing contacts: add only the lists they have never been on -------
-  const { rows: addRows } = await ctx.pool.query(
-    `SELECT ir.row_no, ir.email, ir.data, ir.subscriber_id FROM portal.import_rows ir
-      WHERE ir.import_id = $1 AND ir.classification = 'existing_add'`, [id]);
-  if (addRows.length && opts.listIds.length) {
-    const { rows: subsNow } = await ctx.pool.query(
-      `SELECT x.subscriber_id, x.list_id, s.status FROM subscribers s
-         LEFT JOIN subscriber_lists x ON x.subscriber_id = s.id AND x.list_id = ANY($2::int[])
-        WHERE s.id = ANY($1::int[])`, [addRows.map((r) => r.subscriber_id), opts.listIds]);
-    const has = new Set(subsNow.filter((s) => s.list_id).map((s) => `${s.subscriber_id}:${s.list_id}`));
-    const blocked = new Set(subsNow.filter((s) => s.status === 'blocklisted').map((s) => s.subscriber_id));
-    const groups = new Map();
-    for (const r of addRows) {
-      if (blocked.has(r.subscriber_id)) continue;
-      const need = opts.listIds.filter((l) => !has.has(`${r.subscriber_id}:${l}`));
-      if (!need.length) continue;
-      const key = need.join(',');
-      if (!groups.has(key)) groups.set(key, { lists: need, rows: [] });
-      groups.get(key).rows.push(r);
-    }
-    for (const g of groups.values()) {
-      const ids = g.rows.map((r) => r.subscriber_id);
-      for (let i = 0; i < ids.length; i += 1000) {
-        await ctx.lm.manageLists({ ids: ids.slice(i, i + 1000), action: 'add', listIds: g.lists, status: subStatus });
-      }
-      await withTransaction(ctx.pool, async (db) => {
-        for (const r of g.rows) {
-          const hash = emailHash(r.email);
-          await db.query(`UPDATE portal.import_rows SET classification = 'added_to_lists' WHERE import_id = $1 AND row_no = $2`, [id, r.row_no]);
-          await db.query(
-            `INSERT INTO portal.consent_records (subscriber_id, email, email_hash, action, method, purpose, source, obtained_at, evidence, import_id, recorded_by)
-             VALUES ($1, $2, $3, 'granted', $4, $5, $6, $7, $8, $9, $10)`,
-            [r.subscriber_id, r.email, hash, r.data.consent_method, r.data.consent_purpose || '', r.data.source,
-              r.data.consent_date || null, opts.consent?.evidence || `CSV import ${imp.filename}`, id, imp.created_by]);
-          await recipientEvent(db, { subscriberId: r.subscriber_id, emailHash: hash, type: 'lists_add',
-            details: { import_id: id, list_ids: g.lists }, actorType: 'user', actorId: imp.created_by });
+    await withTransaction(ctx.pool, async (db) => {
+      for (const r of rows) {
+        const hash = emailHash(r.email);
+        // Re-check suppression at commit time in case something changed since the preview.
+        const sup = await db.query('SELECT 1 FROM portal.suppressions WHERE email_hash = $1 AND lifted_at IS NULL', [hash]);
+        if (sup.rowCount) {
+          await db.query(`UPDATE portal.import_rows SET classification = 'suppressed', message = 'Suppressed since preview' WHERE import_id = $1 AND row_no = $2`, [id, r.row_no]);
+          continue;
         }
-      });
-      results.added_to_lists += g.rows.length;
-    }
+        const d = r.data;
+        let contactId;
+        let created = false;
+        const ins = await db.query(
+          `INSERT INTO portal.contacts (email, email_hash, first_name, last_name, company, source, attribs, consent)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT ((LOWER(email))) DO NOTHING RETURNING id`,
+          [r.email, hash, d.first_name || '', d.last_name || '', d.company || '', d.source, d.attribs || {},
+            { status: 'granted', method: d.consent_method, purpose: d.consent_purpose || '', date: d.consent_date || null, source: d.source, import_id: id }]);
+        if (ins.rowCount) {
+          contactId = ins.rows[0].id;
+          created = true;
+        } else {
+          contactId = (await db.query('SELECT id FROM portal.contacts WHERE LOWER(email) = $1', [r.email])).rows[0].id;
+        }
+        const added = await addMemberships(db, [contactId], lists, { confirmed });
+        if (!created && !added) {
+          await db.query(`UPDATE portal.import_rows SET classification = 'existing_unchanged', contact_id = $3,
+            message = 'Already on every selected list (or unsubscribed from it)' WHERE import_id = $1 AND row_no = $2`, [id, r.row_no, contactId]);
+          continue;
+        }
+        await db.query(
+          `INSERT INTO portal.consent_records (contact_id, email, email_hash, action, method, purpose, source, obtained_at, evidence, import_id, recorded_by)
+           VALUES ($1, $2, $3, 'granted', $4, $5, $6, $7, $8, $9, $10)`,
+          [contactId, r.email, hash, d.consent_method, d.consent_purpose || '', d.source, d.consent_date || null, evidence, id, imp.created_by]);
+        await recipientEvent(db, { contactId, emailHash: hash, type: created ? 'imported' : 'lists_add', to: created ? 'active' : undefined,
+          details: { import_id: id, list_ids: opts.listIds }, actorType: 'user', actorId: imp.created_by });
+        if (!confirmed) await queueOptin(db, contactId);
+        await db.query(`UPDATE portal.import_rows SET classification = $3, contact_id = $4 WHERE import_id = $1 AND row_no = $2`,
+          [id, r.row_no, created ? 'imported' : 'added_to_lists', contactId]);
+        results[created ? 'imported' : 'added_to_lists'] += 1;
+      }
+    });
   }
 
   const { rows: finalCounts } = await ctx.pool.query(

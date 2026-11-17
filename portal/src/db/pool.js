@@ -3,8 +3,8 @@
 const { Pool } = require('pg');
 
 /**
- * Creates the shared connection pool. Keep DATABASE_POOL_MAX modest: listmonk
- * shares the same PostgreSQL server and Railway plans cap connections.
+ * Creates the shared connection pool. Keep DATABASE_POOL_MAX modest: Railway
+ * plans cap PostgreSQL connections.
  */
 function createPool(config) {
   const pool = new Pool({
@@ -36,9 +36,8 @@ async function withTransaction(pool, fn) {
 }
 
 /**
- * Runs read-only queries against listmonk's tables. The READ ONLY transaction
- * guarantees the portal can never modify listmonk data directly; all writes go
- * through the listmonk API so its business rules always apply.
+ * Runs queries in a READ ONLY transaction (used for consistent multi-query
+ * reads such as list views).
  */
 async function readOnly(pool, fn) {
   const client = await pool.connect();

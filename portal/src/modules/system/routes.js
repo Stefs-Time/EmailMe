@@ -1,122 +1,149 @@
 'use strict';
 
+const dns = require('node:dns').promises;
 const express = require('express');
 const { z } = require('zod');
 const { parse, notFound } = require('../../lib/errors');
 const { requirePermission } = require('../../middleware/auth');
 const { audit } = require('../../lib/audit');
-const { getState } = require('../sync/worker');
+const { describeSmtp } = require('../../engine/mailer');
+const { getState } = require('../../engine/worker');
+const { emailDomain } = require('../../lib/email');
 
-/**
- * Checks listmonk's configuration against the scope's go-live requirements.
- * Read-only: the portal never changes listmonk settings (and never sees SMTP
- * passwords, which listmonk masks).
- */
-function configChecks(s, config) {
+let smtpCache = { at: 0, ok: null, error: null };
+
+async function smtpStatus(transport) {
+  if (Date.now() - smtpCache.at < 5 * 60000) return smtpCache;
+  try {
+    await transport.verify();
+    smtpCache = { at: Date.now(), ok: true, error: null };
+  } catch (err) {
+    smtpCache = { at: Date.now(), ok: false, error: String(err.response || err.message).slice(0, 200) };
+  }
+  return smtpCache;
+}
+
+async function txt(name) {
+  try {
+    return (await dns.resolveTxt(name)).map((r) => r.join(''));
+  } catch {
+    return [];
+  }
+}
+
+/** DNS checks for the sending domain (scope §6). */
+async function dnsChecks(fromEmail, bounceAddress) {
+  const domain = emailDomain(fromEmail);
+  if (!domain) return [];
+  const spf = (await txt(domain)).find((t) => /^v=spf1\b/i.test(t));
+  const dmarc = (await txt(`_dmarc.${domain}`)).find((t) => /^v=DMARC1\b/i.test(t));
+  const bounceDomain = emailDomain(bounceAddress || fromEmail);
+  let mx = [];
+  try { mx = await dns.resolveMx(bounceDomain); } catch { mx = []; }
+  return [
+    { id: 'dns_spf', ok: Boolean(spf), severity: 'critical', title: `SPF record for ${domain}`,
+      help: spf ? spf : `Add a TXT record on ${domain} authorising your SMTP provider, e.g. "v=spf1 include:<provider> -all".` },
+    { id: 'dns_dmarc', ok: Boolean(dmarc), severity: 'critical', title: `DMARC record for ${domain}`,
+      help: dmarc ? dmarc : `Add a TXT record at _dmarc.${domain}, e.g. "v=DMARC1; p=none; rua=mailto:dmarc@${domain}". Gmail and Yahoo require DMARC for bulk senders.` },
+    { id: 'dns_mx', ok: mx.length > 0, severity: 'warning', title: `Mail server (MX) for ${bounceDomain}`,
+      help: mx.length ? mx.map((m) => m.exchange).join(', ') : `${bounceDomain} has no MX record, so bounce notices cannot be delivered back to you.` },
+    { id: 'dns_dkim', ok: true, severity: 'info', title: 'DKIM signing',
+      help: 'Your SMTP provider signs messages with DKIM. Confirm in your provider dashboard that DKIM is enabled for this domain.' },
+  ];
+}
+
+function configChecks(s, publicUrl, mailboxState) {
   const checks = [];
   const add = (id, ok, title, help, severity = 'warning') => checks.push({ id, ok: Boolean(ok), title, help, severity });
-  const smtp = (s.smtp || []).filter((x) => x.enabled);
-  const placeholder = smtp.some((x) => /yoursite\.com$/i.test(x.host) || x.host === 'smtp.gmail.com' && x.username === 'username@gmail.com');
-  add('smtp', smtp.length > 0 && !placeholder, 'Outgoing SMTP server configured',
-    'listmonk → Settings → SMTP. Enter your mail server host, port, TLS mode and credentials, then use "Test connection".', 'critical');
-  add('smtp_tls', smtp.every((x) => x.tls_type && x.tls_type !== 'none'), 'SMTP uses TLS or STARTTLS',
-    'listmonk → Settings → SMTP → TLS. Use STARTTLS (port 587) or TLS (port 465).');
-  const mailboxes = (s['bounce.mailboxes'] || []).filter((m) => m.enabled);
-  const webhooks = s['bounce.webhooks_enabled'] || s['bounce.ses_enabled'] || s['bounce.sendgrid_enabled'] ||
-    s['bounce.postmark']?.enabled || s['bounce.azure']?.enabled || s['bounce.forwardemail']?.enabled || s['bounce.lettermint']?.enabled;
-  add('bounce_enabled', s['bounce.enabled'] && (mailboxes.length || webhooks), 'Bounce processing enabled',
-    'listmonk → Settings → Bounces. Enable bounce processing and configure the dedicated POP3 bounce mailbox or your provider webhook.', 'critical');
-  const actions = s['bounce.actions'] || {};
-  add('bounce_hard', actions.hard?.action === 'blocklist' && actions.hard?.count === 1, 'Hard bounce → blocklist after 1 bounce',
-    'listmonk → Settings → Bounces → Actions: set Hard to count 1, action "blocklist".', 'critical');
-  add('bounce_complaint', actions.complaint?.action === 'blocklist' && actions.complaint?.count === 1, 'Complaint → blocklist immediately',
-    'listmonk → Settings → Bounces → Actions: set Complaint to count 1, action "blocklist".', 'critical');
-  add('bounce_soft', actions.soft && actions.soft.count >= 1, `Soft bounce threshold set (currently ${actions.soft?.count ?? '–'} → ${actions.soft?.action ?? '–'})`,
-    'listmonk → Settings → Bounces → Actions: choose how many soft bounces trigger an action. Recommended: 3 → blocklist.', 'info');
-  add('unsub_header', s['privacy.unsubscribe_header'], 'One-click List-Unsubscribe header',
-    'listmonk → Settings → Privacy → "Include List-Unsubscribe header". Required by Gmail/Yahoo bulk-sender rules.', 'critical');
-  add('root_https', /^https:\/\//.test(s['app.root_url'] || ''), 'Public root URL uses HTTPS',
-    'listmonk → Settings → General → Root URL. Unsubscribe and tracking links use this address; it must be your public https:// domain.', 'critical');
-  add('from_email', s['app.from_email'] && !/example\.com|yoursite/i.test(s['app.from_email']), 'Default sender address set',
-    'listmonk → Settings → General → Default "from" email, e.g. "Acme News <news@acme.co.za>".');
-  add('global_unsub', config.GLOBAL_UNSUBSCRIBE, 'Unsubscribes are global (POPIA-safe default)',
-    'Set GLOBAL_UNSUBSCRIBE=true in the portal environment unless you run a documented per-list preference model.', 'info');
+  add('public_url', /^https:\/\//.test(publicUrl || ''), 'Public URL uses HTTPS',
+    'Settings → General → Public URL. Unsubscribe and tracking links use it (Railway sets this automatically).', 'critical');
+  add('from_email', s.from_email, 'Default sender address set', 'Settings → Sending → From address.', 'critical');
+  add('org_address', s.org_address, 'Postal address for email footers', 'Settings → General → Postal address. Shown in every email (sender identity).', 'critical');
+  add('bounce_mailbox', s.bounce_mailbox.enabled && mailboxState?.ok !== false, 'Bounce mailbox connected',
+    'Settings → Bounces. Without it, bounces that arrive after sending are not recorded. Use a dedicated mailbox.', 'critical');
+  add('bounce_address', s.bounce_address, 'Return-Path (bounce address) set',
+    'Settings → Bounces → Bounce address: the dedicated mailbox address where failures are returned.', 'warning');
+  add('global_unsub', s.global_unsubscribe, 'Unsubscribes are global (POPIA-safe default)', 'Settings → Compliance.', 'info');
+  add('rate', s.send_rate_per_second <= 20, `Sending rate ${s.send_rate_per_second}/s`, 'Keep the rate within your SMTP provider\'s limits; start slowly on a new domain.', 'info');
+  add('one_click', true, 'One-click unsubscribe headers (RFC 8058)', 'Always included in every campaign email.', 'info');
   return checks;
 }
 
-function systemRoutes({ pool, lm, config, sync }) {
+function systemRoutes({ pool, settings, transport, config, worker }) {
   const r = express.Router();
 
   r.get('/health', requirePermission('system:read'), async (_req, res) => {
-    const out = { database: { ok: false }, listmonk: { ok: false }, sync: null, checks: [] };
+    const out = { database: { ok: false } };
     try {
       await pool.query('SELECT 1');
       out.database.ok = true;
     } catch (err) {
       out.database.error = err.message;
     }
-    try {
-      await lm.health();
-      out.listmonk.ok = true;
-      const cfg = await lm.config().catch(() => null);
-      out.listmonk.version = cfg?.version || null;
-      const settings = await lm.settings();
-      out.checks = configChecks(settings, config);
-      out.listmonk.smtp = (settings.smtp || []).filter((s) => s.enabled)
-        .map((s) => ({ host: s.host, port: s.port, tls: s.tls_type, maxConns: s.max_conns }));
-      out.listmonk.sending = { concurrency: settings['app.concurrency'], ratePerSecond: settings['app.message_rate'],
-        batchSize: settings['app.batch_size'], slidingWindow: settings['app.message_sliding_window'] };
-    } catch (err) {
-      out.listmonk.error = err.message;
-    }
-    out.sync = await getState(pool, 'heartbeat', null);
+    const s = await settings.all();
+    const publicUrl = await settings.publicUrl();
+    out.smtp = { ...describeSmtp(config), ...(await smtpStatus(transport)) };
+    out.worker = await getState(pool, 'heartbeat', null);
+    out.workerStale = !out.worker || Date.now() - new Date(out.worker.at).getTime() > 5 * 60000;
+    out.mailbox = s.bounce_mailbox.enabled ? await getState(pool, 'mailbox', null) : null;
     out.backup = await getState(pool, 'backup_heartbeat', null);
-    out.backupStaleHours = config.BACKUP_STALE_HOURS;
-    out.syncStale = !out.sync || Date.now() - new Date(out.sync.at).getTime() > config.SYNC_STALE_MINUTES * 60000;
-    out.listmonkUrl = config.LISTMONK_PUBLIC_URL;
-    out.globalUnsubscribe = config.GLOBAL_UNSUBSCRIBE;
+    out.backupStaleHours = s.backup_stale_hours;
+    const { rows: q } = await pool.query(
+      `SELECT COUNT(*) FILTER (WHERE status = 'queued')::int AS queued,
+              COUNT(*) FILTER (WHERE status = 'sending')::int AS sending,
+              COUNT(*) FILTER (WHERE status = 'sent' AND sent_at > NOW() - INTERVAL '1 hour')::int AS sent_last_hour,
+              COUNT(*) FILTER (WHERE status = 'failed' AND updated_at > NOW() - INTERVAL '24 hours')::int AS failed_24h
+         FROM portal.messages`);
+    out.queue = q[0];
+    out.sending = { ratePerSecond: s.send_rate_per_second, maxPerHour: s.send_max_per_hour };
+    out.checks = [
+      { id: 'smtp', ok: out.smtp.ok, severity: 'critical', title: `SMTP server ${config.SMTP_HOST}:${config.SMTP_PORT} reachable and accepts login`,
+        help: out.smtp.ok ? '' : `${out.smtp.error || 'Not checked yet'}. Check the SMTP_* variables.` },
+      ...configChecks(s, publicUrl, out.mailbox),
+      ...(s.from_email ? await dnsChecks(s.from_email, s.bounce_address) : []),
+    ];
+    out.publicUrl = publicUrl;
+    out.globalUnsubscribe = s.global_unsubscribe;
     res.json({ success: true, data: out });
   });
 
-  r.post('/sync', requirePermission('system:read'), async (req, res) => {
-    const stats = await sync.runOnce();
-    await audit(pool, req, 'system.sync_triggered', { details: stats || { skipped: 'already running' } });
-    res.json({ success: true, data: stats || { skipped: true } });
+  r.post('/smtp-recheck', requirePermission('system:read'), async (_req, res) => {
+    smtpCache = { at: 0 };
+    res.json({ success: true, data: await smtpStatus(transport) });
+  });
+
+  r.post('/mailbox-poll', requirePermission('system:read'), async (req, res) => {
+    const out = await worker.mailboxIfDue(true);
+    await audit(pool, req, 'system.mailbox_polled', { details: out || {} });
+    res.json({ success: true, data: out || { skipped: true } });
   });
 
   r.get('/alerts', requirePermission('system:read'), async (_req, res) => {
-    const { rows } = await pool.query(
-      `SELECT * FROM portal.alerts ORDER BY resolved_at IS NOT NULL, last_seen DESC LIMIT 100`);
+    const { rows } = await pool.query(`SELECT * FROM portal.alerts ORDER BY resolved_at IS NOT NULL, last_seen DESC LIMIT 100`);
     res.json({ success: true, data: rows });
   });
 
   r.post('/alerts/:id/resolve', requirePermission('system:read'), async (req, res) => {
     const id = parse(z.coerce.number().int().positive(), req.params.id);
-    const { rowCount } = await pool.query(
-      'UPDATE portal.alerts SET resolved_at = NOW() WHERE id = $1 AND resolved_at IS NULL', [id]);
+    const { rowCount } = await pool.query('UPDATE portal.alerts SET resolved_at = NOW() WHERE id = $1 AND resolved_at IS NULL', [id]);
     if (!rowCount) throw notFound('Alert not found or already resolved');
     await audit(pool, req, 'alert.resolved', { targetType: 'alert', targetId: id });
     res.json({ success: true, data: {} });
   });
 
   r.get('/audit', requirePermission('audit:read'), async (req, res) => {
-    const q = parse(z.object({
-      page: z.coerce.number().int().min(1).default(1),
-      action: z.string().trim().max(60).optional(),
-    }), req.query);
-    const params = [q.action ? `${q.action}%` : null, (q.page - 1) * 50];
+    const q = parse(z.object({ page: z.coerce.number().int().min(1).default(1), action: z.string().trim().max(60).optional() }), req.query);
     const { rows } = await pool.query(
       `SELECT id, actor_email, action, target_type, target_id, details, ip, created_at, COUNT(*) OVER() AS total
-         FROM portal.audit_log WHERE ($1::text IS NULL OR action LIKE $1)
-        ORDER BY created_at DESC LIMIT 50 OFFSET $2`, params);
-    res.json({ success: true, data: rows.map(({ total, ...x }) => x),
-      meta: { total: Number(rows[0]?.total || 0), page: q.page, perPage: 50 } });
+         FROM portal.audit_log WHERE ($1::text IS NULL OR action LIKE $1) ORDER BY created_at DESC LIMIT 50 OFFSET $2`,
+      [q.action ? `${q.action}%` : null, (q.page - 1) * 50]);
+    res.json({ success: true, data: rows.map(({ total, ...x }) => x), meta: { total: Number(rows[0]?.total || 0), page: q.page, perPage: 50 } });
   });
 
   r.get('/review', requirePermission('contacts:read'), async (_req, res) => {
     const { rows } = await pool.query(
-      `SELECT r.id, r.subscriber_id, s.email, s.name, r.reason, r.details, r.created_at
-         FROM portal.review_queue r LEFT JOIN subscribers s ON s.id = r.subscriber_id
+      `SELECT r.id, r.contact_id, c.email, TRIM(c.first_name || ' ' || c.last_name) AS name, r.reason, r.details, r.created_at
+         FROM portal.review_queue r LEFT JOIN portal.contacts c ON c.id = r.contact_id
         WHERE r.resolved_at IS NULL ORDER BY r.created_at`);
     res.json({ success: true, data: rows });
   });
@@ -124,4 +151,4 @@ function systemRoutes({ pool, lm, config, sync }) {
   return r;
 }
 
-module.exports = { systemRoutes, configChecks };
+module.exports = { systemRoutes, configChecks, dnsChecks };

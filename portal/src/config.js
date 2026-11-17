@@ -1,9 +1,13 @@
 'use strict';
 
 /**
- * Central configuration. Every value comes from environment variables and is
- * validated once at startup so the process fails fast with a clear message
- * instead of misbehaving later.
+ * Environment configuration. Only the database and the SMTP server are
+ * required; everything else has a safe default or lives in the in-app
+ * Settings page (stored in PostgreSQL).
+ *
+ * Required:  DATABASE_URL, SMTP_HOST
+ * Usual:     SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
+ * Platform:  PORT and RAILWAY_PUBLIC_DOMAIN are provided by Railway.
  */
 const { z } = require('zod');
 
@@ -14,73 +18,57 @@ const bool = (def) =>
     .transform((v) => ['true', '1', 'yes'].includes(v));
 
 const schema = z.object({
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  // --- Required ------------------------------------------------------------
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  SMTP_HOST: z.string().min(1, 'SMTP_HOST is required'),
+
+  // --- SMTP ----------------------------------------------------------------
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASSWORD: z.string().optional(),
+  // TLS from the first byte (port 465). Defaults to true on 465, otherwise
+  // STARTTLS is used when the server offers it.
+  SMTP_SECURE: z.enum(['true', 'false']).optional(),
+  // Refuse to send without TLS (recommended; disable only for a local relay).
+  SMTP_REQUIRE_TLS: bool(true),
+  // Default sender, e.g. "Acme News <news@acme.co.za>". Editable in Settings.
+  SMTP_FROM: z.string().optional(),
+  SMTP_POOL_MAX: z.coerce.number().int().min(1).max(20).default(3),
+
+  // --- Optional ------------------------------------------------------------
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   HOST: z.string().default('0.0.0.0'),
-
-  // PostgreSQL. The portal keeps its own tables in the `portal` schema and
-  // reads (never writes) listmonk's tables in the same database.
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
+  PUBLIC_URL: z.string().url().optional(),
+  RAILWAY_PUBLIC_DOMAIN: z.string().optional(),
   DATABASE_SSL: bool(false),
-  // Verify the server certificate when SSL is on. Only disable for providers
-  // that use self-signed certificates on a private network.
   DATABASE_SSL_VERIFY: bool(true),
-  DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(10),
-
-  SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
-  SESSION_MAX_AGE_HOURS: z.coerce.number().min(1).max(168).default(8),
-  TRUST_PROXY: z.string().default('1'),
-  COOKIE_SECURE: z.enum(['auto', 'true', 'false']).default('auto'),
-
-  // listmonk API (internal network address) and the public admin URL used for
-  // deep links such as "Create campaign".
-  LISTMONK_URL: z.string().url(),
-  LISTMONK_PUBLIC_URL: z.string().url().optional(),
-  LISTMONK_API_USER: z.string().regex(/^[a-zA-Z0-9_.-]{2,50}$/).default('mailharbor'),
-  // Either give a token, or give listmonk admin credentials and the portal
-  // creates its own least-privilege API user at startup (Railway friendly).
-  LISTMONK_API_TOKEN: z.string().min(1).optional(),
-  LISTMONK_ADMIN_USER: z.string().min(1).optional(),
-  LISTMONK_ADMIN_PASSWORD: z.string().min(1).optional(),
-  // With admin credentials: once, apply the scope's bounce policy and the
-  // List-Unsubscribe header, and set listmonk's root URL to LISTMONK_PUBLIC_URL.
-  LISTMONK_APPLY_RECOMMENDED: bool(true),
-  LISTMONK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(15000),
-
-  // Business rules.
-  GLOBAL_UNSUBSCRIBE: bool(true),
-  SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(15).max(3600).default(60),
-  SYNC_STALE_MINUTES: z.coerce.number().int().min(2).max(1440).default(15),
-  IMPORT_MAX_ROWS: z.coerce.number().int().min(1).max(500000).default(100000),
-  IMPORT_MAX_MB: z.coerce.number().min(1).max(100).default(25),
-
-  ORG_NAME: z.string().default('MailHarbor'),
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-
-  // Break-glass administrator controlled by environment variables. When set,
-  // this account is created or repaired on every start: always an active admin
-  // whose password equals ADMIN_PASSWORD. Change the variable to rotate it.
+  DATABASE_POOL_MAX: z.coerce.number().int().min(2).max(50).default(10),
+  // Generated and stored in the database when not provided.
+  SESSION_SECRET: z.string().min(32).optional(),
+  // Optional break-glass administrator, re-applied on every start.
   ADMIN_EMAIL: z.string().trim().toLowerCase().email().optional(),
   ADMIN_PASSWORD: z.string().min(12, 'ADMIN_PASSWORD must be at least 12 characters')
     .refine((p) => /[a-zA-Z]/.test(p) && /[0-9]/.test(p), 'ADMIN_PASSWORD needs letters and at least one number')
     .optional(),
   ADMIN_NAME: z.string().trim().min(1).max(120).default('Administrator'),
-
-  // Alert when the last successful backup is older than this (0 = no check).
-  BACKUP_STALE_HOURS: z.coerce.number().min(0).max(24 * 31).default(0),
+  TRUST_PROXY: z.string().default('1'),
+  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+  // Background workers can be disabled for one-off scripts and tests.
+  WORKERS: bool(true),
+  IMPORT_MAX_ROWS: z.coerce.number().int().min(1).max(500000).default(100000),
+  IMPORT_MAX_MB: z.coerce.number().min(1).max(100).default(25),
 }).superRefine((c, ctx) => {
-  if (!c.LISTMONK_API_TOKEN && !(c.LISTMONK_ADMIN_USER && c.LISTMONK_ADMIN_PASSWORD)) {
-    ctx.addIssue({ code: 'custom', path: ['LISTMONK_API_TOKEN'],
-      message: 'Set LISTMONK_API_TOKEN, or LISTMONK_ADMIN_USER and LISTMONK_ADMIN_PASSWORD so the portal can create its own API user' });
-  }
   if (Boolean(c.ADMIN_EMAIL) !== Boolean(c.ADMIN_PASSWORD)) {
     ctx.addIssue({ code: 'custom', path: ['ADMIN_PASSWORD'], message: 'Set both ADMIN_EMAIL and ADMIN_PASSWORD, or neither' });
+  }
+  if (Boolean(c.SMTP_USER) !== Boolean(c.SMTP_PASSWORD)) {
+    ctx.addIssue({ code: 'custom', path: ['SMTP_PASSWORD'], message: 'Set both SMTP_USER and SMTP_PASSWORD, or neither (unauthenticated relay)' });
   }
 });
 
 function loadConfig(env = process.env) {
-  // Platforms such as Railway may define variables as empty strings; treat
-  // those as unset so defaults and "optional" behave as expected.
+  // Platforms may define variables as empty strings: treat those as unset.
   const clean = Object.fromEntries(Object.entries(env).filter(([, v]) => v !== ''));
   const parsed = schema.safeParse(clean);
   if (!parsed.success) {
@@ -90,11 +78,12 @@ function loadConfig(env = process.env) {
     throw err;
   }
   const c = parsed.data;
+  const envPublicUrl = c.PUBLIC_URL || (c.RAILWAY_PUBLIC_DOMAIN ? `https://${c.RAILWAY_PUBLIC_DOMAIN}` : undefined);
   return Object.freeze({
     ...c,
     isProd: c.NODE_ENV === 'production',
-    LISTMONK_URL: c.LISTMONK_URL.replace(/\/+$/, ''),
-    LISTMONK_PUBLIC_URL: (c.LISTMONK_PUBLIC_URL || c.LISTMONK_URL).replace(/\/+$/, ''),
+    SMTP_SECURE: c.SMTP_SECURE ? c.SMTP_SECURE === 'true' : c.SMTP_PORT === 465,
+    envPublicUrl: envPublicUrl ? envPublicUrl.replace(/\/+$/, '') : undefined,
   });
 }
 

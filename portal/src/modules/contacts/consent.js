@@ -21,7 +21,7 @@ const consentSchema = z.object({
   evidence: z.string().trim().max(1000).default(''),
 });
 
-/** The consent summary mirrored onto the listmonk subscriber's attributes. */
+/** The consent summary stored on the contact (latest basis); full history is in consent_records. */
 function consentAttrib(c, source) {
   return {
     status: 'granted',

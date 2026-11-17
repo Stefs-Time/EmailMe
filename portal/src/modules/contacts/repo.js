@@ -1,106 +1,83 @@
 'use strict';
 
 /**
- * Read model for contacts. Reads listmonk's tables (inside READ ONLY
- * transactions) joined with the portal's suppression / review tables, and
- * derives one clear "recipient status" per contact (scope §3.3).
- *
+ * Read model for contacts: one derived recipient status per contact
+ * (scope §3.3), filtering, sorting and keyset iteration for exports.
  * All values are bound parameters; sort columns come from a whitelist.
  */
 
 const STATUSES = [
-  'active',
-  'unconfirmed',
-  'soft_bounced',
-  'hard_bounced',
-  'complaint',
-  'unsubscribed',
-  'blocklisted',
-  'pending_review',
-  'inactive',
-  'no_lists',
+  'active', 'unconfirmed', 'soft_bounced', 'hard_bounced', 'complaint',
+  'unsubscribed', 'blocklisted', 'pending_review', 'no_lists',
 ];
 
-/** Statuses that listmonk will actually send campaigns to. */
+/** Statuses that receive campaigns. */
 const ELIGIBLE = ['active', 'soft_bounced'];
 
 const SORTS = {
   email: 'c.email',
-  name: 'c.name',
+  name: "LOWER(c.first_name || ' ' || c.last_name)",
   created_at: 'c.created_at',
   updated_at: 'c.updated_at',
   status: 'c.status',
-  bounces: '(c.hard_bounces + c.soft_bounces)',
+  bounces: '(c.hard_bounces + c.soft_bounce_events)',
   last_bounce: 'c.last_bounce_at',
-  source: "c.attribs->>'source'",
-  company: "c.attribs->>'company'",
+  last_sent: 'c.last_sent_at',
+  source: 'c.source',
+  company: 'LOWER(c.company)',
 };
 
-/**
- * Base SELECT producing one row per subscriber with derived fields.
- * Order of the CASE matters: suppression reasons first, then review holds.
- */
+/** Order matters: suppression reasons first, then review holds, then list state. */
 const BASE = `
-SELECT s.id, s.uuid, s.email, s.name, s.attribs, s.status AS listmonk_status,
+SELECT s.id, s.uuid, s.email, s.first_name, s.last_name, s.company, s.source, s.attribs, s.consent,
+       TRIM(s.first_name || ' ' || s.last_name) AS name,
+       s.soft_bounces, s.last_sent_at, s.last_open_at, s.last_click_at, s.last_bounce_at,
        s.created_at, s.updated_at,
-       COALESCE(sl.total, 0) AS total_lists,
-       COALESCE(sl.unsubscribed, 0) AS unsubscribed_lists,
-       COALESCE(sl.list_ids, '{}') AS list_ids,
-       sl.last_unsubscribed_at,
+       COALESCE(ml.total, 0) AS total_lists,
+       COALESCE(ml.unsubscribed, 0) AS unsubscribed_lists,
+       COALESCE(ml.list_ids, '{}') AS list_ids,
+       ml.last_unsubscribed_at,
        COALESCE(b.hard, 0) AS hard_bounces,
-       COALESCE(b.soft, 0) AS soft_bounces,
+       COALESCE(b.soft, 0) AS soft_bounce_events,
        COALESCE(b.complaint, 0) AS complaints,
-       b.last_bounce_at,
        sup.reason AS suppression_reason,
        sup.created_at AS suppressed_at,
        (rq.id IS NOT NULL) AS pending_review,
        CASE
-         WHEN sup.reason = 'complaint' OR (s.status = 'blocklisted' AND COALESCE(b.complaint, 0) > 0 AND rq.id IS NULL) THEN 'complaint'
-         WHEN sup.reason = 'hard_bounce' THEN 'hard_bounced'
+         WHEN sup.reason = 'complaint' THEN 'complaint'
+         WHEN sup.reason IN ('hard_bounce', 'soft_limit') THEN 'hard_bounced'
          WHEN sup.reason = 'unsubscribe' THEN 'unsubscribed'
          WHEN sup.reason IS NOT NULL THEN 'blocklisted'
          WHEN rq.id IS NOT NULL THEN 'pending_review'
-         WHEN s.status = 'blocklisted' AND COALESCE(b.hard, 0) > 0 THEN 'hard_bounced'
-         WHEN s.status = 'blocklisted' THEN 'blocklisted'
-         WHEN s.status = 'disabled' THEN 'inactive'
-         WHEN COALESCE(sl.total, 0) = 0 THEN 'no_lists'
-         WHEN sl.unsubscribed = sl.total THEN 'unsubscribed'
-         WHEN COALESCE(b.soft, 0) > 0 THEN 'soft_bounced'
-         WHEN sl.sendable = 0 THEN 'unconfirmed'
+         WHEN COALESCE(ml.total, 0) = 0 THEN 'no_lists'
+         WHEN ml.unsubscribed = ml.total THEN 'unsubscribed'
+         WHEN ml.subscribed = 0 THEN 'unconfirmed'
+         WHEN s.soft_bounces > 0 THEN 'soft_bounced'
          ELSE 'active'
        END AS status
-FROM subscribers s
+FROM portal.contacts s
 LEFT JOIN LATERAL (
   SELECT COUNT(*)::int AS total,
-         COUNT(*) FILTER (WHERE x.status = 'unsubscribed')::int AS unsubscribed,
-         COUNT(*) FILTER (WHERE x.status = 'confirmed'
-                           OR (x.status = 'unconfirmed' AND l.optin <> 'double'))::int AS sendable,
-         ARRAY_AGG(x.list_id ORDER BY x.list_id) FILTER (WHERE x.status <> 'unsubscribed') AS list_ids,
-         MAX(x.updated_at) FILTER (WHERE x.status = 'unsubscribed') AS last_unsubscribed_at
-  FROM subscriber_lists x JOIN lists l ON l.id = x.list_id
-  WHERE x.subscriber_id = s.id
-) sl ON TRUE
+         COUNT(*) FILTER (WHERE m.status = 'unsubscribed')::int AS unsubscribed,
+         COUNT(*) FILTER (WHERE m.status = 'subscribed')::int AS subscribed,
+         ARRAY_AGG(m.list_id ORDER BY m.list_id) FILTER (WHERE m.status <> 'unsubscribed') AS list_ids,
+         MAX(m.unsubscribed_at) AS last_unsubscribed_at
+  FROM portal.list_members m WHERE m.contact_id = s.id
+) ml ON TRUE
 LEFT JOIN LATERAL (
-  SELECT COUNT(*) FILTER (WHERE type = 'hard')::int AS hard,
-         COUNT(*) FILTER (WHERE type = 'soft')::int AS soft,
-         COUNT(*) FILTER (WHERE type = 'complaint')::int AS complaint,
-         MAX(created_at) AS last_bounce_at
-  FROM bounces WHERE subscriber_id = s.id
+  SELECT COUNT(*) FILTER (WHERE classification = 'hard')::int AS hard,
+         COUNT(*) FILTER (WHERE classification = 'soft')::int AS soft,
+         COUNT(*) FILTER (WHERE classification = 'complaint')::int AS complaint
+  FROM portal.bounce_events WHERE contact_id = s.id
 ) b ON TRUE
-LEFT JOIN portal.suppressions sup
-  ON sup.email_hash = encode(sha256(convert_to(LOWER(s.email), 'UTF8')), 'hex') AND sup.lifted_at IS NULL
-LEFT JOIN portal.review_queue rq ON rq.subscriber_id = s.id AND rq.resolved_at IS NULL
+LEFT JOIN portal.suppressions sup ON sup.email_hash = s.email_hash AND sup.lifted_at IS NULL
+LEFT JOIN portal.review_queue rq ON rq.contact_id = s.id AND rq.resolved_at IS NULL
 `;
 
 function escapeLike(s) {
   return s.replace(/[\\%_]/g, (m) => `\\${m}`);
 }
 
-/**
- * Builds WHERE clauses for the contact filters. Returns {where, params}.
- * Inner filters (on `s`) keep the lateral joins cheap; status filters apply
- * on the derived row.
- */
 function buildFilters(f) {
   const inner = [];
   const outer = [];
@@ -109,28 +86,22 @@ function buildFilters(f) {
     params.push(v);
     return `$${params.length}`;
   };
-
   if (f.q) {
-    const like = `%${escapeLike(f.q.trim())}%`;
-    const ph = p(like);
-    inner.push(`(s.email ILIKE ${ph} OR s.name ILIKE ${ph} OR s.attribs->>'company' ILIKE ${ph})`);
+    const ph = p(`%${escapeLike(f.q.trim())}%`);
+    inner.push(`(s.email ILIKE ${ph} OR (s.first_name || ' ' || s.last_name) ILIKE ${ph} OR s.company ILIKE ${ph})`);
   }
-  if (f.listId) {
-    inner.push(`EXISTS (SELECT 1 FROM subscriber_lists z WHERE z.subscriber_id = s.id AND z.list_id = ${p(f.listId)})`);
-  }
-  if (f.source) inner.push(`s.attribs->>'source' = ${p(f.source)}`);
-  if (f.consentMethod === 'none') inner.push(`COALESCE(s.attribs->'consent'->>'method', '') = ''`);
-  else if (f.consentMethod) inner.push(`s.attribs->'consent'->>'method' = ${p(f.consentMethod)}`);
+  if (f.listId) inner.push(`EXISTS (SELECT 1 FROM portal.list_members z WHERE z.contact_id = s.id AND z.list_id = ${p(f.listId)})`);
+  if (f.source) inner.push(`s.source = ${p(f.source)}`);
+  if (f.consentMethod === 'none') inner.push(`COALESCE(s.consent->>'method', '') = ''`);
+  else if (f.consentMethod) inner.push(`s.consent->>'method' = ${p(f.consentMethod)}`);
   if (f.createdFrom) inner.push(`s.created_at >= ${p(f.createdFrom)}`);
   if (f.createdTo) inner.push(`s.created_at < ${p(f.createdTo)}`);
   if (f.ids && f.ids.length) inner.push(`s.id = ANY(${p(f.ids)}::int[])`);
-
   if (f.status) {
     if (f.status === 'eligible') outer.push(`c.status = ANY(${p(ELIGIBLE)}::text[])`);
     else if (f.status === 'suppressed') outer.push(`c.suppression_reason IS NOT NULL`);
     else outer.push(`c.status = ${p(f.status)}`);
   }
-
   return {
     innerWhere: inner.length ? `WHERE ${inner.join(' AND ')}` : '',
     outerWhere: outer.length ? `WHERE ${outer.join(' AND ')}` : '',
@@ -143,17 +114,13 @@ async function queryContacts(client, filters, { page = 1, perPage = 25, sort = '
   const orderCol = SORTS[sort] || SORTS.created_at;
   const orderDir = dir === 'asc' ? 'ASC' : 'DESC';
   params.push(perPage, (page - 1) * perPage);
-  const sql = `
-    SELECT c.*, COUNT(*) OVER() AS total_count FROM (${BASE} ${innerWhere}) c
-    ${outerWhere}
-    ORDER BY ${orderCol} ${orderDir} NULLS LAST, c.id ${orderDir}
-    LIMIT $${params.length - 1} OFFSET $${params.length}`;
-  const { rows } = await client.query(sql, params);
-  const total = rows.length ? Number(rows[0].total_count) : 0;
-  return { rows: rows.map(strip), total };
+  const { rows } = await client.query(
+    `SELECT c.*, COUNT(*) OVER() AS total_count FROM (${BASE} ${innerWhere}) c ${outerWhere}
+      ORDER BY ${orderCol} ${orderDir} NULLS LAST, c.id ${orderDir}
+      LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+  return { rows: rows.map(strip), total: rows.length ? Number(rows[0].total_count) : 0 };
 }
 
-/** Ids of all contacts matching the filters (capped), for "select all matching". */
 async function matchingIds(client, filters, limit) {
   const { innerWhere, outerWhere, params } = buildFilters(filters);
   params.push(limit + 1);
@@ -162,7 +129,6 @@ async function matchingIds(client, filters, limit) {
   return { ids: rows.slice(0, limit).map((r) => r.id), truncated: rows.length > limit };
 }
 
-/** Keyset-paginated iterator for exports (stable, memory-safe). */
 async function* iterateContacts(client, filters, batchSize = 1000) {
   let lastId = 0;
   for (;;) {
@@ -171,9 +137,7 @@ async function* iterateContacts(client, filters, batchSize = 1000) {
     const keyset = `c.id > $${params.length - 1}`;
     const where = outerWhere ? `${outerWhere} AND ${keyset}` : `WHERE ${keyset}`;
     const { rows } = await client.query(
-      `SELECT c.* FROM (${BASE} ${innerWhere}) c ${where} ORDER BY c.id LIMIT $${params.length}`,
-      params,
-    );
+      `SELECT c.* FROM (${BASE} ${innerWhere}) c ${where} ORDER BY c.id LIMIT $${params.length}`, params);
     if (!rows.length) return;
     yield rows.map(strip);
     lastId = rows[rows.length - 1].id;
@@ -186,54 +150,31 @@ async function getContact(client, id) {
   return rows[0] ? strip(rows[0]) : null;
 }
 
-async function findByEmails(client, emails) {
-  if (!emails.length) return [];
+async function getSubscriptions(client, contactId) {
   const { rows } = await client.query(
-    `SELECT s.id, LOWER(s.email) AS email, s.status FROM subscribers s WHERE LOWER(s.email) = ANY($1::text[])`,
-    [emails],
-  );
+    `SELECT l.id, l.name, l.optin, m.status, m.created_at, m.updated_at, m.confirmed_at, m.unsubscribed_at
+       FROM portal.list_members m JOIN portal.lists l ON l.id = m.list_id
+      WHERE m.contact_id = $1 ORDER BY l.name`, [contactId]);
   return rows;
 }
 
-async function getSubscriptions(client, subscriberId) {
+async function getBounces(client, contactId) {
   const { rows } = await client.query(
-    `SELECT l.id, l.name, l.optin, l.type, x.status, x.created_at, x.updated_at
-       FROM subscriber_lists x JOIN lists l ON l.id = x.list_id
-      WHERE x.subscriber_id = $1 ORDER BY l.name`,
-    [subscriberId],
-  );
+    `SELECT b.id, b.source, b.classification, b.enhanced_code, b.smtp_code, b.reason, b.action_taken, b.bounced_at,
+            c.name AS campaign_name, c.id AS campaign_id
+       FROM portal.bounce_events b LEFT JOIN portal.campaigns c ON c.id = b.campaign_id
+      WHERE b.contact_id = $1 ORDER BY b.bounced_at DESC LIMIT 100`, [contactId]);
   return rows;
 }
 
-async function getBounces(client, subscriberId) {
+async function getMessages(client, contactId) {
   const { rows } = await client.query(
-    `SELECT b.id, b.type, b.source, b.meta, b.created_at, c.name AS campaign_name, c.id AS campaign_id,
-            pb.classification, pb.enhanced_code, pb.reason, pb.action_taken
-       FROM bounces b
-       LEFT JOIN campaigns c ON c.id = b.campaign_id
-       LEFT JOIN portal.bounce_events pb ON pb.listmonk_bounce_id = b.id
-      WHERE b.subscriber_id = $1 ORDER BY b.created_at DESC LIMIT 100`,
-    [subscriberId],
-  );
+    `SELECT m.id, m.kind, m.status, m.sent_at, m.error, m.created_at, c.name AS campaign_name, c.id AS campaign_id,
+            EXISTS (SELECT 1 FROM portal.tracking_events t WHERE t.message_id = m.id AND t.kind = 'open') AS opened,
+            EXISTS (SELECT 1 FROM portal.tracking_events t WHERE t.message_id = m.id AND t.kind = 'click') AS clicked
+       FROM portal.messages m LEFT JOIN portal.campaigns c ON c.id = m.campaign_id
+      WHERE m.contact_id = $1 AND m.kind <> 'test' ORDER BY m.created_at DESC LIMIT 50`, [contactId]);
   return rows;
-}
-
-async function getEngagement(client, subscriberId) {
-  const { rows } = await client.query(
-    `SELECT (SELECT COUNT(*)::int FROM campaign_views WHERE subscriber_id = $1) AS views,
-            (SELECT MAX(created_at) FROM campaign_views WHERE subscriber_id = $1) AS last_view_at,
-            (SELECT COUNT(*)::int FROM link_clicks WHERE subscriber_id = $1) AS clicks,
-            (SELECT MAX(created_at) FROM link_clicks WHERE subscriber_id = $1) AS last_click_at,
-            -- listmonk does not log individual sends. This estimates the most recent
-            -- campaign that targeted one of the contact's lists after they joined it.
-            (SELECT MAX(c.started_at) FROM campaigns c
-               JOIN campaign_lists cl ON cl.campaign_id = c.id
-               JOIN subscriber_lists x ON x.list_id = cl.list_id AND x.subscriber_id = $1
-              WHERE c.status IN ('running', 'finished', 'paused') AND c.started_at >= x.created_at
-                AND c.type = 'regular') AS last_campaign_at_estimate`,
-    [subscriberId],
-  );
-  return rows[0];
 }
 
 function strip(r) {
@@ -243,17 +184,6 @@ function strip(r) {
 }
 
 module.exports = {
-  STATUSES,
-  BASE_SQL: BASE,
-  ELIGIBLE,
-  SORTS,
-  queryContacts,
-  matchingIds,
-  iterateContacts,
-  getContact,
-  findByEmails,
-  getSubscriptions,
-  getBounces,
-  getEngagement,
-  buildFilters,
+  STATUSES, ELIGIBLE, SORTS, BASE_SQL: BASE,
+  queryContacts, matchingIds, iterateContacts, getContact, getSubscriptions, getBounces, getMessages, buildFilters,
 };

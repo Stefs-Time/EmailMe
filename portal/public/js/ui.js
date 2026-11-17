@@ -85,7 +85,6 @@ export const STATUS_INFO = {
   unsubscribed: { label: 'Unsubscribed', help: 'Opted out; suppressed' },
   blocklisted: { label: 'Blocklisted', help: 'Manually or automatically suppressed' },
   pending_review: { label: 'Pending review', help: 'Held: a person must decide (e.g. spam/policy rejection)' },
-  inactive: { label: 'Inactive', help: 'Disabled in listmonk' },
   no_lists: { label: 'No lists', help: 'Not subscribed to any list, so receives nothing' },
 };
 

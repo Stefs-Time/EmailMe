@@ -18,6 +18,10 @@ const { exportRoutes } = require('./modules/exports/routes');
 const { suppressionRoutes } = require('./modules/suppression/routes');
 const { reportRoutes } = require('./modules/reports/routes');
 const { systemRoutes } = require('./modules/system/routes');
+const { campaignRoutes } = require('./modules/campaigns/routes');
+const { templateRoutes } = require('./modules/templates/routes');
+const { settingsRoutes, setupRoutes } = require('./modules/settings/routes');
+const { publicRoutes } = require('./modules/public/routes');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const NODE_MODULES = path.join(__dirname, '..', 'node_modules');
@@ -27,7 +31,7 @@ function createApp(deps) {
   const app = express();
 
   app.disable('x-powered-by');
-  // Behind Railway / Caddy / Nginx: trust the proxy hop so req.ip and secure
+  // Behind Railway / a reverse proxy: trust the proxy hop so req.ip and secure
   // cookies work. A number means "trust N hops".
   app.set('trust proxy', /^\d+$/.test(config.TRUST_PROXY) ? Number(config.TRUST_PROXY) : config.TRUST_PROXY);
 
@@ -39,7 +43,8 @@ function createApp(deps) {
           'default-src': ["'self'"],
           'script-src': ["'self'"],
           'style-src': ["'self'"],
-          'img-src': ["'self'", 'data:'],
+          // https: lets the campaign editor show images hosted elsewhere.
+          'img-src': ["'self'", 'data:', 'https:'],
           'font-src': ["'self'"],
           'connect-src': ["'self'"],
           'frame-ancestors': ["'none'"],
@@ -65,6 +70,9 @@ function createApp(deps) {
     }
   });
 
+  // Recipient-facing pages and provider webhooks (no login).
+  app.use(publicRoutes(deps));
+
   // Static assets: the SPA plus vendored Bootstrap / icons / Chart.js (no CDN).
   const staticOpts = { maxAge: config.isProd ? '1h' : 0, index: false };
   app.use('/vendor/bootstrap', express.static(path.join(NODE_MODULES, 'bootstrap', 'dist'), staticOpts));
@@ -72,21 +80,21 @@ function createApp(deps) {
   app.use('/vendor/chart.js', express.static(path.join(NODE_MODULES, 'chart.js', 'dist'), staticOpts));
   app.use(express.static(PUBLIC_DIR, staticOpts));
 
-  const secureCookie = config.COOKIE_SECURE === 'auto' ? config.isProd : config.COOKIE_SECURE === 'true';
+  // Secure cookies in production (Railway and the reverse proxy terminate HTTPS).
   app.use(
     '/api',
     session({
       name: 'mh.sid',
       store: new PgStore({ pool, schemaName: 'portal', tableName: 'sessions', pruneSessionInterval: 15 * 60 }),
-      secret: config.SESSION_SECRET,
+      secret: deps.sessionSecret,
       resave: false,
       saveUninitialized: false,
       rolling: true,
       cookie: {
         httpOnly: true,
         sameSite: 'lax',
-        secure: secureCookie,
-        maxAge: config.SESSION_MAX_AGE_HOURS * 3600 * 1000,
+        secure: config.isProd,
+        maxAge: 8 * 3600 * 1000,
       },
     }),
   );
@@ -106,6 +114,7 @@ function createApp(deps) {
   app.use('/api', csrfProtection);
 
   app.use('/api/auth', authRoutes(deps));
+  app.use('/api/setup', setupRoutes(deps));
   app.use('/api', requireAuth);
   app.use('/api/users', userRoutes(deps));
   app.use('/api/contacts', contactRoutes(deps));
@@ -115,6 +124,9 @@ function createApp(deps) {
   app.use('/api/suppressions', suppressionRoutes(deps));
   app.use('/api/reports', reportRoutes(deps));
   app.use('/api/system', systemRoutes(deps));
+  app.use('/api/campaigns', campaignRoutes(deps));
+  app.use('/api/templates', templateRoutes(deps));
+  app.use('/api/settings', settingsRoutes(deps));
   app.use('/api', notFoundHandler);
 
   // SPA shell for every other GET.

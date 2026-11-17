@@ -71,9 +71,9 @@ function contactRoutes(deps) {
   r.get('/facets', requirePermission('contacts:read'), async (_req, res) => {
     const data = await readOnly(deps.pool, async (db) => {
       const sources = await db.query(
-        `SELECT attribs->>'source' AS v, COUNT(*)::int AS n FROM subscribers
-          WHERE attribs->>'source' IS NOT NULL AND attribs->>'source' <> '' GROUP BY 1 ORDER BY 2 DESC LIMIT 100`);
-      const lists = await db.query(`SELECT id, name, optin, type FROM lists ORDER BY name`);
+        `SELECT source AS v, COUNT(*)::int AS n FROM portal.contacts
+          WHERE source <> '' GROUP BY 1 ORDER BY 2 DESC LIMIT 100`);
+      const lists = await db.query(`SELECT id, name, optin FROM portal.lists ORDER BY name`);
       return { sources: sources.rows, lists: lists.rows };
     });
     res.json({ success: true, data: { ...data, statuses: repo.STATUSES, consentMethods: CONSENT_METHODS } });
@@ -143,7 +143,7 @@ function contactRoutes(deps) {
   r.post('/:id/erase', requirePermission('contacts:erase'), async (req, res) => {
     const id = parse(idParam, req.params.id);
     const body = parse(z.object({ confirm: z.literal('ERASE'), note }), req.body);
-    await service.erase(ctx(req), id, body.note);
+    await service.erase(ctx(req), id);
     res.json({ success: true, data: {} });
   });
 
@@ -164,7 +164,7 @@ function contactRoutes(deps) {
     let data;
     switch (body.action) {
       case 'add_to_lists':
-        data = await service.changeLists(c, body.ids, 'add', body.listIds, { subscriptionStatus: body.subscriptionStatus });
+        data = await service.changeLists(c, body.ids, 'add', body.listIds, { confirmed: body.subscriptionStatus === 'confirmed' });
         break;
       case 'remove_from_lists':
         data = await service.changeLists(c, body.ids, 'remove', body.listIds);

@@ -7,7 +7,7 @@ export async function render(el, ctx) {
   const q = ctx.query();
   const state = { q: q.get('q') || '', reason: '', include_lifted: 'false', page: 1 };
   mount(el, html`<div class="page-head"><div><h1>Suppression list</h1>
-      <p>Addresses that must never receive marketing. Imports, list changes and listmonk edits cannot override this list.</p></div>
+      <p>Addresses that must never receive marketing. Imports, list changes and campaigns cannot override this list.</p></div>
     <div class="d-flex gap-2 flex-wrap">
       ${ctx.can('exports:read') ? html`<button class="btn btn-outline-primary" id="csv"><i class="bi bi-download me-1"></i>Export</button>` : ''}
       ${ctx.can('suppression:add') ? html`<button class="btn btn-primary" id="add"><i class="bi bi-plus-lg me-1"></i>Suppress addresses</button>` : ''}</div></div>

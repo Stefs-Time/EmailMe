@@ -3,7 +3,7 @@
 const { emailHash, normalizeEmail } = require('../../lib/email');
 const { recipientEvent } = require('../../lib/audit');
 
-const REASONS = ['hard_bounce', 'complaint', 'unsubscribe', 'manual', 'blocklisted', 'erased'];
+const REASONS = ['hard_bounce', 'soft_limit', 'complaint', 'unsubscribe', 'manual', 'erased'];
 
 /** Returns Map(emailHash -> active suppression row) for the given hashes. */
 async function activeByHashes(db, hashes) {
@@ -23,25 +23,21 @@ async function activeForEmail(db, email) {
 
 /**
  * Records a suppression (idempotent: one active row per address).
- * Returns true if a new suppression was created.
+ * Suppressed addresses are excluded from every send at queue time and again
+ * immediately before delivery. Returns true if a new suppression was created.
  */
-async function addSuppression(db, { email, subscriberId, reason, source = '', details = {}, userId = null, actorType = 'system' }) {
+async function addSuppression(db, { email, contactId, campaignId, reason, source = '', details = {}, userId = null, actorType = 'system' }) {
   const hash = emailHash(email);
   const { rowCount } = await db.query(
-    `INSERT INTO portal.suppressions (email, email_hash, reason, source, details, subscriber_id, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO portal.suppressions (email, email_hash, reason, source, details, contact_id, campaign_id, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (email_hash) WHERE lifted_at IS NULL DO NOTHING`,
-    [normalizeEmail(email), hash, reason, source, details, subscriberId ?? null, userId],
+    [normalizeEmail(email), hash, reason, source, details, contactId ?? null, campaignId ?? null, userId],
   );
   if (rowCount) {
     await recipientEvent(db, {
-      subscriberId,
-      emailHash: hash,
-      type: 'suppressed',
-      to: reason,
-      details: { source, ...details },
-      actorType,
-      actorId: userId,
+      contactId, emailHash: hash, campaignId, type: 'suppressed', to: reason,
+      details: { source, ...details }, actorType, actorId: userId,
     });
   }
   return rowCount > 0;

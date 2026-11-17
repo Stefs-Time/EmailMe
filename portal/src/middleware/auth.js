@@ -25,8 +25,10 @@ const PERMISSIONS = {
   'users:manage': ['admin'],
   'audit:read': ['admin'],
   'system:read': ['manager', 'admin'],
-  // Show "write a campaign in listmonk" links (listmonk has its own logins).
-  'campaigns:compose': ['manager', 'admin'],
+  'campaigns:write': ['manager', 'admin'],
+  'campaigns:send': ['manager', 'admin'],
+  'templates:write': ['manager', 'admin'],
+  'settings:manage': ['admin'],
 };
 
 function can(role, permission) {

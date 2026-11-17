@@ -6,7 +6,7 @@ import { bounceBadge } from './dashboard.js';
 const EVENT_LABELS = {
   created: 'Contact created', imported: 'Imported', profile_updated: 'Details updated', lists_add: 'Added to list(s)',
   lists_remove: 'Removed from list(s)', lists_unsubscribe: 'Unsubscribed from list(s)', unsubscribed: 'Unsubscribed',
-  suppressed: 'Suppressed', suppression_enforced: 'Blocked in listmonk (suppression enforced)', suppression_lifted: 'Suppression lifted',
+  suppressed: 'Suppressed', optin_confirmed: 'Confirmed subscription (double opt-in)', suppression_lifted: 'Suppression lifted',
   soft_bounce: 'Soft bounce', review_hold: 'Held for review', review_resolved: 'Review resolved', erased: 'Personal data erased',
 };
 
@@ -14,10 +14,10 @@ export async function render(el, ctx, [id]) {
   mount(el, loading());
   const [{ data: d }, { data: facets }] = await Promise.all([get(`/contacts/${id}`), get('/contacts/facets')]);
   const c = d.contact;
-  const a = c.attribs || {};
+  const a = c;
   const canWrite = ctx.can('contacts:write');
   const suppressed = Boolean(d.suppression);
-  const custom = Object.entries(a).filter(([k]) => !['first_name', 'last_name', 'company', 'source', 'consent', 'import_id'].includes(k));
+  const custom = Object.entries(c.attribs || {});
 
   mount(el, html`
     <nav aria-label="breadcrumb"><ol class="breadcrumb small"><li class="breadcrumb-item"><a href="#/contacts">Contacts</a></li><li class="breadcrumb-item active">${c.email}</li></ol></nav>
@@ -63,11 +63,12 @@ export async function render(el, ctx, [id]) {
           </dl></div></div>
         <div class="card mb-3"><div class="card-header">Delivery & engagement</div><div class="card-body">
           <dl class="dl-grid">
-            <dt>Bounces</dt><dd>${num(c.hard_bounces)} hard · ${num(c.soft_bounces)} soft · ${num(c.complaints)} complaints</dd>
+            <dt>Campaigns received</dt><dd>${num(d.engagement.received)}</dd>
+            <dt>Last email sent</dt><dd>${datetime(c.last_sent_at)}</dd>
+            <dt>Last open</dt><dd>${datetime(c.last_open_at)} ${d.engagement.opens ? `(${num(d.engagement.opens)} email(s) opened)` : ''}</dd>
+            <dt>Last click</dt><dd>${datetime(c.last_click_at)} ${d.engagement.clicks ? `(${num(d.engagement.clicks)} email(s) clicked)` : ''}</dd>
+            <dt>Bounces</dt><dd>${num(c.hard_bounces)} hard · ${num(c.soft_bounce_events)} soft · ${num(c.complaints)} complaints${c.soft_bounces ? ` · ${num(c.soft_bounces)} recent soft` : ''}</dd>
             <dt>Last bounce</dt><dd>${datetime(c.last_bounce_at)}</dd>
-            <dt>Last campaign</dt><dd>${datetime(d.engagement.last_campaign_at_estimate)} <span class="small text-muted-2" title="listmonk does not log individual sends; this is the latest campaign sent to one of this contact's lists after they joined.">(estimated)</span></dd>
-            <dt>Last open</dt><dd>${datetime(d.engagement.last_view_at)} ${d.engagement.views ? `(${num(d.engagement.views)} total)` : ''}</dd>
-            <dt>Last click</dt><dd>${datetime(d.engagement.last_click_at)} ${d.engagement.clicks ? `(${num(d.engagement.clicks)} total)` : ''}</dd>
             <dt>Unsubscribed</dt><dd>${datetime(c.last_unsubscribed_at)}</dd>
           </dl>
           <div class="small text-muted-2 mt-2">Opens are indicative only: image blocking and privacy features hide some, security scanners add others.</div>
@@ -79,7 +80,7 @@ export async function render(el, ctx, [id]) {
             ${x.purpose ? html`<div class="small text-muted-2">Purpose: ${x.purpose}</div>` : ''}
             ${x.evidence ? html`<div class="small text-muted-2">Evidence: ${x.evidence}</div>` : ''}
             <div class="small text-muted-2">Recorded by ${x.recorded_by || 'system'}</div></li>`)}</ul>`
-            : html`<div class="card-body"><div class="text-warning-emphasis small"><i class="bi bi-exclamation-triangle me-1"></i>No consent record. ${a.consent?.method ? `listmonk attribute says: ${CONSENT_LABELS[a.consent.method] || a.consent.method}.` : 'Record the permission basis before sending marketing.'}</div></div>`}
+            : html`<div class="card-body"><div class="text-warning-emphasis small"><i class="bi bi-exclamation-triangle me-1"></i>No consent record. ${c.consent?.method ? `Contact record says: ${CONSENT_LABELS[c.consent.method] || c.consent.method}.` : 'Record the permission basis before sending marketing.'}</div></div>`}
         </div>
       </div>
       <div class="col-lg-7">
@@ -87,23 +88,32 @@ export async function render(el, ctx, [id]) {
           ${d.subscriptions.length ? html`<div class="table-responsive"><table class="table table-sm">
             <thead><tr><th>List</th><th>Subscription</th><th>Since</th><th>Updated</th></tr></thead><tbody>
             ${d.subscriptions.map((s) => html`<tr><td>${s.name}${s.optin === 'double' ? html` <span class="badge text-bg-light">double opt-in</span>` : ''}</td>
-              <td><span class="status s-${s.status === 'unsubscribed' ? 'unsubscribed' : s.status === 'confirmed' ? 'active' : 'unconfirmed'}">${label(s.status)}</span></td>
+              <td><span class="status s-${s.status === 'unsubscribed' ? 'unsubscribed' : s.status === 'subscribed' ? 'active' : 'unconfirmed'}">${label(s.status)}</span></td>
               <td class="small">${date(s.created_at)}</td><td class="small">${date(s.updated_at)}</td></tr>`)}
             </tbody></table></div>` : html`<div class="card-body text-muted-2">Not on any list.</div>`}
         </div>
         <div class="card mb-3"><div class="card-header">Bounces</div>
           ${d.bounces.length ? html`<div class="table-responsive"><table class="table table-sm">
             <thead><tr><th>When</th><th>Type</th><th>Reason</th><th>Campaign</th></tr></thead><tbody>
-            ${d.bounces.map((b) => html`<tr><td class="small text-nowrap">${datetime(b.created_at)}</td>
-              <td>${bounceBadge(b.classification || b.type)}${b.classification && b.classification !== b.type ? html`<div class="small text-muted-2">listmonk: ${b.type}</div>` : ''}</td>
-              <td class="small">${b.reason || b.meta?.classify_reason || '–'}${b.enhanced_code ? html` <span class="mono">${b.enhanced_code}</span>` : ''}<div class="text-muted-2">${b.source}</div></td>
+            ${d.bounces.map((b) => html`<tr><td class="small text-nowrap">${datetime(b.bounced_at)}</td>
+              <td>${bounceBadge(b.classification)}</td>
+              <td class="small">${b.reason || '–'}${b.enhanced_code ? html` <span class="mono">${b.enhanced_code}</span>` : ''}<div class="text-muted-2">via ${b.source} · ${String(b.action_taken).replace(/_/g, ' ')}</div></td>
               <td class="small">${b.campaign_name || '–'}</td></tr>`)}
             </tbody></table></div>` : html`<div class="card-body text-muted-2">No bounces recorded.</div>`}
+        </div>
+        <div class="card mb-3"><div class="card-header">Emails</div>
+          ${d.messages.length ? html`<div class="table-responsive"><table class="table table-sm">
+            <thead><tr><th>Email</th><th>Status</th><th>Opened</th><th>Clicked</th><th>When</th></tr></thead><tbody>
+            ${d.messages.map((m) => html`<tr><td class="small">${m.kind === 'optin' ? 'Confirmation request' : m.campaign_id ? html`<a href="#/campaigns/${m.campaign_id}">${m.campaign_name}</a>` : '–'}</td>
+              <td class="small text-capitalize">${m.status}${m.error ? html`<div class="text-muted-2 text-normal">${m.error}</div>` : ''}</td>
+              <td>${m.opened ? html`<i class="bi bi-check-lg text-success" aria-label="Opened"></i>` : ''}</td><td>${m.clicked ? html`<i class="bi bi-check-lg text-success" aria-label="Clicked"></i>` : ''}</td>
+              <td class="small text-nowrap">${datetime(m.sent_at || m.created_at)}</td></tr>`)}</tbody></table></div>`
+            : html`<div class="card-body text-muted-2">No emails sent to this contact yet.</div>`}
         </div>
         <div class="card"><div class="card-header">History</div><div class="card-body">
           ${d.events.length ? html`<ul class="timeline">${d.events.map((e) => html`<li>
             <div class="fw-semibold">${EVENT_LABELS[e.event_type] || label(e.event_type)}${e.to_status ? html` <span class="text-muted-2 fw-normal">→ ${label(e.to_status)}</span>` : ''}</div>
-            <div class="t">${datetime(e.created_at)} · ${e.actor_name || (e.actor_type === 'listmonk' ? 'listmonk' : 'automatic')}${eventDetail(e)}</div></li>`)}</ul>`
+            <div class="t">${datetime(e.created_at)} · ${e.actor_name || (e.actor_type === 'recipient' ? 'by the recipient' : 'automatic')}${e.campaign_name ? ` · campaign “${e.campaign_name}”` : ''}${eventDetail(e)}</div></li>`)}</ul>`
             : html`<div class="text-muted-2">No history yet.</div>`}
         </div></div>
       </div>
@@ -156,7 +166,7 @@ export async function render(el, ctx, [id]) {
         onSubmit: async (fd) => { await post('/contacts/actions', { action: act, ids: [Number(id)], note: fd.get('note') }); toast('Done'); reload(); } });
     } else if (act === 'erase') {
       formModal({ title: 'Erase personal information', danger: true, submitLabel: 'Erase permanently',
-        body: html`<p>Use this for a POPIA deletion request. The contact is deleted from listmonk and personal details are removed from MailHarbor records.
+        body: html`<p>Use this for a POPIA deletion request. The contact and their personal details are deleted from MailHarbor.
           A one-way <strong>hash</strong> of the address is kept on the suppression list so the person is never re-imported or emailed again.</p>
           <p class="text-danger fw-semibold">This cannot be undone. Consider downloading a data export first.</p>
           <label class="form-label">Type <span class="kbd">ERASE</span> to confirm</label><input class="form-control" name="confirm" autocomplete="off" required>

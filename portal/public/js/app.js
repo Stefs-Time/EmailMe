@@ -10,8 +10,12 @@ const ROUTES = [
   { path: /^\/import\/([0-9a-f-]{36})$/, view: 'import', title: 'Import contacts', perm: 'imports:write' },
   { path: /^\/imports\/?$/, view: 'imports', title: 'Import history' },
   { path: /^\/lists\/?$/, view: 'lists', title: 'Lists' },
-  { path: /^\/campaigns\/?$/, view: 'campaigns', title: 'Campaign reports' },
-  { path: /^\/campaigns\/(\d+)$/, view: 'campaign', title: 'Campaign report' },
+  { path: /^\/campaigns\/?$/, view: 'campaigns', title: 'Campaigns' },
+  { path: /^\/campaigns\/(\d+)$/, view: 'campaign', title: 'Campaign' },
+  { path: /^\/campaigns\/(\d+)\/edit$/, view: 'campaign-edit', title: 'Edit campaign', perm: 'campaigns:write' },
+  { path: /^\/templates\/?$/, view: 'templates', title: 'Templates' },
+  { path: /^\/templates\/(\d+|new)$/, view: 'template-edit', title: 'Edit template', perm: 'templates:write' },
+  { path: /^\/settings\/?([a-z]*)$/, view: 'settings', title: 'Settings', perm: 'settings:manage' },
   { path: /^\/reports\/?$/, view: 'reports', title: 'Audience & deliverability' },
   { path: /^\/suppression\/?$/, view: 'suppression', title: 'Suppression list' },
   { path: /^\/review\/?$/, view: 'review', title: 'Review queue' },
@@ -34,13 +38,16 @@ const NAV = [
   { href: '#/lists', icon: 'card-list', label: 'Lists', match: 'lists' },
   { href: '#/review', icon: 'hourglass-split', label: 'Review queue', match: 'review', badge: 'review' },
   { href: '#/suppression', icon: 'slash-circle', label: 'Suppression list', match: 'suppression' },
+  { section: 'Email' },
+  { href: '#/campaigns', icon: 'send', label: 'Campaigns', match: 'campaign' },
+  { href: '#/templates', icon: 'layout-text-window', label: 'Templates', match: 'template' },
   { section: 'Insights' },
-  { href: '#/campaigns', icon: 'envelope-paper', label: 'Campaign reports', match: 'campaign' },
   { href: '#/reports', icon: 'bar-chart-line', label: 'Audience & bounces', match: 'reports' },
   { href: '#/exports', icon: 'download', label: 'Exports', match: 'exports', perm: 'exports:read' },
   { section: 'Help & admin' },
   { href: '#/guides', icon: 'journal-text', label: 'Guides', match: 'guides' },
   { href: '#/system', icon: 'heart-pulse', label: 'System health', match: 'system', perm: 'system:read' },
+  { href: '#/settings', icon: 'gear', label: 'Settings', match: 'settings', perm: 'settings:manage' },
   { href: '#/users', icon: 'person-gear', label: 'Users', match: 'users', perm: 'users:manage' },
   { href: '#/audit', icon: 'shield-check', label: 'Audit log', match: 'audit', perm: 'audit:read' },
 ];
@@ -81,10 +88,8 @@ function renderShell() {
           ? html`<div class="nav-section">${n.section}</div>`
           : html`<a href="${n.href}" data-match="${n.match}"><i class="bi bi-${n.icon}"></i><span>${n.label}</span>${n.badge ? html`<span class="badge rounded-pill text-bg-warning d-none" data-badge="${n.badge}"></span>` : ''}</a>`))}
       </div>
-      ${ctx.can('campaigns:compose') ? html`<div class="sidebar-footer">
-        <a class="btn btn-sm btn-outline-primary w-100 mb-2" href="${state.session.listmonkUrl}/admin/campaigns/new" target="_blank" rel="noopener">
-          <i class="bi bi-send me-1"></i>New campaign in listmonk<span class="visually-hidden"> (opens in a new tab)</span></a>
-        <div class="text-muted-2">Campaigns are written and sent in listmonk. <a href="#/guides/campaigns">How?</a></div>
+      ${ctx.can('campaigns:write') ? html`<div class="sidebar-footer">
+        <a class="btn btn-sm btn-primary w-100" href="#/campaigns?new=1"><i class="bi bi-plus-lg me-1"></i>New campaign</a>
       </div>` : ''}
     </nav>
     <div class="sidebar-backdrop" id="backdrop"></div>
@@ -191,6 +196,17 @@ async function boot() {
   } catch (err) {
     mount($('#root'), html`<div class="container py-5">${errorBox(err)}<button class="btn btn-primary" id="retry">Retry</button></div>`);
     $('#retry').addEventListener('click', boot);
+    return;
+  }
+  if (!state.session.user && state.session.setupNeeded) {
+    const { renderSetup } = await import('./views/setup.js');
+    renderSetup($('#root'), async (session) => {
+      state.session = { ...state.session, ...session, setupNeeded: false };
+      setCsrf(session.csrfToken);
+      renderShell();
+      location.hash = '#/settings';
+      await route();
+    });
     return;
   }
   if (!state.session.user) {

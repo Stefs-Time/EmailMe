@@ -3,14 +3,14 @@
 /**
  * Bounce classification rules (scope §3.6.2).
  *
- * listmonk's native POP3 classifier marks every 5.x.x status as a hard bounce.
- * That is wrong for policy / spam / authentication rejections (5.7.x), which
- * say nothing about whether the mailbox exists. These rules refine listmonk's
- * verdict using the enhanced status code and response text when available.
+ * Many tools mark every 5.x.x status as a hard bounce. That is wrong for
+ * policy / spam / authentication rejections (5.7.x), which say nothing about
+ * whether the mailbox exists. These rules use the enhanced status code and the
+ * response text; `hint` is the source's own verdict, used only as a fallback.
  *
  * Classifications:
  *   hard      -> permanently undeliverable: suppress
- *   soft      -> temporary: record; listmonk's soft-bounce threshold applies
+ *   soft      -> temporary: counted; suppressed after the soft-bounce limit
  *   complaint -> spam complaint: suppress immediately
  *   review    -> needs a human: hold (exclude from sends) until resolved
  */
@@ -50,7 +50,7 @@ const IPV4_RE = /\b\d{1,3}(?:\.\d{1,3}){3}\b/g;
 /**
  * Builds the text the rules inspect. Received headers are dropped and IPv4
  * addresses stripped so that e.g. "10.5.1.1" is never read as status 5.1.1.
- * listmonk's own `classify_reason` (e.g. "smtp_status=5.7.1") is put first.
+ * a `classify_reason` field (e.g. "smtp_status=5.7.1") is put first.
  */
 function flatten(meta) {
   if (!meta) return '';
@@ -74,18 +74,18 @@ function flatten(meta) {
 }
 
 /**
- * @param {string} listmonkType hard | soft | complaint
- * @param {object|string} meta  listmonk bounce meta (varies by source)
+ * @param {string|undefined} hint  the source's verdict: hard | soft | complaint
+ * @param {object|string} meta  response / diagnostic text or object
  * @returns {{classification:string, enhancedCode:string|null, smtpCode:string|null, reason:string}}
  */
-function classifyBounce(listmonkType, meta) {
+function classifyBounce(hint, meta) {
   const text = flatten(meta);
   const enhanced = text.match(ENHANCED_RE);
   const enhancedCode = enhanced ? `${enhanced[1]}.${enhanced[2]}.${enhanced[3]}` : null;
   const basic = text.replace(ENHANCED_RE, ' ').match(BASIC_RE);
   const smtpCode = basic ? basic[1] : null;
 
-  if (listmonkType === 'complaint') {
+  if (hint === 'complaint') {
     return { classification: 'complaint', enhancedCode, smtpCode, reason: 'Spam complaint' };
   }
 
@@ -105,16 +105,16 @@ function classifyBounce(listmonkType, meta) {
     }
   }
 
-  if (POLICY_TEXT_RE.test(text) && listmonkType === 'hard') {
+  if (POLICY_TEXT_RE.test(text) && hint === 'hard') {
     return { classification: 'review', enhancedCode, smtpCode, reason: 'Possible policy rejection' };
   }
 
-  // Fall back to listmonk's own verdict.
+  // Fall back to the source's own verdict (unknown → soft, the cautious choice).
   return {
-    classification: listmonkType === 'hard' ? 'hard' : 'soft',
+    classification: hint === 'hard' ? 'hard' : 'soft',
     enhancedCode,
     smtpCode,
-    reason: listmonkType === 'hard' ? 'Hard bounce (listmonk classification)' : 'Soft bounce (listmonk classification)',
+    reason: hint === 'hard' ? 'Permanent failure (reported by the receiving server)' : 'Temporary or unclassified failure',
   };
 }
 

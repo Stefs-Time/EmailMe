@@ -9,9 +9,8 @@ const { audit, recipientEvent } = require('../../lib/audit');
 const { normalizeEmail, isValidEmail, emailHash } = require('../../lib/email');
 const { addSuppression, REASONS } = require('./service');
 const { consentSchema } = require('../contacts/consent');
-const { withSyncLock } = require('../sync/worker');
 
-function suppressionRoutes({ pool, lm }) {
+function suppressionRoutes({ pool }) {
   const r = express.Router();
 
   r.get('/', requirePermission('contacts:read'), async (req, res) => {
@@ -29,7 +28,7 @@ function suppressionRoutes({ pool, lm }) {
     if (q.q) { params.push(`%${q.q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`); where.push(`p.email ILIKE $${params.length}`); }
     params.push(q.per_page, (q.page - 1) * q.per_page);
     const { rows } = await pool.query(
-      `SELECT p.id, p.email, p.reason, p.source, p.details, p.subscriber_id, p.created_at, p.lifted_at, p.lift_reason,
+      `SELECT p.id, p.email, p.reason, p.source, p.details, p.contact_id, p.created_at, p.lifted_at, p.lift_reason,
               u.name AS created_by_name, COUNT(*) OVER() AS total
          FROM portal.suppressions p LEFT JOIN portal.users u ON u.id = p.created_by
         ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
@@ -48,17 +47,16 @@ function suppressionRoutes({ pool, lm }) {
     if (invalid.length) throw validation(`Invalid email address(es): ${invalid.slice(0, 5).join(', ')}`);
     const emails = [...new Set(body.emails.map(normalizeEmail))];
     const { rows: subs } = await pool.query(
-      `SELECT id, LOWER(email) AS email FROM subscribers WHERE LOWER(email) = ANY($1::text[])`, [emails]);
+      `SELECT id, LOWER(email) AS email FROM portal.contacts WHERE LOWER(email) = ANY($1::text[])`, [emails]);
     const subMap = new Map(subs.map((s) => [s.email, s.id]));
     let added = 0;
     await withTransaction(pool, async (db) => {
       for (const e of emails) {
-        if (await addSuppression(db, { email: e, subscriberId: subMap.get(e), reason: 'manual', source: 'portal',
+        if (await addSuppression(db, { email: e, contactId: subMap.get(e), reason: 'manual', source: 'portal',
           details: { note: body.note }, userId: req.user.id, actorType: 'user' })) added += 1;
       }
       await audit(db, req, 'suppression.added', { details: { count: added, note: body.note } });
     });
-    if (subs.length) await lm.blocklistSubscribers(subs.map((s) => s.id));
     res.status(201).json({ success: true, data: { added, alreadySuppressed: emails.length - added } });
   });
 
@@ -85,44 +83,38 @@ function suppressionRoutes({ pool, lm }) {
       throw validation('This address hard-bounced. Confirm in the reason that the address has been verified as working (mention "address").');
     }
 
-    const sub = await withSyncLock(pool, () => liftAndReactivate(sup, body, req));
-    res.json({ success: true, data: { id, subscriberId: sub?.id ?? null } });
-  });
-
-  async function liftAndReactivate(sup, body, req) {
-    const id = sup.id;
-    const { rows: subRows } = await pool.query(
-      'SELECT id, status FROM subscribers WHERE LOWER(email) = $1', [sup.email]);
-    const sub = subRows[0];
-
-    await withTransaction(pool, async (db) => {
+    const contact = await withTransaction(pool, async (db) => {
+      const { rows: cRows } = await db.query('SELECT id, soft_bounces FROM portal.contacts WHERE email_hash = $1', [sup.email_hash]);
+      const c = cRows[0] || null;
       await db.query(
         `UPDATE portal.suppressions SET lifted_at = NOW(), lifted_by = $2, lift_reason = $3, lift_basis = $4 WHERE id = $1`,
         [id, req.user.id, body.reason, body.consent]);
       await db.query(
-        `INSERT INTO portal.consent_records (subscriber_id, email, email_hash, action, method, purpose, source, obtained_at, evidence, recorded_by)
+        `INSERT INTO portal.consent_records (contact_id, email, email_hash, action, method, purpose, source, obtained_at, evidence, recorded_by)
          VALUES ($1, $2, $3, 'granted', $4, $5, 'reactivation', $6, $7, $8)`,
-        [sub?.id ?? null, sup.email, sup.email_hash, body.consent.method, body.consent.purpose,
+        [c?.id ?? null, sup.email, sup.email_hash, body.consent.method, body.consent.purpose,
           body.consent.obtainedAt || null, body.consent.evidence, req.user.id]);
-      await recipientEvent(db, { subscriberId: sub?.id, emailHash: sup.email_hash, type: 'suppression_lifted',
-        from: sup.reason, to: 'active', details: { reason: body.reason }, actorType: 'user', actorId: req.user.id });
-      await audit(db, req, 'suppression.lifted', { targetType: 'suppression', targetId: id,
-        details: { previous_reason: sup.reason, consent_method: body.consent.method } });
-    });
-
-    if (sub && sub.status === 'blocklisted') {
-      await lm.patchSubscriber(sub.id, { status: 'enabled' });
-      if (body.resubscribe) {
-        // Restore subscriptions to lists they were on, now with a new permission basis.
-        const { rows: lists } = await pool.query(
-          `SELECT list_id FROM subscriber_lists WHERE subscriber_id = $1 AND status = 'unsubscribed'`, [sub.id]);
-        if (lists.length) {
-          await lm.manageLists({ ids: [sub.id], action: 'add', listIds: lists.map((l) => l.list_id), status: 'confirmed' });
+      let restored = 0;
+      if (c) {
+        await db.query(`UPDATE portal.contacts SET soft_bounces = 0, consent = $2, updated_at = NOW() WHERE id = $1`,
+          [c.id, { status: 'granted', method: body.consent.method, purpose: body.consent.purpose || '',
+            date: body.consent.obtainedAt ? new Date(body.consent.obtainedAt).toISOString().slice(0, 10) : null, source: 'reactivation' }]);
+        if (body.resubscribe) {
+          // Restore the lists they had left, now with a new, documented permission basis.
+          const r = await db.query(
+            `UPDATE portal.list_members SET status = 'subscribed', confirmed_at = NOW(), unsubscribed_at = NULL, updated_at = NOW()
+              WHERE contact_id = $1 AND status = 'unsubscribed'`, [c.id]);
+          restored = r.rowCount;
         }
       }
-    }
-    return sub;
-  }
+      await recipientEvent(db, { contactId: c?.id, emailHash: sup.email_hash, type: 'suppression_lifted',
+        from: sup.reason, to: 'active', details: { reason: body.reason, restored_lists: restored }, actorType: 'user', actorId: req.user.id });
+      await audit(db, req, 'suppression.lifted', { targetType: 'suppression', targetId: id,
+        details: { previous_reason: sup.reason, consent_method: body.consent.method, restored_lists: restored } });
+      return c;
+    });
+    res.json({ success: true, data: { id, contactId: contact?.id ?? null } });
+  });
 
   r.get('/check', requirePermission('contacts:read'), async (req, res) => {
     const q = parse(z.object({ email: z.string().trim().max(254) }), req.query);

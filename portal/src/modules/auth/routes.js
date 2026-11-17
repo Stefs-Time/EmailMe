@@ -26,7 +26,7 @@ function permissionsFor(role) {
   return Object.keys(PERMISSIONS).filter((p) => can(role, p));
 }
 
-function authRoutes({ pool, config }) {
+function authRoutes({ pool, settings }) {
   const r = express.Router();
 
   const loginLimiter = rateLimit({
@@ -42,15 +42,17 @@ function authRoutes({ pool, config }) {
   });
 
   /** Session bootstrap for the SPA: who am I + CSRF token. */
-  r.get('/session', (req, res) => {
+  r.get('/session', async (req, res) => {
     const csrfToken = ensureCsrfToken(req);
+    const s = await settings.all();
+    const { rowCount } = await pool.query('SELECT 1 FROM portal.users LIMIT 1');
     res.json({
       success: true,
       data: {
         user: req.user ? { ...req.user, permissions: permissionsFor(req.user.role) } : null,
         csrfToken,
-        orgName: config.ORG_NAME,
-        listmonkUrl: config.LISTMONK_PUBLIC_URL,
+        orgName: s.org_name,
+        setupNeeded: rowCount === 0,
       },
     });
   });

@@ -20,12 +20,12 @@ async function audit(db, req, action, { targetType, targetId, details } = {}) {
   );
 }
 
-async function recipientEvent(db, { subscriberId, emailHash, type, from, to, details, actorType = 'system', actorId }) {
+async function recipientEvent(db, { contactId, emailHash, campaignId, type, from, to, details, actorType = 'system', actorId }) {
   await db.query(
     `INSERT INTO portal.recipient_events
-       (subscriber_id, email_hash, event_type, from_status, to_status, details, actor_type, actor_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [subscriberId ?? null, emailHash ?? null, type, from ?? null, to ?? null, details ?? {}, actorType, actorId ?? null],
+       (contact_id, email_hash, campaign_id, event_type, from_status, to_status, details, actor_type, actor_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [contactId ?? null, emailHash ?? null, campaignId ?? null, type, from ?? null, to ?? null, details ?? {}, actorType, actorId ?? null],
   );
 }
 

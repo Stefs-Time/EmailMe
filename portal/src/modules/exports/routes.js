@@ -38,7 +38,7 @@ function exportRoutes({ pool }) {
     const q = parse(filterSchema, req.query);
     const filters = toFilters(q);
     await audit(pool, req, 'export.contacts', { details: { filters: q } });
-    const { rows: lists } = await pool.query('SELECT id, name FROM lists');
+    const { rows: lists } = await pool.query('SELECT id, name FROM portal.lists');
     const listName = new Map(lists.map((l) => [l.id, l.name]));
     // Dedicated client: the export runs as one long read-only transaction so
     // the snapshot is consistent across pages.
@@ -48,10 +48,10 @@ function exportRoutes({ pool }) {
       const pages = (async function* gen() {
         for await (const page of repo.iterateContacts(client, filters)) {
           yield page.map((c) => [
-            c.id, c.email, c.attribs?.first_name || '', c.attribs?.last_name || '', c.name, c.attribs?.company || '',
+            c.id, c.email, c.first_name, c.last_name, c.name, c.company,
             c.status, (c.list_ids || []).map((id) => listName.get(id) || id).join('; '),
-            c.attribs?.source || '', c.attribs?.consent?.method || '', c.attribs?.consent?.date || '',
-            c.attribs?.consent?.purpose || '', c.hard_bounces, c.soft_bounces, c.complaints, c.last_bounce_at,
+            c.source, c.consent?.method || '', c.consent?.date || '',
+            c.consent?.purpose || '', c.hard_bounces, c.soft_bounce_events, c.complaints, c.last_bounce_at,
             c.suppression_reason || '', c.suppressed_at, c.last_unsubscribed_at, c.created_at, c.updated_at,
           ]);
         }
@@ -90,12 +90,12 @@ function exportRoutes({ pool }) {
     await streamCsv(res, `consent-history-${stamp()}.csv`,
       ['Email', 'Contact ID', 'Action', 'Method', 'Purpose', 'Source', 'Consent obtained', 'Evidence', 'Recorded at', 'Recorded by'],
       pager(pool,
-        `SELECT c.id, c.email, c.subscriber_id, c.action, c.method, c.purpose, c.source, c.obtained_at, c.evidence,
+        `SELECT c.id, c.email, c.contact_id, c.action, c.method, c.purpose, c.source, c.obtained_at, c.evidence,
                 c.created_at, u.name AS recorded_by
            FROM portal.consent_records c LEFT JOIN portal.users u ON u.id = c.recorded_by
           WHERE ($1::timestamptz IS NULL OR c.created_at >= $1) AND ($2::timestamptz IS NULL OR c.created_at < $2)
             AND c.id > $3 ORDER BY c.id LIMIT $4`, [q.from || null, q.to || null],
-        (c) => [c.email || '[erased]', c.subscriber_id, c.action, c.method, c.purpose, c.source, c.obtained_at,
+        (c) => [c.email || '[erased]', c.contact_id, c.action, c.method, c.purpose, c.source, c.obtained_at,
           c.evidence, c.created_at, c.recorded_by || 'system']));
   });
 
@@ -103,14 +103,14 @@ function exportRoutes({ pool }) {
     const q = parse(range, req.query);
     await audit(pool, req, 'export.events', { details: q });
     await streamCsv(res, `recipient-history-${stamp()}.csv`,
-      ['Event ID', 'Contact ID', 'Event', 'From', 'To', 'Details', 'Actor', 'At'],
+      ['Event ID', 'Contact ID', 'Campaign ID', 'Event', 'From', 'To', 'Details', 'Actor', 'At'],
       pager(pool,
-        `SELECT e.id, e.subscriber_id, e.event_type, e.from_status, e.to_status, e.details, e.actor_type, e.created_at,
+        `SELECT e.id, e.contact_id, e.campaign_id, e.event_type, e.from_status, e.to_status, e.details, e.actor_type, e.created_at,
                 u.name AS actor_name
            FROM portal.recipient_events e LEFT JOIN portal.users u ON u.id = e.actor_id
           WHERE ($1::timestamptz IS NULL OR e.created_at >= $1) AND ($2::timestamptz IS NULL OR e.created_at < $2)
             AND e.id > $3 ORDER BY e.id LIMIT $4`, [q.from || null, q.to || null],
-        (e) => [e.id, e.subscriber_id, e.event_type, e.from_status, e.to_status, e.details,
+        (e) => [e.id, e.contact_id, e.campaign_id, e.event_type, e.from_status, e.to_status, e.details,
           e.actor_name || e.actor_type, e.created_at]));
   });
 
@@ -118,16 +118,16 @@ function exportRoutes({ pool }) {
     const q = parse(range, req.query);
     await audit(pool, req, 'export.bounces', { details: q });
     await streamCsv(res, `bounces-${stamp()}.csv`,
-      ['Bounce ID', 'Email', 'Campaign', 'listmonk type', 'Classification', 'Enhanced code', 'Reason', 'Action', 'Source', 'Bounced at'],
+      ['Bounce ID', 'Email', 'Campaign', 'Classification', 'SMTP code', 'Enhanced code', 'Reason', 'Action', 'Source', 'Bounced at'],
       pager(pool,
-        `SELECT b.id, s.email, c.name AS campaign, b.listmonk_type, b.classification, b.enhanced_code, b.reason,
+        `SELECT b.id, s.email, c.name AS campaign, b.classification, b.smtp_code, b.enhanced_code, b.reason,
                 b.action_taken, b.source, b.bounced_at
            FROM portal.bounce_events b
-           LEFT JOIN subscribers s ON s.id = b.subscriber_id
-           LEFT JOIN campaigns c ON c.id = b.campaign_id
+           LEFT JOIN portal.contacts s ON s.id = b.contact_id
+           LEFT JOIN portal.campaigns c ON c.id = b.campaign_id
           WHERE ($1::timestamptz IS NULL OR b.bounced_at >= $1) AND ($2::timestamptz IS NULL OR b.bounced_at < $2)
             AND b.id > $3 ORDER BY b.id LIMIT $4`, [q.from || null, q.to || null],
-        (b) => [b.id, b.email || '[deleted]', b.campaign, b.listmonk_type, b.classification, b.enhanced_code,
+        (b) => [b.id, b.email || '[deleted]', b.campaign, b.classification, b.smtp_code, b.enhanced_code,
           b.reason, b.action_taken, b.source, b.bounced_at]));
   });
 

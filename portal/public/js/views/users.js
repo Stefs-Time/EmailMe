@@ -8,7 +8,7 @@ const ROLES = [
 ];
 
 export async function render(el, ctx) {
-  mount(el, html`<div class="page-head"><div><h1>Users</h1><p>People who can sign in to MailHarbor. listmonk has its own separate logins for writing campaigns.</p></div>
+  mount(el, html`<div class="page-head"><div><h1>Users</h1><p>People who can sign in to MailHarbor.</p></div>
     <button class="btn btn-primary" id="new"><i class="bi bi-person-plus me-1"></i>Add user</button></div><div class="card" id="t">${loading()}</div>`);
   let users = [];
   async function load() {

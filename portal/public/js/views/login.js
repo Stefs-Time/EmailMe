@@ -15,7 +15,7 @@ export function renderLogin(root, session, onLoggedIn) {
           <li><i class="bi bi-check2-circle me-2"></i>Campaign reports and POPIA-ready exports</li>
         </ul>
       </div>
-      <small class="opacity-75">${session.orgName} · powered by listmonk</small>
+      <small class="opacity-75">${session.orgName}</small>
     </div>
     <div class="login-form">
       <form id="login-form" novalidate>

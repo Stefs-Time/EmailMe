@@ -66,12 +66,12 @@ export async function render(el, ctx) {
         </tr></thead><tbody>
         ${r.data.map((c) => html`<tr class="row-link" data-id="${c.id}">
           ${canWrite ? html`<td class="ps-3"><input type="checkbox" class="form-check-input" data-sel="${c.id}" ${selected.has(c.id) ? raw('checked') : ''} aria-label="Select ${c.email}"></td>` : ''}
-          <td><a class="cell-email text-decoration-none" href="#/contacts/${c.id}">${c.email}</a><div class="small text-muted-2">${c.name}${c.attribs?.company ? ` · ${c.attribs.company}` : ''}</div></td>
+          <td><a class="cell-email text-decoration-none" href="#/contacts/${c.id}">${c.email}</a><div class="small text-muted-2">${c.name}${c.company ? ` · ${c.company}` : ''}</div></td>
           <td>${statusBadge(c.status)}</td>
           <td class="small">${(c.list_ids || []).slice(0, 2).map((id) => listName.get(id) || `#${id}`).join(', ')}${(c.list_ids || []).length > 2 ? ` +${c.list_ids.length - 2}` : ''}</td>
-          <td class="small">${c.attribs?.source || '–'}</td>
-          <td class="small">${c.hard_bounces + c.soft_bounces + c.complaints > 0
-            ? html`${c.hard_bounces ? html`<span class="text-danger">${c.hard_bounces} hard</span> ` : ''}${c.soft_bounces ? `${c.soft_bounces} soft ` : ''}${c.complaints ? html`<span class="text-danger">${c.complaints} complaint</span>` : ''}<div class="text-muted-2">${ago(c.last_bounce_at)}</div>`
+          <td class="small">${c.source || '–'}</td>
+          <td class="small">${c.hard_bounces + c.soft_bounce_events + c.complaints > 0
+            ? html`${c.hard_bounces ? html`<span class="text-danger">${c.hard_bounces} hard</span> ` : ''}${c.soft_bounce_events ? `${c.soft_bounce_events} soft ` : ''}${c.complaints ? html`<span class="text-danger">${c.complaints} complaint</span>` : ''}<div class="text-muted-2">${ago(c.last_bounce_at)}</div>`
             : '–'}</td>
           <td class="small text-nowrap">${date(c.created_at)}</td>
         </tr>`)}

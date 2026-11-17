@@ -19,7 +19,7 @@ export async function render(el, ctx) {
   const s = d.statuses;
   const total = d.totals.contacts;
   const eligible = (s.active || 0) + (s.soft_bounced || 0);
-  const order = ['active', 'soft_bounced', 'unconfirmed', 'pending_review', 'unsubscribed', 'hard_bounced', 'complaint', 'blocklisted', 'inactive', 'no_lists'];
+  const order = ['active', 'soft_bounced', 'unconfirmed', 'pending_review', 'unsubscribed', 'hard_bounced', 'complaint', 'blocklisted', 'no_lists'];
 
   mount(el, html`
     <div class="page-head">

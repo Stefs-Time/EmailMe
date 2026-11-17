@@ -222,3 +222,25 @@ code { color: #22303f; background: #eef1f5; padding: .1rem .35rem; border-radius
 
 /* Toasts below the top bar, clear of page footers and primary actions */
 .toast-stack { margin-top: 56px; z-index: 1090; }
+
+/* Campaign editor */
+.list-pick { max-height: 220px; overflow-y: auto; }
+.editor-toolbar { display: flex; flex-wrap: wrap; gap: .25rem; padding: .5rem .75rem; background: #f8fafc; align-items: center; }
+.editor-toolbar .sep { width: 1px; height: 1.4rem; background: var(--mh-border); margin: 0 .25rem; }
+.editor-surface { min-height: 340px; padding: 1.25rem 1.5rem; outline: none; line-height: 1.6; font-size: 1rem; background: #fff; overflow-wrap: anywhere; }
+.editor-surface:focus-visible { box-shadow: inset 0 0 0 2px #6d97cc; }
+.editor-surface h2, .editor-surface h3 { color: var(--mh-navy); }
+.editor-surface img { max-width: 100%; height: auto; }
+.editor-code { min-height: 380px; border: 0; border-radius: 0; font-size: .85rem; }
+.mh-align-center { text-align: center; }
+.mh-align-right { text-align: right; }
+.mh-button { background: #1f4e8c; color: #fff !important; padding: 10px 20px; border-radius: 6px; text-decoration: none; display: inline-block; }
+.preview-card { position: sticky; top: 76px; }
+.preview-frame-wrap { background: #eef1f5; padding: 12px; display: flex; justify-content: center; }
+#preview { width: 100%; height: 640px; border: 1px solid var(--mh-border); border-radius: 6px; background: #fff; transition: width .2s; }
+.camp-status.sending { background: #e6f5f3; color: #0b7469; }
+.camp-status.sent { background: #e7f6ee; color: #13734a; }
+.camp-status.draft { background: #eef1f5; color: #46525f; }
+
+.mw-520 { max-width: 520px; }
+.mw-200 { max-width: 200px; }

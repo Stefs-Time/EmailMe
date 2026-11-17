@@ -22,7 +22,7 @@ SELECT c.id, c.name, c.subject, c.status, c.created_at, c.send_at, c.started_at,
        COALESCE(b.complaint, 0) AS complaints,
        COALESCE(t.opens, 0) AS opens, COALESCE(t.unique_opens, 0) AS unique_opens,
        COALESCE(t.clicks, 0) AS clicks, COALESCE(t.unique_clicks, 0) AS unique_clicks,
-       COALESCE(u.n, 0) AS unsubscribes
+       COALESCE(u.n, 0) AS unsubscribes, COALESCE(u.stayed, 0) AS stayed, COALESCE(u.prefs, 0) AS preference_changes
   FROM portal.campaigns c
   LEFT JOIN LATERAL (
     SELECT COUNT(*)::int AS targeted,
@@ -44,8 +44,11 @@ SELECT c.id, c.name, c.subject, c.status, c.created_at, c.send_at, c.started_at,
            COUNT(DISTINCT message_id) FILTER (WHERE kind = 'click')::int AS unique_clicks
       FROM portal.tracking_events WHERE campaign_id = c.id) t ON TRUE
   LEFT JOIN LATERAL (
-    SELECT COUNT(DISTINCT COALESCE(contact_id::text, email_hash))::int AS n FROM portal.recipient_events
-     WHERE campaign_id = c.id AND event_type = 'unsubscribed') u ON TRUE`;
+    SELECT COUNT(DISTINCT COALESCE(contact_id::text, email_hash)) FILTER (WHERE event_type = 'unsubscribed')::int AS n,
+           COUNT(DISTINCT COALESCE(contact_id::text, email_hash)) FILTER (WHERE event_type = 'stayed_subscribed')::int AS stayed,
+           COUNT(DISTINCT COALESCE(contact_id::text, email_hash)) FILTER (WHERE event_type = 'preferences_updated')::int AS prefs
+      FROM portal.recipient_events
+     WHERE campaign_id = c.id AND event_type IN ('unsubscribed', 'stayed_subscribed', 'preferences_updated')) u ON TRUE`;
 
 function shapeCampaign(c) {
   const failures = c.hard_bounces + c.soft_bounces + c.review_bounces;
@@ -57,7 +60,7 @@ function shapeCampaign(c) {
   };
 }
 
-function reportRoutes({ pool }) {
+function reportRoutes({ pool, settings, config }) {
   const r = express.Router();
   r.use(requirePermission('reports:read'));
 
@@ -189,6 +192,48 @@ function reportRoutes({ pool }) {
                     FROM portal.bounce_events WHERE bounced_at > NOW() - $1 * INTERVAL '1 day' GROUP BY 1 ORDER BY 3 DESC LIMIT 10`, [q.days]),
     ]);
     res.json({ success: true, data: { daily: daily.rows, byClass: byClass.rows, byDomain: byDomain.rows, byCode: byCode.rows } });
+  });
+
+  /**
+   * Mail usage through your SMTP server: volume per day and kind, failures,
+   * current hour against the hourly cap, queue, and recipient actions.
+   */
+  r.get('/usage', async (req, res) => {
+    const q = parse(z.object({ days: z.coerce.number().int().min(1).max(365).default(30) }), req.query);
+    const [daily, totals, actions, byCampaign] = await Promise.all([
+      pool.query(`SELECT d::date AS day,
+                         COUNT(m.id) FILTER (WHERE m.kind = 'campaign')::int AS campaign,
+                         COUNT(m.id) FILTER (WHERE m.kind = 'test')::int AS test,
+                         COUNT(m.id) FILTER (WHERE m.kind = 'optin')::int AS optin
+                    FROM generate_series(date_trunc('day', NOW()) - ($1 - 1) * INTERVAL '1 day', date_trunc('day', NOW()), INTERVAL '1 day') d
+                    LEFT JOIN portal.messages m ON m.sent_at >= d AND m.sent_at < d + INTERVAL '1 day'
+                   GROUP BY d ORDER BY d`, [q.days]),
+      pool.query(`SELECT COUNT(*) FILTER (WHERE sent_at > NOW() - INTERVAL '1 hour')::int AS last_hour,
+                         COUNT(*) FILTER (WHERE sent_at >= date_trunc('day', NOW()))::int AS today,
+                         COUNT(*) FILTER (WHERE sent_at >= date_trunc('month', NOW()))::int AS this_month,
+                         COUNT(*) FILTER (WHERE sent_at > NOW() - $1 * INTERVAL '1 day')::int AS period,
+                         (SELECT COUNT(*)::int FROM portal.messages WHERE status IN ('failed', 'unknown') AND updated_at > NOW() - $1 * INTERVAL '1 day') AS failed,
+                         (SELECT COUNT(*)::int FROM portal.messages WHERE status IN ('queued', 'sending')) AS queued
+                    FROM portal.messages WHERE sent_at > LEAST(date_trunc('month', NOW()), NOW() - $1 * INTERVAL '1 day')`, [q.days]),
+      pool.query(`SELECT event_type, COUNT(*)::int AS n FROM portal.recipient_events
+                   WHERE actor_type = 'recipient' AND created_at > NOW() - $1 * INTERVAL '1 day'
+                     AND event_type IN ('unsubscribed', 'stayed_subscribed', 'preferences_updated', 'optin_confirmed')
+                   GROUP BY 1`, [q.days]),
+      pool.query(`SELECT c.id, c.name, COUNT(m.id)::int AS sent, MIN(m.sent_at) AS first_sent, MAX(m.sent_at) AS last_sent
+                    FROM portal.messages m JOIN portal.campaigns c ON c.id = m.campaign_id
+                   WHERE m.kind = 'campaign' AND m.sent_at > NOW() - $1 * INTERVAL '1 day'
+                   GROUP BY c.id, c.name ORDER BY sent DESC LIMIT 10`, [q.days]),
+    ]);
+    const s = await settings.all();
+    res.json({ success: true, data: {
+      days: q.days,
+      daily: daily.rows,
+      totals: totals.rows[0],
+      limits: { per_second: s.send_rate_per_second, per_hour: s.send_max_per_hour || null },
+      smtp: { host: config?.SMTP_HOST || null, port: config?.SMTP_PORT || null },
+      actions: Object.fromEntries(actions.rows.map((a) => [a.event_type, a.n])),
+      byCampaign: byCampaign.rows,
+    } });
   });
 
   return r;

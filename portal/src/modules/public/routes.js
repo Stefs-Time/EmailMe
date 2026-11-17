@@ -175,6 +175,104 @@ function publicRoutes({ pool, settings, logger }) {
     return page(res, { title: 'Confirmed', org: s.org_name, body: `<h1>Thank you!</h1><p>Your subscription to ${escapeHtml(s.org_name)} is confirmed.</p>` });
   });
 
+  /** Page for links in test emails, which belong to no contact. */
+  const testPage = (res, s) => page(res, { title: 'Test email', org: s.org_name,
+    body: '<h1>This is a test email</h1><p>In the real campaign, this link opens the recipient\'s own page.</p>' });
+
+  // ---- Stay subscribed (re-engagement) ----------------------------------
+  r.get('/s/stay/:token', async (req, res) => {
+    const s = await settings.all();
+    const m = await messageByToken(req.params.token);
+    if (m?.kind === 'test') return testPage(res, s);
+    if (!m || !m.contact_id) return page(res, { title: 'Link not valid', org: s.org_name, status: 404, body: '<h1>This link is no longer valid</h1>' });
+    return page(res, { title: 'Stay subscribed', org: s.org_name, body: `<h1>Stay on our list?</h1>
+      <p>Confirm that <strong>${escapeHtml(maskEmail(m.contact_email))}</strong> would like to keep receiving emails from ${escapeHtml(s.org_name)}.</p>
+      <form method="post"><button type="submit" class="btn">Yes, keep me subscribed</button></form>
+      <p class="muted">Changed your mind? <a href="/u/${escapeHtml(m.uuid)}">Unsubscribe instead</a>.</p>` });
+  });
+
+  r.post('/s/stay/:token', async (req, res) => {
+    const s = await settings.all();
+    const m = await messageByToken(req.params.token);
+    if (m?.kind === 'test') return testPage(res, s);
+    if (!m || !m.contact_id) return page(res, { title: 'Link not valid', org: s.org_name, status: 404, body: '<h1>This link is no longer valid</h1>' });
+    const ok = await withTransaction(pool, async (db) => {
+      const { rows } = await db.query('SELECT email_hash FROM portal.contacts WHERE id = $1', [m.contact_id]);
+      const sup = await db.query('SELECT 1 FROM portal.suppressions WHERE email_hash = $1 AND lifted_at IS NULL', [rows[0].email_hash]);
+      if (sup.rowCount) return false; // suppressed people are not silently re-activated
+      // Engagement: counts as a click, clears earlier temporary failures.
+      await db.query('UPDATE portal.contacts SET last_click_at = NOW(), soft_bounces = 0, updated_at = NOW() WHERE id = $1', [m.contact_id]);
+      await recipientEvent(db, { contactId: m.contact_id, emailHash: rows[0].email_hash, campaignId: m.campaign_id,
+        type: 'stayed_subscribed', details: { ip: req.ip }, actorType: 'recipient' });
+      return true;
+    });
+    if (!ok) {
+      return page(res, { title: 'Unsubscribed', org: s.org_name, body: `<h1>You are currently unsubscribed</h1>
+        <p>To receive our emails again, please contact ${escapeHtml(s.org_name)}${s.reply_to ? ` at ${escapeHtml(s.reply_to)}` : ''}.</p>` });
+    }
+    return page(res, { title: 'Thank you', org: s.org_name, body: `<h1>Thank you!</h1><p>You'll keep receiving emails from ${escapeHtml(s.org_name)}.</p>
+      <p class="muted">You can <a href="/p/${escapeHtml(m.uuid)}">manage your preferences</a> at any time.</p>` });
+  });
+
+  // ---- Preference centre --------------------------------------------------
+  async function preferenceState(contactId) {
+    const { rows: c } = await pool.query('SELECT email, email_hash FROM portal.contacts WHERE id = $1', [contactId]);
+    const { rows: lists } = await pool.query(
+      `SELECT l.id, l.name, l.description, m.status FROM portal.list_members m JOIN portal.lists l ON l.id = m.list_id
+        WHERE m.contact_id = $1 ORDER BY l.name`, [contactId]);
+    const sup = await pool.query('SELECT 1 FROM portal.suppressions WHERE email_hash = $1 AND lifted_at IS NULL', [c[0].email_hash]);
+    return { email: c[0].email, lists, suppressed: sup.rowCount > 0 };
+  }
+
+  function preferencePage(res, s, m, st, notice = '') {
+    if (st.suppressed || !st.lists.some((l) => l.status !== 'unsubscribed')) {
+      return page(res, { title: 'Preferences', org: s.org_name, body: `${notice}<h1>You are unsubscribed</h1>
+        <p><strong>${escapeHtml(maskEmail(st.email))}</strong> does not receive marketing emails from ${escapeHtml(s.org_name)}.</p>
+        <p class="muted">To subscribe again, please contact ${escapeHtml(s.org_name)}${s.reply_to ? ` at ${escapeHtml(s.reply_to)}` : ''}.</p>` });
+    }
+    const items = st.lists.map((l) => (l.status === 'unsubscribed'
+      ? `<li class="pref muted"><span class="pref-name">${escapeHtml(l.name)}</span> <span class="pref-state">Unsubscribed</span></li>`
+      : `<li class="pref"><label><input type="checkbox" name="keep" value="${l.id}" checked> <span class="pref-name">${escapeHtml(l.name)}</span>${l.status === 'unconfirmed' ? ' <span class="pref-state">awaiting confirmation</span>' : ''}${l.description ? `<span class="pref-desc">${escapeHtml(l.description)}</span>` : ''}</label></li>`)).join('');
+    return page(res, { title: 'Email preferences', org: s.org_name, body: `${notice}<h1>Email preferences</h1>
+      <p>Choose what <strong>${escapeHtml(maskEmail(st.email))}</strong> receives from ${escapeHtml(s.org_name)}. Untick a list to stop receiving it.</p>
+      <form method="post"><ul class="prefs">${items}</ul>
+        <button type="submit" name="action" value="save" class="btn">Save my preferences</button>
+        <button type="submit" name="action" value="all" class="btn btn-secondary">Unsubscribe from everything</button></form>` });
+  }
+
+  r.get('/p/:token', async (req, res) => {
+    const s = await settings.all();
+    const m = await messageByToken(req.params.token);
+    if (m?.kind === 'test') return testPage(res, s);
+    if (!m || !m.contact_id) return page(res, { title: 'Link not valid', org: s.org_name, status: 404, body: '<h1>This link is no longer valid</h1>' });
+    return preferencePage(res, s, m, await preferenceState(m.contact_id));
+  });
+
+  r.post('/p/:token', async (req, res) => {
+    const s = await settings.all();
+    const m = await messageByToken(req.params.token);
+    if (m?.kind === 'test') return testPage(res, s);
+    if (!m || !m.contact_id) return page(res, { title: 'Link not valid', org: s.org_name, status: 404, body: '<h1>This link is no longer valid</h1>' });
+    const before = await preferenceState(m.contact_id);
+    const keep = new Set([].concat(req.body?.keep || []).map(Number).filter(Number.isInteger));
+    const active = before.lists.filter((l) => l.status !== 'unsubscribed');
+    const everything = req.body?.action === 'all' || (active.length && active.every((l) => !keep.has(l.id)));
+    // Only lists this contact is on can be changed; the form can never re-subscribe anyone.
+    const drop = active.filter((l) => !keep.has(l.id)).map((l) => l.id);
+    if (everything || drop.length) {
+      await withTransaction(pool, async (db) => {
+        await unsubscribeContact(db, {
+          contactId: m.contact_id, campaignId: m.campaign_id, listIds: everything ? null : drop, global: everything,
+          actorType: 'recipient', source: 'preference-centre',
+        });
+        await recipientEvent(db, { contactId: m.contact_id, campaignId: m.campaign_id, type: 'preferences_updated',
+          details: { unsubscribed_lists: everything ? 'all' : drop }, actorType: 'recipient' });
+      });
+    }
+    const notice = '<p class="notice">Your preferences have been saved.</p>';
+    return preferencePage(res, s, m, await preferenceState(m.contact_id), notice);
+  });
+
   // ---- Provider webhook --------------------------------------------------
   /**
    * POST /webhooks/bounce?token=… with JSON (one event or an array):

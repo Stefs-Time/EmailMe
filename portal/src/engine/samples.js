@@ -83,11 +83,11 @@ const SAMPLES = [
     blocks: [
       heading('Are you still interested, {{ first_name | "there" }}?', { align: 'center' }),
       text('<p>We haven\'t heard from you in a while, and we only want to email people who find our updates useful.</p><p>If you\'d like to keep hearing from us about [what you send: specials, news, events], just click below.</p>', { align: 'center' }),
-      button('Yes, keep me on the list'),
+      button('Yes, keep me on the list', { link: 'stay' }),
       spacer(8),
       text('<p>Not interested any more? <a href="{{ unsubscribe_url }}">Unsubscribe here</a>, no hard feelings. We\'ll stop emailing you straight away.</p>', { align: 'center', size: 14, color: '#5f6b7a' }),
     ],
-    tip: 'Point the button at a page on your website (for example a "thank you" page). The click counts as engagement in the campaign report, so you can see who wants to stay.',
+    tip: 'The button goes to MailHarbor\'s own "stay subscribed" page. Everyone who confirms is counted in the campaign report as "Stayed subscribed".',
   },
   {
     id: 'find-out-more',

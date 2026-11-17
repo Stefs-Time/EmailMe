@@ -111,3 +111,29 @@ test('template builder: needs exactly one top-level content block; campaigns can
   assert.throws(() => renderDocument({ blocks: [{ id: 'a', type: 'content' }] }));
   assert.throws(() => renderDocument({ blocks: [{ id: 'f', type: 'footer' }] }));
 });
+
+test('builder: platform-managed link destinations', () => {
+  const { renderDocument, renderTemplate, starterTemplate } = require('../../src/engine/blocks');
+  const { html } = renderDocument({ blocks: [
+    { id: 'a', type: 'button', props: { label: 'Unsubscribe', link: 'unsubscribe' } },
+    { id: 'b', type: 'button', props: { label: 'Preferences', link: 'preferences' } },
+    { id: 'c', type: 'button', props: { label: 'Stay', link: 'stay' } },
+    { id: 'd', type: 'button', props: { label: 'Web', link: 'view' } },
+    { id: 'e', type: 'button', props: { label: 'Site', link: 'url', url: 'https://acme.example' } },
+  ] });
+  for (const tag of ['unsubscribe_url', 'preferences_url', 'stay_url', 'view_url']) assert.match(html, new RegExp(`href="\\{\\{ ${tag} \\}\\}"`));
+  assert.match(html, /href="https:\/\/acme\.example"/);
+  assert.throws(() => renderDocument({ blocks: [{ id: 'x', type: 'button', props: { link: 'javascript' } }] }));
+
+  const m = renderMessage({
+    campaign: { subject: 's', body_html: html, track_clicks: true, track_opens: false }, contact: { email: 'x@y.z' }, token: 'tok',
+    settings: { org_name: 'A', org_address: 'B' }, publicUrl: 'https://mh.example', links: () => 9,
+  });
+  assert.match(m.html, /href="https:\/\/mh\.example\/p\/tok"/);
+  assert.match(m.html, /href="https:\/\/mh\.example\/s\/stay\/tok"/);
+  assert.match(m.html, /href="https:\/\/mh\.example\/t\/c\/tok\/9"/, 'web addresses are still click-tracked');
+
+  assert.match(renderTemplate(starterTemplate()).html, /href="\{\{ preferences_url \}\}"/, 'template footer links to preferences');
+  const noPrefs = renderTemplate({ ...starterTemplate(), blocks: starterTemplate().blocks.map((b) => (b.type === 'footer' ? { ...b, props: { prefs: false } } : b)) });
+  assert.doesNotMatch(noPrefs.html, /preferences_url/);
+});

@@ -23,6 +23,9 @@ export async function render(el, ctx, [id]) {
       ['Unsubscribes', c.unsubscribes, 'envelope-x', c.rates.unsubscribe],
       ['Unique opens', c.unique_opens, 'envelope-open', c.rates.open],
       ['Unique clicks', c.unique_clicks, 'cursor', c.rates.click],
+      // Platform pages: only shown when the campaign used them
+      ...(c.stayed ? [['Stayed subscribed', c.stayed, 'hand-thumbs-up', null]] : []),
+      ...(c.preference_changes ? [['Preference changes', c.preference_changes, 'sliders', null]] : []),
     ];
     const done = c.sent + c.failed + c.skipped;
     const progress = c.targeted ? (done / c.targeted) * 100 : 0;

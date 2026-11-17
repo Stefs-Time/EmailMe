@@ -16,7 +16,7 @@ There have been two rounds:
 | Browser walkthrough | Fresh database → first-run setup with the log code → settings (address, SMTP test, bounce tab) → list + contact → campaign editor (subject, preheader, personalisation tag, button, autosave, readiness) → test send → send now → report → templates → system health |
 | Role crawl | Signed in as **viewer** and **manager**, opened all 21 routes (including deep links to admin-only and edit screens), recorded the menu, every visible action, failed API calls and page errors |
 | Accessibility | axe-core (WCAG 2 A/AA) on every screen in the walkthrough and the role crawl |
-| Functional regression | 21 unit tests + 23 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)) |
+| Functional regression | 22 unit tests + 24 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)) |
 
 ## 2. Round 2 findings and fixes
 
@@ -74,6 +74,26 @@ How it was tested:
 | B8 | Touch | Low | HTML5 drag and drop does not work on phones, and Firefox can't drag a `<button>`. | Tiles are focusable elements; tap or Enter adds below the selected block | Added, tested (phone emulation) |
 
 Result: 15/15 pass, 0 console errors with the CSP enforced, axe 0 violations, no horizontal scroll at 390px.
+
+### Platform-managed recipient links and mail usage (added 17 Nov 2026, from UAT feedback)
+
+Feedback: "Unsubscribe etc should be managed in the platform. If those buttons are used it should auto-create the link."
+
+| # | Area | Sev. | Finding / request | Change | Status |
+|---|---|---|---|---|---|
+| L1 | Builder | Medium | Buttons for unsubscribe, "keep me subscribed" and so on needed a typed URL, and there was no built-in page for them. | Buttons and text links choose a destination: web address, Unsubscribe, Manage preferences, Stay subscribed or View in browser. MailHarbor creates each recipient's link at send time, and the checklist only asks for a URL for web-address buttons | Done, tested |
+| L2 | Compliance | Medium | No way for recipients to opt out of individual lists. | Preference centre (`/p/…`): untick lists or unsubscribe from everything. It can only opt out (a forged form can't re-subscribe); the template footer links to it (switchable) | Done, tested |
+| L3 | Re-engagement | Medium | "Are you still interested?" had nowhere to send people. | Stay-subscribed page (`/s/stay/…`): the GET shows a page, the POST records it; it never re-activates suppressed addresses. Counted per campaign; the sample uses it by default | Done, tested |
+| U1 | Reports | Medium | No view of overall sending volume through the SMTP server. | Mail usage page: today, month, last hour against the hourly limit, queue, daily volume by kind, SMTP rejections, recipient actions, campaigns sent | Done, tested |
+
+Browser test (8 steps):
+- a button set to "Unsubscribe page" needs no URL;
+- a text link to "Manage preferences";
+- links in a test send;
+- a real send;
+- the preference and stay pages on a phone (axe: 0 violations);
+- the Mail usage page (axe: 0 violations);
+- the "Are you still interested?" sample is ready to send without a link.
 
 ### Personalisation chips and sample designs (added 17 Nov 2026, from UAT feedback)
 
@@ -176,7 +196,7 @@ Role crawl (viewer, manager × 21 routes):
 - **Viewer:** no write controls on any screen; the admin-only and edit routes show the permission page; 0 API errors, 0 page errors, 0 axe violations.
 - **Manager:** campaign, template, import, list, contact, suppression and export actions present. Settings, Users, Audit and Lift are absent. 0 API errors, 0 page errors, 0 axe violations.
 
-Acceptance suite: 23/23 pass. Unit tests: 21/21 pass.
+Acceptance suite: 24/24 pass. Unit tests: 22/22 pass.
 
 ## 5. Round 1 (listmonk-based build): findings still relevant
 

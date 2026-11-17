@@ -32,14 +32,14 @@ const LABEL = Object.fromEntries(BLOCKS.map((b) => [b.type, b.label]));
 const DEFAULTS = {
   heading: { text: 'Your heading', level: 2, align: 'left', color: '#16365f', pad: 12, bg: '' },
   text: { html: '<p>Write your text here.</p>', align: 'left', color: '#1b2430', size: 16, pad: 12, bg: '' },
-  button: { label: 'Find out more', url: '', align: 'center', bg: '#1f4e8c', color: '#ffffff', radius: 6, full: false, pad: 16, bg_row: '' },
+  button: { label: 'Find out more', link: 'url', url: '', align: 'center', bg: '#1f4e8c', color: '#ffffff', radius: 6, full: false, pad: 16, bg_row: '' },
   image: { src: '', alt: '', href: '', width: 100, align: 'center', pad: 12, bg: '' },
   columns: { ratio: '50-50', gap: 16, columns: [[], []], pad: 12, bg: '' },
   divider: { color: '#dde3ea', thickness: 1, pad: 12, bg: '' },
   spacer: { height: 24 },
   html: { html: '<p>Custom HTML</p>', pad: 12, bg: '' },
   content: {},
-  footer: { text: 'You are receiving this because you subscribed or are a customer of {{ org_name }}.', align: 'center', color: '#5f6b7a', size: 12, pad: 16, bg: '' },
+  footer: { text: 'You are receiving this because you subscribed or are a customer of {{ org_name }}.', align: 'center', color: '#5f6b7a', size: 12, pad: 16, bg: '', prefs: true },
 };
 const PAGE_DEFAULTS = { page_bg: '#f4f6f9', body_bg: '#ffffff', width: 600, font: 'arial', radius: 8, body_pad: 28 };
 const FONTS = {
@@ -49,6 +49,21 @@ const FONTS = {
   trebuchet: ['Trebuchet MS', "'Trebuchet MS', Arial, sans-serif"],
   georgia: ['Georgia (serif)', "Georgia, 'Times New Roman', serif"],
 };
+/**
+ * Where a button or link can go. Everything except "url" is a MailHarbor page:
+ * each recipient gets their own link automatically when the email is sent.
+ */
+export const DESTINATIONS = [
+  { value: 'url', label: 'A web address', tag: null, hint: 'Your website or any page (https://…)' },
+  { value: 'unsubscribe', label: 'Unsubscribe page', tag: '{{ unsubscribe_url }}', hint: 'The contact unsubscribes in one step. Recorded automatically.' },
+  { value: 'preferences', label: 'Manage preferences', tag: '{{ preferences_url }}', hint: 'The contact chooses which lists to keep, or unsubscribes from everything.' },
+  { value: 'stay', label: 'Stay subscribed (re-engagement)', tag: '{{ stay_url }}', hint: 'The contact confirms they still want your emails. Counted in the campaign report.' },
+  { value: 'view', label: 'View in browser', tag: '{{ view_url }}', hint: 'Opens this email as a web page.' },
+];
+const DEST = Object.fromEntries(DESTINATIONS.map((d) => [d.value, d]));
+const destinationSelect = (value, attrs) => html`<select class="form-select form-select-sm" ${raw(attrs)}>
+  ${DESTINATIONS.map((d) => html`<option value="${d.value}" ${value === d.value ? raw('selected') : ''}>${d.label}</option>`)}</select>`;
+
 const HEADING_SIZE = { 1: 28, 2: 22, 3: 18 };
 
 /** WCAG contrast ratio between two #rrggbb colours. */
@@ -210,11 +225,17 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign', cust
         Object.assign(s.style, { backgroundColor: p.bg, color: p.color, borderRadius: `${p.radius}px`, display: p.full ? 'block' : 'inline-block' });
         s.dataset.field = 'label';
         body.append(s);
-        if (!p.url) {
+        const link = p.link || 'url';
+        if (link === 'url' && !p.url) {
           const warn = document.createElement('div');
           warn.className = 'bb-hint text-warning-emphasis';
-          warn.textContent = 'Add the button link in the panel →';
+          warn.textContent = 'Choose where this button goes in the panel →';
           body.append(warn);
+        } else if (link !== 'url') {
+          const note = document.createElement('div');
+          note.className = 'bb-hint';
+          note.textContent = `Goes to: ${DEST[link].label} (MailHarbor creates each person's link)`;
+          body.append(note);
         }
         break;
       }
@@ -273,7 +294,7 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign', cust
         Object.assign(f.style, { color: p.color, fontSize: `${p.size}px`, textAlign: p.align });
         const line = (t) => { const d = document.createElement('div'); d.textContent = t; return d; };
         const links = document.createElement('div');
-        links.innerHTML = '<u>Unsubscribe</u> &nbsp;·&nbsp; <u>View in browser</u>';
+        links.innerHTML = `<u>Unsubscribe</u> &nbsp;·&nbsp; ${p.prefs !== false ? '<u>Manage preferences</u> &nbsp;·&nbsp; ' : ''}<u>View in browser</u>`;
         f.append(line('{{ org_name }} · {{ org_address }}'), ...(p.text.trim() ? [line(p.text)] : []), links);
         body.append(f);
         break;
@@ -406,13 +427,17 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign', cust
           </div></div>
           ${alignField(p.align)}${colorField('color', p.color, 'Text colour')}${numberField('size', p.size, 'Text size (px)', 12, 22)}${numberField('pad', p.pad, 'Spacing (px)', 0, 64)}${bgField(p)}`;
         break;
-      case 'button':
-        fields = html`<div class="col-12"><label class="form-label small">Link (https://…)</label><input type="url" class="form-control form-control-sm" data-prop="url" value="${p.url}" placeholder="https://example.co.za/offer"></div>
+      case 'button': {
+        const link = p.link || 'url';
+        fields = html`<div class="col-12"><label class="form-label small">Button goes to</label>${destinationSelect(link, 'data-prop="link"')}
+            <div class="form-text">${DEST[link].hint}</div></div>
+          ${link === 'url' ? html`<div class="col-12"><label class="form-label small">Web address (https://…)</label><input type="url" class="form-control form-control-sm" data-prop="url" value="${p.url}" placeholder="https://example.co.za/offer"></div>` : ''}
           <div class="col-12"><label class="form-label small">Label</label><input class="form-control form-control-sm" data-prop="label" value="${p.label}" maxlength="120"></div>
           ${alignField(p.align)}${colorField('bg', p.bg, 'Button colour')}${colorField('color', p.color, 'Text colour')}
           ${numberField('radius', p.radius, 'Rounded corners', 0, 30)}${numberField('pad', p.pad, 'Spacing (px)', 0, 64)}
           <div class="col-12"><div class="form-check form-switch small"><input class="form-check-input" type="checkbox" role="switch" id="bb-full" data-prop="full" ${p.full ? raw('checked') : ''}><label class="form-check-label" for="bb-full">Full width</label></div></div>`;
         break;
+      }
       case 'image':
         fields = html`<div class="col-12"><label class="form-label small">Image address (https://…)</label><input type="url" class="form-control form-control-sm" data-prop="src" value="${p.src}" placeholder="https://example.co.za/banner.jpg">
             <div class="form-text">Host images on your website or file storage. Use JPG or PNG, about 1200px wide.</div></div>
@@ -440,6 +465,7 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign', cust
       case 'footer':
         fields = html`<div class="col-12"><label class="form-label small">Extra line (optional)</label><input class="form-control form-control-sm" data-prop="text" value="${p.text}" maxlength="300">
             <div class="form-text">Your organisation name and postal address (Settings → General), the unsubscribe link and "View in browser" are always included.</div></div>
+          <div class="col-12"><div class="form-check form-switch small"><input class="form-check-input" type="checkbox" role="switch" id="bb-prefs" data-prop="prefs" ${p.prefs !== false ? raw('checked') : ''}><label class="form-check-label" for="bb-prefs">Include "Manage preferences" link</label></div></div>
           ${alignField(p.align)}${colorField('color', p.color, 'Text colour')}${numberField('size', p.size, 'Text size (px)', 10, 16)}${numberField('pad', p.pad, 'Spacing (px)', 0, 64)}${bgField(p)}`;
         break;
       case 'html':
@@ -532,7 +558,7 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign', cust
     const burst = t.matches('input[type=url], input:not([type]), textarea');
     setProp(selectedId, t.dataset.prop, v, { history: !burst || !typingSnapshot });
     if (burst) { typingSnapshot = true; clearTimeout(props.burstTimer); props.burstTimer = setTimeout(() => { typingSnapshot = false; }, 800); }
-    if (t.dataset.prop === 'level' || t.dataset.prop === 'full') renderProps();
+    if (['level', 'full', 'link'].includes(t.dataset.prop)) renderProps();
     else updateContrast();
   });
   props.addEventListener('change', (e) => {
@@ -563,16 +589,24 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign', cust
       if (!range || range.collapsed) { toast('Select the words to turn into a link first', 'info'); return; }
       formModal({
         title: 'Add link', submitLabel: 'Add link',
-        body: html`<label class="form-label">Web address</label><input class="form-control" name="url" type="url" required placeholder="https://">`,
+        body: html`<label class="form-label">Link goes to</label>${destinationSelect('url', 'name="dest" id="bb-dest"')}
+          <div class="mt-3" id="bb-url-wrap"><label class="form-label">Web address</label><input class="form-control" name="url" type="url" placeholder="https://"></div>
+          <div class="form-text" id="bb-dest-hint">${DEST.url.hint}</div>`,
         onSubmit: async (fd) => {
-          const url = String(fd.get('url') || '').trim();
-          if (!/^(https?:\/\/|mailto:)/i.test(url)) throw { message: 'Use a full web address starting with https://' };
+          const dest = String(fd.get('dest') || 'url');
+          const url = dest === 'url' ? String(fd.get('url') || '').trim() : DEST[dest].tag;
+          if (dest === 'url' && !/^(https?:\/\/|mailto:)/i.test(url)) throw { message: 'Use a full web address starting with https://' };
           editable.focus();
           sel.removeAllRanges();
           sel.addRange(range);
           document.execCommand('createLink', false, url);
           syncEditable(editable);
         },
+      });
+      const destSel = document.getElementById('bb-dest');
+      destSel?.addEventListener('change', () => {
+        document.getElementById('bb-url-wrap').classList.toggle('d-none', destSel.value !== 'url');
+        document.getElementById('bb-dest-hint').textContent = DEST[destSel.value].hint;
       });
     }
   });

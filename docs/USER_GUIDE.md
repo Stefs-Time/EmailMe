@@ -126,8 +126,20 @@ New campaigns open in the builder. It has three parts:
 - **Two columns:** drag blocks into each column. On phones the columns stack automatically.
 - **Images** are added by web address (https://…), for example from your website or file storage. Use JPG or PNG,
   about 1200px wide, and always fill in the description (alt text).
+- **Where a button or link goes:** select the button (or select words and press the link button) and choose:
+
+  | Goes to | What happens |
+  |---|---|
+  | A web address | Your website or any page; clicks are tracked |
+  | Unsubscribe page | The person unsubscribes in one step |
+  | Manage preferences | The person sees their lists, unticks the ones they don't want, or unsubscribes from everything |
+  | Stay subscribed | The person confirms they still want your emails ("Are you still interested?" campaigns) |
+  | View in browser | Opens the email as a web page |
+
+  For everything except a web address, MailHarbor creates each person's own link when it sends. There's nothing to
+  copy or set up. Everything those pages do is recorded on the contact and in the campaign report.
 - The builder warns when text and background colours are hard to read. The *Ready to send* checklist also warns about
-  buttons without a link and images without a description.
+  web-address buttons without a link and images without a description.
 
 The campaign's **Template** (in the envelope section) adds the header and footer around the design; **Preview** shows both.
 
@@ -156,8 +168,20 @@ Open the campaign, or go to **Reports**:
 | Complaints | Marked as spam |
 | Unsubscribes | Opted out from this email |
 | Unique opens / clicks | People who opened / clicked at least once |
+| Stayed subscribed | Confirmed on the "stay subscribed" page (shown when the campaign used it) |
+| Preference changes | Changed their lists on the preference page (shown when used) |
 
 The report also lists the **top links** and a timeline.
+
+**Mail usage** (menu → Insights) shows everything MailHarbor sends through your SMTP server:
+- emails sent today, this month and in the last hour, compared with your hourly limit;
+- emails waiting to be sent;
+- emails per day by kind (campaigns, opt-in confirmations, tests);
+- emails your SMTP server rejected;
+- what recipients did (unsubscribed, changed preferences, stayed subscribed, confirmed opt-in);
+- which campaigns were sent.
+
+Compare these numbers with your SMTP provider's limits.
 
 Benchmarks:
 - A bounce rate above **2%** deserves attention. Above **5%**, the list needs cleaning.

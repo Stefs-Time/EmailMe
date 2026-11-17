@@ -10,6 +10,9 @@ export const SERIES = {
   opens: '#2f6fb5',
   clicks: '#0f8f82',
   bounces: '#c4302b',
+  campaign: '#2f6fb5',
+  optin: '#0f8f82',
+  test: '#b8860b',
 };
 
 const INK = '#5f6b7a';

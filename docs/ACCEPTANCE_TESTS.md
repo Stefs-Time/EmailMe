@@ -9,7 +9,7 @@ local SMTP server (`test/helpers/smtpSink.js`). That server rejects addresses by
 | `soft-` | 452 4.2.2 |
 | `policy-` | 550 5.7.1 |
 
-All 23 tests pass (17 Nov 2026).
+All 24 tests pass (17 Nov 2026).
 
 ```bash
 cd portal
@@ -55,10 +55,18 @@ Additional automated checks:
   block are rejected; a designed template (logo, page colour, width, footer) wraps a delivered campaign, with exactly
   one unsubscribe link (the footer's);
 - samples and personalisation: every sample creates a valid builder campaign (subject and preview text included);
-  unknown samples are rejected; sample buttons must be given a link before sending; imported columns are offered as
-  personalisation fields.
+  unknown samples are rejected; web-address buttons in samples must be given a link before sending; imported columns
+  are offered as personalisation fields;
+- platform-managed links, through the real send path:
+  - buttons going to "Stay subscribed" and "Manage preferences" need no URL;
+  - the delivered email carries each recipient's own stay, preferences and unsubscribe links;
+  - the stay page records nothing on GET and records on POST;
+  - the preference centre unsubscribes from unticked lists only, cannot be used to re-subscribe, and "Unsubscribe from
+    everything" suppresses;
+  - the campaign report counts stayed subscribed, preference changes and unsubscribes;
+  - the mail usage report returns daily volume, totals, recipient actions and campaigns.
 
-**Unit tests** (`npm run test:unit`, 21 tests): configuration rules, secret encryption, rendering and personalisation,
+**Unit tests** (`npm run test:unit`, 22 tests): configuration rules, secret encryption, rendering and personalisation,
 DSN/ARF/auto-reply parsing, bounce classification, SMTP error classification, and the builder renderer (defaults,
 rejection of unsafe URLs, colours and block types, escaping, tag links, column stacking, image widths, click tracking) and the template renderer (complete document, doctype kept,
 a single content slot, footer links, rules on template-only blocks).

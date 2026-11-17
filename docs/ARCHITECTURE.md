@@ -156,9 +156,18 @@ Eligibility for a campaign (`engine/audience.js`) requires all of the following:
 | `GET /t/o/:token.gif` | Open pixel |
 | `GET /t/c/:token/:linkId` | Click redirect, **only** to URLs stored for that campaign (no open redirect) |
 | `GET`/`POST /s/confirm/:token` | Double opt-in confirm page / confirm |
+| `GET`/`POST /s/stay/:token` | "Stay subscribed" page / confirm: records `stayed_subscribed`, refreshes engagement, never re-activates a suppressed address |
+| `GET`/`POST /p/:token` | Preference centre: the contact's lists; POST unsubscribes from unticked lists (list level) or from everything (global suppression). It can only opt out, never re-subscribe |
 | `POST /webhooks/bounce` | Provider bounce/complaint events (token, constant-time compare) |
 
-All public routes are rate-limited (300/min per IP).
+All public routes are rate-limited (300/min per IP). Links in **test** emails open a "this is a test email" page.
+
+**Platform-managed links.** Builder buttons have a `link` destination (`url`, `unsubscribe`, `preferences`, `stay`,
+`view`). Text links can use the same destinations. Everything except `url` is stored as a tag (`{{ unsubscribe_url }}`,
+`{{ preferences_url }}`, `{{ stay_url }}`, `{{ view_url }}`), which the renderer turns into the recipient's own tokenised
+link at send time. These links are not click-tracked as campaign links; the pages record their own events in
+`recipient_events`, which feed the campaign report (`stayed`, `preference_changes`, `unsubscribes`) and the mail usage
+report (`GET /api/reports/usage`).
 
 ## Data model (`portal` schema)
 

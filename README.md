@@ -44,7 +44,10 @@ in the app.
 - **Compliance built in:**
   - every email carries an unsubscribe link and RFC 8058 one-click `List-Unsubscribe` headers (required by Gmail and Yahoo for bulk senders);
   - the organisation's postal address goes in the footer;
-  - an unsubscribe from any list suppresses the person globally (default).
+  - an unsubscribe from any list suppresses the person globally (default);
+  - **recipient pages run by MailHarbor**: unsubscribe, a **preference centre** (opt out of individual lists or
+    everything), **stay subscribed** (re-engagement) and view in browser. Any button or text link can point to them, and
+    each recipient's personal link is created automatically at send time. No URLs to manage.
 - **Bounce handling** from three sources:
   - SMTP rejections at send time;
   - an IMAP bounce mailbox, with DSN and ARF complaint parsing;
@@ -61,7 +64,10 @@ in the app.
 - **Suppression that cannot be bypassed:** imports, list changes and manual adds never reactivate an unsubscribed,
   bounced, complained or blocklisted address. Reactivation is admin-only and needs a documented new permission basis.
 - **Reports:**
-  - per campaign: recipients, sent, failed, hard and soft bounces, complaints, unsubscribes, unique opens and clicks, top links, a timeline;
+  - per campaign: recipients, sent, failed, hard and soft bounces, complaints, unsubscribes, unique opens and clicks,
+    stayed subscribed, preference changes, top links, a timeline;
+  - **mail usage** through your SMTP server: sent today / this month / last hour (against the hourly limit), the queue,
+    emails per day by kind (campaign, opt-in, test), SMTP rejections, recipient actions and campaigns sent;
   - audience by source, consent and domain;
   - bounce trends.
 - **Exports (CSV, Excel-safe):** contacts for any filter, eligible contacts, suppression list, consent and unsubscribe

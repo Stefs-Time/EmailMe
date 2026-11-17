@@ -25,6 +25,14 @@ const url = z.string().trim().max(2000).refine(
 );
 const imageUrl = z.string().trim().max(2000).refine((u) => u === '' || /^https?:\/\/[^\s"<>]+$/i.test(u), 'Use an image address starting with https://');
 const plain = (max) => z.string().max(max);
+/** Platform-managed destinations: MailHarbor creates each recipient's own link at send time. */
+const LINK_TAGS = {
+  unsubscribe: '{{ unsubscribe_url }}',
+  preferences: '{{ preferences_url }}',
+  stay: '{{ stay_url }}',
+  view: '{{ view_url }}',
+};
+const linkKind = z.enum(['url', ...Object.keys(LINK_TAGS)]);
 const spacing = z.coerce.number().int().min(0).max(64);
 const common = { pad: spacing.default(12), bg: z.union([hex, z.literal('')]).default('') };
 
@@ -32,7 +40,7 @@ const leafSchemas = {
   heading: z.object({ text: plain(300).default('Heading'), level: z.coerce.number().int().min(1).max(3).default(2), align: align.default('left'), color: hex.default('#16365f'), ...common }),
   text: z.object({ html: plain(50000).default('<p></p>'), align: align.default('left'), color: hex.default('#1b2430'), size: z.coerce.number().int().min(12).max(22).default(16), ...common }),
   button: z.object({
-    label: plain(120).default('Find out more'), url: url.default(''), align: align.default('center'),
+    label: plain(120).default('Find out more'), link: linkKind.default('url'), url: url.default(''), align: align.default('center'),
     bg: hex.default('#1f4e8c'), color: hex.default('#ffffff'), radius: z.coerce.number().int().min(0).max(30).default(6),
     full: z.boolean().default(false), pad: spacing.default(16), bg_row: z.union([hex, z.literal('')]).default(''),
   }),
@@ -49,6 +57,7 @@ const leafSchemas = {
     text: plain(300).default('You are receiving this because you subscribed or are a customer of {{ org_name }}.'),
     align: align.default('center'), color: hex.default('#5f6b7a'), size: z.coerce.number().int().min(10).max(16).default(12),
     pad: spacing.default(16), bg: z.union([hex, z.literal('')]).default(''),
+    prefs: z.boolean().default(true),
   }),
 };
 const TEMPLATE_ONLY = new Set(['content', 'footer']);
@@ -161,7 +170,8 @@ function renderLeaf(b, widthPx) {
     case 'button': {
       if (!p.label.trim()) return '';
       const width = p.full ? 'width:100%;' : '';
-      const a = `<a href="${esc(p.url || '#')}" style="display:${p.full ? 'block' : 'inline-block'};padding:12px 24px;font-size:16px;font-weight:bold;line-height:1.2;color:${p.color};text-decoration:none;border-radius:${p.radius}px">${escText(p.label)}</a>`;
+      const href = p.link !== 'url' ? LINK_TAGS[p.link] : (p.url || '#');
+      const a = `<a href="${esc(href)}" style="display:${p.full ? 'block' : 'inline-block'};padding:12px 24px;font-size:16px;font-weight:bold;line-height:1.2;color:${p.color};text-decoration:none;border-radius:${p.radius}px">${escText(p.label)}</a>`;
       const btn = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${p.align}" style="${width}border-collapse:separate"><tr><td align="center" bgcolor="${p.bg}" style="background-color:${p.bg};border-radius:${p.radius}px">${a}</td></tr></table>`;
       return row(btn, { pad: p.pad, bg: p.bg_row }, p.align);
     }
@@ -182,6 +192,7 @@ function renderLeaf(b, widthPx) {
       const link = `color:${p.color};text-decoration:underline`;
       return row(`<p style="margin:0;font-size:${p.size}px;line-height:1.5;color:${p.color};text-align:${p.align}">{{ org_name }}{{ org_address_line }}`
         + `${p.text.trim() ? `<br>${escText(p.text)}` : ''}<br><a href="{{ unsubscribe_url }}" style="${link}">Unsubscribe</a> &nbsp;&middot;&nbsp; `
+        + `${p.prefs ? `<a href="{{ preferences_url }}" style="${link}">Manage preferences</a> &nbsp;&middot;&nbsp; ` : ''}`
         + `<a href="{{ view_url }}" style="${link}">View in browser</a></p>`, p, p.align);
     }
     default:
@@ -287,6 +298,7 @@ function documentFromHtml(h) {
 }
 
 module.exports = {
+  LINK_TAGS,
   renderDocument, documentSchema, starterDocument, documentFromHtml, cleanText, CONTENT_WIDTH,
   renderTemplate, templateSchema, starterTemplate, FONTS,
 };

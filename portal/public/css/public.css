@@ -11,3 +11,16 @@ p { line-height: 1.55; }
 .btn { background: #1f4e8c; color: #fff; border: 0; border-radius: 8px; padding: 12px 20px; font-size: 1rem; font-weight: 600; cursor: pointer; }
 .btn:hover { background: #16365f; }
 .btn:focus-visible { outline: 3px solid #6d97cc; outline-offset: 2px; }
+a { color: #1f4e8c; }
+.btn-secondary { background: #fff; color: #1f4e8c; border: 1px solid #b8c7da; margin-top: 8px; }
+.btn-secondary:hover { background: #f4f6f9; color: #16365f; }
+form .btn + .btn { margin-left: 0; }
+.prefs { list-style: none; padding: 0; margin: 0 0 20px; border: 1px solid #e2e7ee; border-radius: 10px; }
+.pref { padding: 12px 14px; border-bottom: 1px solid #e2e7ee; }
+.pref:last-child { border-bottom: 0; }
+.pref label { display: block; cursor: pointer; }
+.pref input { width: 18px; height: 18px; vertical-align: -3px; margin-right: 6px; accent-color: #1f4e8c; }
+.pref-name { font-weight: 600; }
+.pref-state { font-size: .8rem; color: #5f6b7a; margin-left: 4px; }
+.pref-desc { display: block; font-size: .85rem; color: #5f6b7a; margin: 2px 0 0 30px; }
+.notice { background: #e6f5f3; color: #0b5d55; border-radius: 8px; padding: 10px 12px; font-weight: 600; }

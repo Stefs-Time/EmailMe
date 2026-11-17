@@ -86,7 +86,9 @@ async function readinessProblems(pool, settings, c) {
   if (!stripped && !/<img\s/i.test(c.body_html)) problems.push('Write the email content.');
   if (c.editor === 'builder' && c.body_json) {
     const all = (c.body_json.blocks || []).flatMap((b) => (b.type === 'columns' ? b.props.columns.flat() : [b]));
-    if (all.some((b) => b.type === 'button' && b.props.label?.trim() && !b.props.url)) problems.push('A button has no link: select it and add a web address.');
+    if (all.some((b) => b.type === 'button' && b.props.label?.trim() && (b.props.link || 'url') === 'url' && !b.props.url)) {
+      problems.push('A button has no link: select it and choose where it goes (a web address, or a MailHarbor page such as Unsubscribe).');
+    }
     if (all.some((b) => b.type === 'image' && b.props.src && !b.props.alt?.trim())) problems.push('An image has no description (alt text) for people who cannot see it.');
   }
   if (!(await settings.publicUrl())) problems.push('Set the public URL (Settings → General) so unsubscribe links work.');

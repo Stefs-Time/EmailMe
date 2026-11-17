@@ -89,6 +89,12 @@ const G = {
         short description for people who cannot see it.</li>
       <li>The builder warns you when text and background colours are hard to read, and the checklist warns about buttons without a link.</li>
     </ul>
+    <h3>Unsubscribe, preferences and "stay subscribed": handled by MailHarbor</h3>
+    <p>Select a button (or select words and press the link button) and choose where it goes: <em>Unsubscribe page</em>,
+      <em>Manage preferences</em> (the person picks which lists to keep), <em>Stay subscribed</em> (for "Are you still interested?" emails)
+      or <em>View in browser</em>. MailHarbor creates each person's own link when it sends, so there is nothing to set up, and everything they do
+      is recorded on the contact and in the campaign report. The footer of your template already links to Unsubscribe and Manage preferences.</p>
+    <p><a href="#/usage">Mail usage</a> shows how many emails go through your SMTP server per day, this month and in the last hour.</p>
     <h3>While it sends</h3>
     <p>The campaign page updates every few seconds. You can <strong>pause</strong>, <strong>resume</strong> or <strong>cancel</strong>. If your email server
     stops accepting mail, sending pauses automatically and an alert appears. Fix the problem, then press Resume.</p>

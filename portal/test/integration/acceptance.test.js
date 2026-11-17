@@ -520,14 +520,86 @@ t('samples and personalisation chips: ready-made designs; imported columns offer
   assert.equal(c.data.editor, 'builder');
   assert.match(c.data.subject, /are you still interested/);
   assert.match(c.data.body_html, /href="\{\{ unsubscribe_url \}\}"/, 'easy way out links to unsubscribe');
-  const ready = await http('admin', 'GET', `/api/campaigns/${c.data.id}`);
-  assert.ok(ready.data.problems.some((p) => /button has no link/.test(p)), 'sample buttons must be given a link before sending');
+  const promo = await http('admin', 'POST', '/api/campaigns', { name: 'Promo', sample: 'promotion' });
+  const ready = await http('admin', 'GET', `/api/campaigns/${promo.data.id}`);
+  assert.ok(ready.data.problems.some((p) => /button has no link/.test(p)), 'web-address buttons in samples must be given a link before sending');
   assert.equal((await http('admin', 'POST', '/api/campaigns', { name: 'x', sample: 'nope' })).status, 422);
   assert.equal((await http('admin', 'GET', '/api/campaigns/samples/nope')).status, 404);
 
   await http('admin', 'POST', '/api/contacts', { email: 'attr-ann@ok.example', firstName: 'Ann', listIds: [listId], consent: { method: 'web_form' }, attribs: { city: 'Durban' } });
   const facets = await http('admin', 'GET', '/api/contacts/facets');
   assert.ok(facets.data.attributes.includes('city'), 'imported columns are offered as personalisation chips');
+});
+
+t('platform-managed links: buttons go to MailHarbor pages (stay subscribed, preferences, unsubscribe) with no URL to type', async () => {
+  const l2 = await http('admin', 'POST', '/api/lists', { name: 'Events', optin: 'single' });
+  assert.equal(l2.status, 201, JSON.stringify(l2));
+  const add = await http('admin', 'POST', '/api/contacts', { email: 'pref-pat@ok.example', firstName: 'Pat', listIds: [listId, l2.data.id], consent: { method: 'web_form' } });
+  assert.equal(add.status, 201, JSON.stringify(add));
+  const add2 = await http('admin', 'POST', '/api/contacts', { email: 'all-al@ok.example', firstName: 'Al', listIds: [l2.data.id], consent: { method: 'web_form' } });
+  assert.equal(add2.status, 201);
+
+  const c = await http('admin', 'POST', '/api/campaigns', { name: 'Still interested?', sample: 'still-interested' });
+  assert.equal(c.data.body_json.blocks.find((b) => b.type === 'button').props.link, 'stay', 'sample button uses the built-in page');
+  const design = c.data.body_json;
+  design.blocks.push({ id: 'pb', type: 'button', props: { label: 'Manage preferences', link: 'preferences' } });
+  const r = await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, {
+    name: 'Still interested?', subject: 'Still interested?', preheader: '', from_name: 'Acme', from_email: 'news@acme.example', reply_to: '',
+    template_id: c.data.template_id, editor: 'builder', body_json: design, body_text: '', track_opens: false, track_clicks: true, list_ids: [l2.data.id],
+  });
+  assert.equal(r.status, 200, JSON.stringify(r));
+  assert.deepEqual((await http('admin', 'GET', `/api/campaigns/${c.data.id}`)).data.problems, [], 'no URL needed for platform links');
+
+  sink.messages.length = 0;
+  assert.equal((await http('admin', 'POST', `/api/campaigns/${c.data.id}/send`)).status, 200);
+  await drain();
+  const [m] = sinkTo('pref-pat@ok.example');
+  const link = (re) => { const x = m.parsed.html.match(re); assert.ok(x, `missing ${re}`); return x[0].replace('https://mail.acme.example', ''); };
+  const stay = link(/https:\/\/mail\.acme\.example\/s\/stay\/[0-9a-f-]{36}/);
+  const prefs = link(/https:\/\/mail\.acme\.example\/p\/[0-9a-f-]{36}/);
+  link(/https:\/\/mail\.acme\.example\/u\/[0-9a-f-]{36}/);
+
+  // Stay subscribed: GET only shows a page (scanner-safe); POST records it.
+  let res = await fetch(base + stay);
+  assert.match(await res.text(), /Yes, keep me subscribed/);
+  assert.equal((await pool.query(`SELECT 1 FROM portal.recipient_events WHERE event_type = 'stayed_subscribed'`)).rowCount, 0);
+  res = await fetch(base + stay, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: '' });
+  assert.match(await res.text(), /Thank you/);
+
+  // Preferences: keep one list, drop the other (no global suppression).
+  res = await fetch(base + prefs);
+  const page1 = await res.text();
+  assert.match(page1, /Events/);
+  res = await fetch(base + prefs, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `action=save&keep=${listId}` });
+  assert.match(await res.text(), /preferences have been saved/);
+  const pat = await contact('pref-pat@ok.example');
+  const subs = (await http('admin', 'GET', `/api/contacts/${pat.id}`)).data.subscriptions;
+  assert.equal(subs.find((s) => s.list_id === l2.data.id || s.id === l2.data.id)?.status, 'unsubscribed');
+  assert.equal(subs.find((s) => s.list_id === listId || s.id === listId)?.status, 'subscribed');
+  assert.notEqual(pat.status, 'unsubscribed', 'still subscribed to the other list');
+  // A forged form cannot re-subscribe anyone.
+  await fetch(base + prefs, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: `action=save&keep=${listId}&keep=${l2.data.id}` });
+  const subs2 = (await http('admin', 'GET', `/api/contacts/${pat.id}`)).data.subscriptions;
+  assert.equal(subs2.find((s) => s.list_id === l2.data.id || s.id === l2.data.id)?.status, 'unsubscribed');
+
+  // "Unsubscribe from everything" suppresses.
+  const [m2] = sinkTo('all-al@ok.example');
+  const prefs2 = m2.parsed.html.match(/https:\/\/mail\.acme\.example(\/p\/[0-9a-f-]{36})/)[1];
+  await fetch(base + prefs2, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'action=all' });
+  assert.equal((await contact('all-al@ok.example')).status, 'unsubscribed');
+
+  const report = await http('admin', 'GET', `/api/reports/campaigns/${c.data.id}`);
+  const rc = report.data.campaign || report.data;
+  assert.equal(rc.stayed, 1);
+  assert.equal(rc.preference_changes, 2);
+  assert.ok(rc.unsubscribes >= 2);
+
+  const usage = await http('admin', 'GET', '/api/reports/usage?days=7');
+  assert.equal(usage.status, 200);
+  assert.ok(usage.data.totals.today >= 2);
+  assert.ok(usage.data.daily.length === 7);
+  assert.equal(usage.data.actions.stayed_subscribed, 1);
+  assert.ok(usage.data.byCampaign.some((x) => x.id === c.data.id));
 });
 
 t('exports and campaign report download as CSV', async () => {

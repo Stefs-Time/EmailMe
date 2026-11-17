@@ -9,7 +9,7 @@ local SMTP server (`test/helpers/smtpSink.js`). That server rejects addresses by
 | `soft-` | 452 4.2.2 |
 | `policy-` | 550 5.7.1 |
 
-All 20 tests pass (17 Nov 2026).
+All 21 tests pass (17 Nov 2026).
 
 ```bash
 cd portal
@@ -47,10 +47,14 @@ Additional automated checks:
 - POPIA erasure keeps only a hash, and the erased address cannot be re-imported;
 - open pixel and click redirect (stored URLs only);
 - the bounce-mailbox password is encrypted at rest and never returned;
-- exports and the campaign report download as CSV.
+- exports and the campaign report download as CSV;
+- the drag-and-drop builder: new campaigns start in the builder; unsafe designs are rejected (422) and rich text is
+  cleaned before it is stored; a button without a link is flagged; the delivered email contains the rendered columns,
+  personalisation and a click-tracked button; duplicating keeps the design.
 
-**Unit tests** (`npm run test:unit`, 12 tests): configuration rules, secret encryption, rendering and personalisation,
-DSN/ARF/auto-reply parsing, bounce classification, SMTP error classification.
+**Unit tests** (`npm run test:unit`, 19 tests): configuration rules, secret encryption, rendering and personalisation,
+DSN/ARF/auto-reply parsing, bounce classification, SMTP error classification, and the builder renderer (defaults,
+rejection of unsafe URLs, colours and block types, escaping, tag links, column stacking, image widths, click tracking).
 
 **Not automated:**
 - the IMAP layer against a real mailbox (the parser is tested; the connection layer only for failure);

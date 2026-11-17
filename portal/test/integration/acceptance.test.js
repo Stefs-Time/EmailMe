@@ -423,6 +423,52 @@ t('TC14 (scope): bounce mailbox unavailable raises a critical alert; password st
   await http('admin', 'PUT', '/api/settings', { bounce_mailbox: { enabled: false } });
 });
 
+t('drag-and-drop builder: new campaigns start in the builder; the server validates, renders and sends the design', async () => {
+  await addContact('builder-bea@ok.example');
+  const c = await http('admin', 'POST', '/api/campaigns', { name: 'Builder campaign' });
+  assert.equal(c.status, 201);
+  assert.equal(c.data.editor, 'builder');
+  assert.equal(c.data.body_json.blocks.length, 3, 'starter design');
+
+  const base = { name: 'Builder campaign', subject: 'Designed for {{ first_name }}', preheader: '', from_name: 'Acme', from_email: 'news@acme.example',
+    reply_to: '', template_id: c.data.template_id, editor: 'builder', body_text: '', track_opens: true, track_clicks: true, list_ids: [listId] };
+  const bad = await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, { ...base, body_json: { blocks: [{ id: 'x', type: 'button', props: { url: 'javascript:alert(1)' } }] } });
+  assert.equal(bad.status, 422, 'invalid design rejected');
+  assert.ok(bad.error.details.some((d) => d.field.includes('url')));
+
+  const design = { version: 1, blocks: [
+    { id: 'h', type: 'heading', props: { text: 'Hi {{ first_name | "friend" }}', align: 'center' } },
+    { id: 'c', type: 'columns', props: { columns: [
+      [{ id: 'i', type: 'image', props: { src: 'https://cdn.acme.example/p.png', alt: 'Product' } }],
+      [{ id: 't', type: 'text', props: { html: '<p onclick="x()">Only <strong>R99</strong></p>' } }]] } },
+    { id: 'b', type: 'button', props: { label: 'Buy now', url: '' } },
+  ] };
+  let r = await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, { ...base, body_json: design });
+  assert.equal(r.status, 200, JSON.stringify(r));
+  assert.ok((await http('admin', 'GET', `/api/campaigns/${c.data.id}`)).data.problems.some((p) => /button has no link/.test(p)), 'readiness flags a button without a link');
+  assert.doesNotMatch(JSON.stringify(r.data.body_json), /onclick/, 'stored design is cleaned');
+
+  design.blocks[2].props.url = 'https://shop.acme.example/buy';
+  r = await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, { ...base, body_json: design });
+  assert.deepEqual((await http('admin', 'GET', `/api/campaigns/${c.data.id}`)).data.problems, []);
+  assert.match(r.data.body_html, /class="mh-col"/);
+
+  sink.messages.length = 0;
+  assert.equal((await http('admin', 'POST', `/api/campaigns/${c.data.id}/send`)).status, 200);
+  await drain();
+  const [m] = sinkTo('builder-bea@ok.example');
+  assert.ok(m, 'builder email delivered');
+  assert.match(m.parsed.html, />Hi builder-bea<\/h2>/);
+  assert.match(m.parsed.html, /<strong>R99<\/strong>/);
+  assert.match(m.parsed.html, /https:\/\/mail\.acme\.example\/t\/c\/[^"]+/, 'button link is click-tracked');
+  assert.doesNotMatch(m.parsed.html, /shop\.acme\.example\/buy"/, 'raw button URL replaced by the tracked redirect');
+
+  const dup = await http('admin', 'POST', `/api/campaigns/${c.data.id}/duplicate`);
+  const copy = await http('admin', 'GET', `/api/campaigns/${dup.data.id}`);
+  assert.equal(copy.data.editor, 'builder');
+  assert.equal(copy.data.body_json.blocks.length, 3, 'duplicate keeps the design');
+});
+
 t('exports and campaign report download as CSV', async () => {
   const text = await (await http('admin', 'GET', '/api/exports/contacts.csv?status=suppressed', undefined, { raw: true })).text();
   assert.ok(text.includes('hard-dan@ok.example'));

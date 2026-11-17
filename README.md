@@ -21,7 +21,10 @@ in the app.
   detection, matching against existing contacts, suppression check, a required consent basis and a
   **preview before anything is saved**. After the import you get a downloadable row-by-row report.
 - **Campaigns:**
-  - a visual editor (headings, formatting, links, images, buttons, alignment) or raw HTML, plus a plain-text part;
+  - a **drag-and-drop email builder**: headings, text, buttons, images, two-column layouts, dividers, spacers and HTML
+    blocks, edited directly on a WYSIWYG canvas, with undo/redo, colour-contrast warnings and phone-friendly output
+    (columns stack). The server validates the design and renders email-safe HTML;
+  - a visual editor or raw HTML as alternatives, plus a plain-text part;
   - templates, with a default template;
   - personalisation `{{ first_name | "there" }}` and a preheader;
   - preview as a sample contact, test sends;
@@ -248,6 +251,9 @@ Verified in the build environment:
   - SMTP outage → auto-pause → resume.
 - **Browser walkthrough (Playwright):** setup, settings, lists, contacts, the campaign editor, test send, send, report,
   templates, system health. An axe accessibility scan found no violations on those pages.
+- **Drag-and-drop builder (Playwright):** 15-step walkthrough with the CSP enforced, covering palette drags, nested
+  columns, handle reordering, in-place editing, undo, test send, HTML conversion and phone width. It passed with no
+  console errors and no axe violations.
 
 **Not verified here:**
 - the IMAP connection against a real mailbox (only the parser is tested);

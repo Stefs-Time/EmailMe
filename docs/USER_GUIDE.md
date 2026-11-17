@@ -79,9 +79,9 @@ For an opt-out request by phone or email, use **Actions → Unsubscribe** and no
 
    The panel on the right shows **how many people will receive it**. That count already excludes suppressed,
    unconfirmed and held contacts.
-3. Write the content in the **Visual** editor. You can add headings, bold text, links, images by web address, buttons,
-   alignment and lists. You can also switch to **HTML**. The **Plain text** tab is generated automatically; edit it if
-   you want.
+3. Design the content in the **Builder** (see *The drag-and-drop builder* below). The **Plain text** tab is generated
+   automatically; edit it if you want. If you prefer to write or paste HTML, use the **Visual** or **HTML** editor.
+   Converting a design to HTML is one-way: it comes back into the builder as a single HTML block.
 4. **Personalise** with tags such as `{{ first_name | "there" }}`. The text after `|` is used when the contact has no
    first name. Available tags:
    - `first_name`, `last_name`, `full_name`, `email`, `company`;
@@ -90,6 +90,29 @@ For an opt-out request by phone or email, use **Actions → Unsubscribe** and no
 
 Every email automatically includes an unsubscribe link and your organisation's postal address. If you remove the
 unsubscribe link from the template, MailHarbor adds a footer anyway.
+
+### The drag-and-drop builder
+New campaigns open in the builder. It has three parts:
+
+| Part | What it does |
+|---|---|
+| **Blocks** (left) | Heading, Text, Button, Image, Two columns, Divider, Spacer, HTML |
+| **The email** (centre) | Shows the content as it will look. Click into headings, text and buttons and type |
+| **Settings** (right) | Colours, alignment, links, image address and description, size and spacing of the selected block |
+
+- **Add a block:** drag it from *Blocks* onto the email. A green line shows where it will land. On a phone or with a
+  keyboard, select a block in the email, then tap or press a block name: the new block goes below the selected one.
+- **Move a block:** drag its ⋮⋮ handle, or use the ↑ ↓ buttons on the block. The other buttons duplicate and delete it.
+  **Undo** and **Redo** are above the email (Ctrl+Z / Ctrl+Y).
+- **Format text:** select words in a text block, then use **B**, *I*, U, lists or the link button in Settings.
+  Pasted text loses its formatting on purpose, because Word and web formatting breaks email layouts.
+- **Two columns:** drag blocks into each column. On phones the columns stack automatically.
+- **Images** are added by web address (https://…), for example from your website or file storage. Use JPG or PNG,
+  about 1200px wide, and always fill in the description (alt text).
+- The builder warns when text and background colours are hard to read. The *Ready to send* checklist also warns about
+  buttons without a link and images without a description.
+
+The template (Settings of the campaign → Template) adds the header and footer around the design; **Preview** shows both.
 
 ### Test, then send
 1. Click **Send test** and enter up to 5 addresses. Check the email on your phone and on a computer, and click every link.

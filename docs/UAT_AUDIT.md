@@ -16,7 +16,7 @@ There have been two rounds:
 | Browser walkthrough | Fresh database → first-run setup with the log code → settings (address, SMTP test, bounce tab) → list + contact → campaign editor (subject, preheader, personalisation tag, button, autosave, readiness) → test send → send now → report → templates → system health |
 | Role crawl | Signed in as **viewer** and **manager**, opened all 21 routes (including deep links to admin-only and edit screens), recorded the menu, every visible action, failed API calls and page errors |
 | Accessibility | axe-core (WCAG 2 A/AA) on every screen in the walkthrough and the role crawl |
-| Functional regression | 12 unit tests + 20 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)) |
+| Functional regression | 19 unit tests + 21 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)) |
 
 ## 2. Round 2 findings and fixes
 
@@ -41,6 +41,40 @@ Severity:
 | N12 | Testing | Low | Scope TC14 (bounce mailbox unavailable → alert) was only a manual check. | Automated test against an unreachable IMAP server; also checks the password is encrypted at rest and never returned | Added, passing |
 | N13 | Deployment | **High** (docs) | Railway allows outbound SMTP only on the Pro plan and above. A Hobby deployment would start but could never send. | Stated prominently in README and DEPLOY_RAILWAY; System health shows an SMTP timeout with that hint | Documented |
 
+### Drag-and-drop builder (added 17 Nov 2026)
+
+How it was tested:
+- **Browser walkthrough with the real CSP enforced, 15 steps:**
+  - a new campaign opens in the builder;
+  - a real mouse drag from the palette;
+  - editing the heading in place, with a personalisation tag and alignment;
+  - bold text;
+  - the button link and colour, with the contrast warning;
+  - Two columns, with blocks dropped into each column;
+  - reordering by the drag handle;
+  - delete, then undo;
+  - autosave and the server render;
+  - the preview;
+  - the keyboard/touch "press to add" path;
+  - a test send;
+  - converting to HTML and back;
+  - phone width.
+- **Phone check:** iPhone 13 emulation with tap-to-add.
+- **Accessibility:** axe scan of the builder with a block selected.
+
+| # | Area | Sev. | Finding | Fix | Status |
+|---|---|---|---|---|---|
+| B1 | Security | **High** | (Design review) The stored design kept rich text exactly as submitted; only the rendered email was cleaned. Another user's editor would then load raw HTML into the page (stored XSS). | The server cleans text and HTML blocks before storing the design; unit + integration tests | Fixed, tested |
+| B2 | Canvas | Medium | Each block's wrapper had the class `bb-<type>`, which collided with the inner element styles. The button row was padded and centred like a button. | Wrapper class renamed `bb-type-<type>` | Fixed, verified by screenshot |
+| B3 | Canvas | Medium | The button's colour was also painted as the background of its whole row. | Row background (`bg_row`) kept separate from the button colour | Fixed, verified |
+| B4 | Drag and drop | Medium | Dropping at the very top edge was ignored: the marker's margin collapsed outside the list. | The drop uses the marker's position; the whole canvas area accepts drops | Fixed, tested |
+| B5 | Drag and drop | Medium | Drag targets far down a long email needed scrolling while dragging. | Palette and settings panel stay pinned on screen (desktop) | Fixed |
+| B6 | CSP | Medium | Builder HTML (inline styles) was loaded into the hidden Visual editor, causing CSP violations. Converting a design to Visual displayed it wrongly. | Builder content is never loaded there; converting lands in the HTML editor | Fixed: 0 console errors |
+| B7 | Accessibility | Low | A user-chosen button colour (white on teal) fell below 4.5:1 contrast. | Live contrast warning for button, heading and text colours | Added |
+| B8 | Touch | Low | HTML5 drag and drop does not work on phones, and Firefox can't drag a `<button>`. | Tiles are focusable elements; tap or Enter adds below the selected block | Added, tested (phone emulation) |
+
+Result: 15/15 pass, 0 console errors with the CSP enforced, axe 0 violations, no horizontal scroll at 390px.
+
 ## 3. Allocation matrix: scope requirement → screen → role
 
 ✔ = can do · 👁 = read only · – = hidden (direct link shows "no permission")
@@ -52,7 +86,7 @@ Severity:
 | 3.2 | Sort and filter recipients | **Contacts**: search, status/list/source/consent filters, sortable columns, quick search | ✔ | ✔ | ✔ |
 | 3.3 | Recipient status model | Status badges; dashboard tiles; *Eligible to receive* filter | 👁 | 👁 | 👁 |
 | 3.4 | CSV import: validation, dedupe, suppression, preview, report | **Import** wizard + **Import history** | 👁 history | ✔ | ✔ |
-| 3.5 | Campaigns: create, templates, personalise, test, schedule, pause/resume/cancel | **Campaigns**, campaign editor, **Templates** | 👁 | ✔ | ✔ |
+| 3.5 | Campaigns: create, templates, personalise, test, schedule, pause/resume/cancel | **Campaigns**, drag-and-drop builder / editor, **Templates** | 👁 | ✔ | ✔ |
 | 3.6 | Bounce processing and classification | Automatic (SMTP, IMAP mailbox, webhook); **Settings → Bounces**; **Review queue**; contact bounce table | 👁 | ✔ resolve | ✔ + configure |
 | 3.7 | Unsubscribe and global suppression | Link + one-click header in every email; **Contact → Unsubscribe**; **Suppression list**; Settings → Compliance | 👁 | ✔ add | ✔ add / lift / configure |
 | 3.8 | Campaign reporting | Campaign page (metrics, top links, timeline, failures) + campaigns CSV | 👁 | 👁 + export | 👁 + export |
@@ -91,7 +125,7 @@ Role crawl (viewer, manager × 21 routes):
 - **Viewer:** no write controls on any screen; the admin-only and edit routes show the permission page; 0 API errors, 0 page errors, 0 axe violations.
 - **Manager:** campaign, template, import, list, contact, suppression and export actions present. Settings, Users, Audit and Lift are absent. 0 API errors, 0 page errors, 0 axe violations.
 
-Acceptance suite: 20/20 pass. Unit tests: 12/12 pass.
+Acceptance suite: 21/21 pass. Unit tests: 19/19 pass.
 
 ## 5. Round 1 (listmonk-based build): findings still relevant
 

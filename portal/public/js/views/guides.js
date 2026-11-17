@@ -64,14 +64,27 @@ const G = {
       <li><strong>Who receives it:</strong> tick one or more lists. The number of people who will actually receive it is shown underneath:
         suppressed, unsubscribed, unconfirmed and held contacts are left out automatically.</li>
       <li><strong>Envelope:</strong> subject line, preview text (the grey text inboxes show after the subject), sender and template.</li>
-      <li><strong>Content:</strong> write in the <em>Visual</em> editor (headings, lists, links, buttons, images) or paste HTML in the <em>HTML</em> tab.
-        Use <em>Personalise</em> to insert fields such as <code>{{ first_name }}</code>. Add a fallback for empty values:
-        <code>{{ first_name | "there" }}</code>. Custom CSV columns work too: <code>{{ attribs.city }}</code>.</li>
+      <li><strong>Content:</strong> design the email in the drag-and-drop <em>Builder</em> (see below). Insert personal fields such as
+        <code>{{ first_name }}</code>, with a fallback for empty values: <code>{{ first_name | "there" }}</code>. Custom CSV columns work too:
+        <code>{{ attribs.city }}</code>. The <em>Visual</em> and <em>HTML</em> editors are there if you prefer to write or paste HTML.</li>
       <li>Check the <strong>preview</strong> on desktop and mobile, then <strong>Send test</strong> to yourself.</li>
       <li><strong>Send now</strong>, or <strong>Schedule</strong> for later. Changes save automatically while you type.</li>
     </ol>
     <p>Each person receives their own individual email; nobody sees other recipients. Every email includes your postal address, an unsubscribe
     link and the one-click unsubscribe header that Gmail, Yahoo and Outlook require.</p>
+    <h3>The drag-and-drop builder</h3>
+    <ul>
+      <li><strong>Add:</strong> drag a block from <em>Blocks</em> onto the email. A green line shows where it will land. On a phone or with a
+        keyboard, select a block in the email, then tap or press a block name to add the new one below it.</li>
+      <li><strong>Edit:</strong> click into a heading, text or button and type. Select a block to change its colours, alignment, links,
+        image, size and spacing in the panel on the right. Select words in a text block to make them bold, italic or a link.</li>
+      <li><strong>Arrange:</strong> drag a block by its <i class="bi bi-grip-vertical"></i> handle, or use the arrows. Duplicate or delete it with the
+        other buttons. <em>Undo</em> and <em>Redo</em> are above the email.</li>
+      <li><strong>Two columns:</strong> drag blocks into each column. On phones the columns stack automatically.</li>
+      <li><strong>Images</strong> are added by web address (https://…), for example from your website. Always give each image a
+        short description for people who cannot see it.</li>
+      <li>The builder warns you when text and background colours are hard to read, and the checklist warns about buttons without a link.</li>
+    </ul>
     <h3>While it sends</h3>
     <p>The campaign page updates every few seconds. You can <strong>pause</strong>, <strong>resume</strong> or <strong>cancel</strong>. If your email server
     stops accepting mail, sending pauses automatically and an alert appears. Fix the problem, then press Resume.</p>

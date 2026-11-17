@@ -24,6 +24,7 @@
 | `src/config.js` | Validates environment variables (zod); fails fast with a list of problems |
 | `src/lib/settings.js` | Typed settings with defaults, 5 s cache, partial updates, encrypted bounce-mailbox password |
 | `src/lib/secrets.js` | Generated secrets; AES-256-GCM encrypt/decrypt with an HKDF-derived key |
+| `src/engine/blocks.js` | Drag-and-drop builder documents: validation (zod), cleaning, and rendering to table-based, inline-styled email HTML with phone stacking |
 | `src/engine/render.js` | Template + content merge, personalisation tags (HTML-escaped, no logic), link rewriting, open pixel, compliance footer, `List-Unsubscribe` headers, plain-text part, HTML sanitising |
 | `src/engine/sender.js` | Campaign start (recipient snapshot + link table), rate-limited sending, retries, error handling, completion, opt-in confirmation emails |
 | `src/engine/mailer.js` | Pooled nodemailer transport (TLS 1.2+), SMTP error classification |
@@ -32,6 +33,26 @@
 | `src/engine/worker.js` | Worker loops and health/upkeep |
 | `src/modules/*` | REST API per feature; `public/` holds the recipient-facing pages and webhook |
 | `public/` | Single-page app: Bootstrap 5, ES modules, no build step, no inline script (strict CSP) |
+
+## Email builder
+
+New campaigns use a block builder (`public/js/builder.js`). The browser only edits a JSON document:
+
+```json
+{ "version": 1, "blocks": [ { "id": "b1", "type": "heading", "props": { "text": "Hi {{ first_name | \"there\" }}", "level": 2 } },
+                             { "id": "b2", "type": "columns", "props": { "ratio": "50-50", "columns": [[ ... ], [ ... ]] } } ] }
+```
+
+On every save the server:
+1. validates the document. Colours must be `#rrggbb`; URLs must be http(s), mailto, tel or a `{{ tag }}`; sizes are
+   bounded; columns cannot be nested; there are at most 200 blocks;
+2. cleans rich text (inline formatting, links, lists only) and HTML blocks, and stores the **cleaned** document;
+3. renders table-based HTML with inline styles (what email clients support), plus a small `@media` rule that stacks
+   columns on phones.
+
+The browser's own rendering is never stored or sent. The canvas styles elements through the CSSOM, because the app's
+CSP blocks inline style attributes. Switching a design to the HTML editor uses the server-rendered HTML. Switching
+back wraps it as one HTML block.
 
 ## Worker loops
 
@@ -138,7 +159,7 @@ All public routes are rate-limited (300/min per IP).
 | `users`, `sessions` | Portal accounts (Argon2id), server-side sessions |
 | `contacts` | Email, hash, names, company, source, attributes (jsonb), consent (jsonb), soft-bounce count, last sent/open/click/bounce |
 | `lists`, `list_members` | Lists (single/double opt-in) and memberships (`subscribed`/`unconfirmed`/`unsubscribed`) |
-| `templates`, `campaigns`, `campaign_lists` | Content and targeting; campaign status `draft → scheduled → sending ⇄ paused → sent` or `cancelled` |
+| `templates`, `campaigns`, `campaign_lists` | Content and targeting; `campaigns.editor` is `builder`, `visual` or `html`, and a builder campaign keeps its design in `body_json` with the server-rendered result in `body_html`; campaign status `draft → scheduled → sending ⇄ paused → sent` or `cancelled` |
 | `messages` | One row per recipient email (campaign, opt-in, test); token, status, attempts, timestamps, error |
 | `links`, `tracking_events` | Campaign links; opens and clicks |
 | `bounce_events` | Every bounce with source, codes, classification, action taken |

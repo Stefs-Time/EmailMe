@@ -1,5 +1,6 @@
 import { get, put, post, del } from '../api.js';
 import { html, raw, mount, $, $$, num, loading, options, toast, errorToast, formModal, confirmModal, esc } from '../ui.js';
+import { createBuilder, documentFromHtml } from '../builder.js';
 
 const TAGS = [
   ['first_name', 'First name'], ['last_name', 'Last name'], ['full_name', 'Full name'], ['company', 'Company'],
@@ -30,9 +31,9 @@ export async function render(el, ctx, [id]) {
           <button class="btn btn-teal" id="send"><i class="bi bi-send me-1"></i>Send now</button>` : ''}
       </div>
     </div>
+    <form id="cform" novalidate>
     <div class="row g-3">
       <div class="col-xl-7">
-        <form id="cform" novalidate>
         <div class="card mb-3"><div class="card-header">1 · Who receives it</div><div class="card-body">
           <div class="list-pick" role="group" aria-label="Lists">
             ${facets.lists.length ? facets.lists.map((l) => html`<div class="form-check">
@@ -55,12 +56,24 @@ export async function render(el, ctx, [id]) {
             <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="tc" name="track_clicks" ${c.track_clicks ? raw('checked') : ''}><label class="form-check-label" for="tc">Track link clicks</label></div>
           </div>
         </div></div></div>
-        <div class="card mb-3"><div class="card-header d-flex align-items-center gap-2">3 · Content
+      </div>
+      <div class="col-xl-5">
+        <div class="card mb-3" id="ready"></div>
+        <div class="card preview-card"><div class="card-header d-flex align-items-center">Preview <span class="small text-muted-2 ms-2">with sample data and your template</span>
+          <div class="btn-group btn-group-sm ms-auto" role="group" aria-label="Preview width">
+            <button type="button" class="btn btn-outline-secondary active" data-width="100%">Desktop</button>
+            <button type="button" class="btn btn-outline-secondary" data-width="375px">Mobile</button></div></div>
+          <div class="preview-frame-wrap"><iframe id="preview" title="Email preview" sandbox="allow-popups"></iframe></div></div>
+      </div>
+      <div class="col-12">
+        <div class="card mb-3"><div class="card-header d-flex align-items-center gap-2 flex-wrap">3 · Content
           <div class="nav nav-pills ms-auto" role="group" aria-label="Editor mode">
-            <button type="button" class="nav-link py-1 px-2 ${c.editor === 'visual' ? 'active' : ''}" data-tab="visual" aria-pressed="${c.editor === 'visual'}">Visual</button>
-            <button type="button" class="nav-link py-1 px-2 ${c.editor === 'html' ? 'active' : ''}" data-tab="html" aria-pressed="${c.editor === 'html'}">HTML</button>
+            <button type="button" class="nav-link py-1 px-2" data-tab="builder" aria-pressed="false"><i class="bi bi-grid-1x2 me-1"></i>Builder</button>
+            <button type="button" class="nav-link py-1 px-2" data-tab="visual" aria-pressed="false">Visual</button>
+            <button type="button" class="nav-link py-1 px-2" data-tab="html" aria-pressed="false">HTML</button>
             <button type="button" class="nav-link py-1 px-2" data-tab="text" aria-pressed="false">Plain text</button>
           </div></div>
+          <div id="builder" class="d-none"></div>
           <div class="editor-toolbar border-bottom" id="toolbar" role="toolbar" aria-label="Formatting">
             <button type="button" class="btn btn-sm btn-light" data-cmd="bold" title="Bold" aria-label="Bold"><i class="bi bi-type-bold"></i></button>
             <button type="button" class="btn btn-sm btn-light" data-cmd="italic" title="Italic" aria-label="Italic"><i class="bi bi-type-italic"></i></button>
@@ -86,26 +99,24 @@ export async function render(el, ctx, [id]) {
           <div class="editor-surface" id="visual" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Email content"></div>
           <textarea class="form-control mono editor-code d-none" id="htmlsrc" aria-label="HTML source" spellcheck="false"></textarea>
           <div class="d-none" id="textwrap"><textarea class="form-control editor-code" id="textsrc" aria-label="Plain text version" placeholder="Leave empty to generate the plain-text version automatically from the content."></textarea></div>
-          <div class="card-footer small text-muted-2">An unsubscribe link and your organisation's address are added to every email automatically if the template does not include them.</div>
+          <div class="card-footer small text-muted-2">The template adds the header and footer around this content. An unsubscribe link and your organisation's address are always included.</div>
         </div>
-        </form>
       </div>
-      <div class="col-xl-5">
-        <div class="card mb-3" id="ready"></div>
-        <div class="card preview-card"><div class="card-header d-flex align-items-center">Preview <span class="small text-muted-2 ms-2">with sample data</span>
-          <div class="btn-group btn-group-sm ms-auto" role="group" aria-label="Preview width">
-            <button type="button" class="btn btn-outline-secondary active" data-width="100%">Desktop</button>
-            <button type="button" class="btn btn-outline-secondary" data-width="375px">Mobile</button></div></div>
-          <div class="preview-frame-wrap"><iframe id="preview" title="Email preview" sandbox="allow-popups"></iframe></div></div>
-      </div>
-    </div>`);
+    </div>
+    </form>`);
 
   const form = $('#cform', el);
   const visual = $('#visual', el);
   const htmlsrc = $('#htmlsrc', el);
   const textsrc = $('#textsrc', el);
   let editor = c.editor;
-  visual.innerHTML = c.body_html; // stored content is sanitised server-side
+  let builder = null;
+  let lastHtml = c.body_html;
+  const startBuilder = (doc) => { builder = createBuilder($('#builder', el), doc, { onChange: () => changed() }); };
+  if (editor === 'builder') startBuilder(c.body_json || documentFromHtml(c.body_html));
+  // Stored content is sanitised server-side. Builder output (inline styles) is not loaded into the
+  // visual editor: the app's CSP blocks inline styles, so it would display wrongly there.
+  if (editor !== 'builder') visual.innerHTML = c.body_html;
   htmlsrc.value = c.body_html;
   textsrc.value = c.body_text;
 
@@ -113,7 +124,8 @@ export async function render(el, ctx, [id]) {
   const collect = () => ({
     name: form.name.value, subject: form.subject.value, preheader: form.preheader.value,
     from_name: form.from_name.value, from_email: form.from_email.value, reply_to: form.reply_to.value,
-    template_id: Number(form.template_id.value) || null, editor, body_html: currentHtml(), body_text: textsrc.value,
+    template_id: Number(form.template_id.value) || null, editor,
+    body_html: editor === 'builder' ? '' : currentHtml(), ...(editor === 'builder' ? { body_json: builder.getDoc() } : {}), body_text: textsrc.value,
     track_opens: form.track_opens.checked, track_clicks: form.track_clicks.checked, list_ids: [...selected],
   });
 
@@ -125,6 +137,7 @@ export async function render(el, ctx, [id]) {
     $('#save-state', el).textContent = 'Saving…';
     saving = put(`/campaigns/${id}`, collect()).then((r) => {
       $('#save-state', el).textContent = 'All changes saved';
+      lastHtml = r.data.body_html;
       renderReady(r.data);
       refreshPreview();
       return true;
@@ -200,7 +213,7 @@ export async function render(el, ctx, [id]) {
   });
   htmlsrc.addEventListener('input', changed);
   textsrc.addEventListener('input', changed);
-  form.addEventListener('input', (e) => { if (!e.target.matches('[data-list]')) changed(); });
+  form.addEventListener('input', (e) => { if (!e.target.matches('[data-list]') && !e.target.closest('#builder')) changed(); });
   form.addEventListener('change', (e) => {
     if (e.target.matches('[data-list]')) {
       selected[e.target.checked ? 'add' : 'delete'](Number(e.target.value));
@@ -209,21 +222,44 @@ export async function render(el, ctx, [id]) {
   });
   form.addEventListener('submit', (e) => e.preventDefault());
 
-  // Tabs
-  el.addEventListener('click', (e) => {
-    const t = e.target.closest('[data-tab]');
-    if (!t) return;
-    const tab = t.dataset.tab;
-    if (tab === 'html' && editor === 'visual') htmlsrc.value = visual.innerHTML;
-    if (tab === 'visual' && editor === 'html') visual.innerHTML = htmlsrc.value;
-    if (tab !== 'text') { if (editor !== tab) changed(); editor = tab; }
-    $$('[data-tab]', el).forEach((x) => { x.classList.toggle('active', x === t); x.setAttribute('aria-pressed', String(x === t)); });
+  // Editor modes
+  function showPane(tab) {
+    $$('[data-tab]', el).forEach((x) => { const on = x.dataset.tab === tab; x.classList.toggle('active', on); x.setAttribute('aria-pressed', String(on)); });
+    $('#builder', el).classList.toggle('d-none', tab !== 'builder');
     visual.classList.toggle('d-none', tab !== 'visual');
     $('#toolbar', el).classList.toggle('d-none', tab !== 'visual');
     htmlsrc.classList.toggle('d-none', tab !== 'html');
     $('#textwrap', el).classList.toggle('d-none', tab !== 'text');
+  }
+  async function switchTo(tab) {
+    if (tab === 'text' || tab === editor) { showPane(tab); return; }
+    if (editor === 'builder') {
+      const ok = await confirmModal({ title: 'Convert the design to HTML?', confirmLabel: 'Convert to HTML',
+        message: 'The drag-and-drop layout becomes HTML code that you edit directly. You can return to the builder later, but the content then comes back as a single HTML block.' });
+      if (!ok) return;
+      dirty = true;
+      if (!(await save())) return; // the server renders the latest design
+      htmlsrc.value = lastHtml;
+      tab = 'html'; // designed layouts use inline styles, which only the HTML editor shows faithfully
+    } else if (tab === 'builder') {
+      const ok = await confirmModal({ title: 'Switch to the drag-and-drop builder?', confirmLabel: 'Use the builder',
+        message: 'Your current content is kept as one HTML block. Add, rearrange or replace blocks around it.' });
+      if (!ok) return;
+      startBuilder(documentFromHtml(currentHtml()));
+    } else if (tab === 'html') {
+      htmlsrc.value = visual.innerHTML;
+    } else {
+      visual.innerHTML = htmlsrc.value;
+    }
+    editor = tab;
+    changed();
+    showPane(tab);
+  }
+  el.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-tab]');
+    if (t) switchTo(t.dataset.tab);
   });
-  if (editor === 'html') el.querySelector('[data-tab="html"]').click();
+  showPane(editor);
 
   el.addEventListener('click', (e) => {
     const w = e.target.closest('[data-width]');

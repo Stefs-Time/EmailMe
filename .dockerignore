@@ -1,0 +1,12 @@
+# Only portal/ (minus dev files) goes into the image.
+**/node_modules
+**/npm-debug.log
+**/.env
+**/.env.*
+portal/test
+**/coverage
+**/*.md
+.git
+docs
+deploy
+backups

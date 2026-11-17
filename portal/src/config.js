@@ -19,8 +19,10 @@ const bool = (def) =>
 
 const schema = z.object({
   // --- Required ------------------------------------------------------------
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-  SMTP_HOST: z.string().min(1, 'SMTP_HOST is required'),
+  DATABASE_URL: z.string({ error: 'is required: the PostgreSQL connection URL (on Railway: ${{Postgres.DATABASE_URL}})' })
+    .min(1, 'is required: the PostgreSQL connection URL (on Railway: ${{Postgres.DATABASE_URL}})'),
+  SMTP_HOST: z.string({ error: 'is required: your outgoing mail server, e.g. smtp.example.co.za (also set SMTP_PORT, SMTP_USER, SMTP_PASSWORD)' })
+    .min(1, 'is required: your outgoing mail server'),
 
   // --- SMTP ----------------------------------------------------------------
   SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),

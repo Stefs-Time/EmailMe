@@ -102,7 +102,7 @@ Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ## Repository layout
 
 ```
-portal/                    the application (deploy this folder)
+portal/                    the application source
   src/
     server.js              startup: migrations → secrets → settings → admin → worker → HTTP
     config.js              environment variables (validated at startup)
@@ -113,7 +113,7 @@ portal/                    the application (deploy this folder)
   public/                  single-page web app (Bootstrap 5, no build step)
   scripts/                 backup.js, create-admin.js
   test/                    unit + end-to-end acceptance tests (with a local SMTP test server)
-  Dockerfile, railway.json
+Dockerfile, railway.json   image + Railway config (built from the repo root)
 docker-compose.yml         self-hosted stack: Caddy + MailHarbor + PostgreSQL + backups
 deploy/                    Caddyfile, restore script
 docs/                      guides (see below)
@@ -124,7 +124,8 @@ docs/                      guides (see below)
 Two services, plus an optional backup cron:
 
 1. **New Project → Deploy PostgreSQL.**
-2. **+ New → GitHub Repo →** this repository. Set *Root Directory* to `portal`, then generate a public domain.
+2. **+ New → GitHub Repo →** this repository. Leave *Root Directory* empty: Railway uses the root `Dockerfile` and
+   `railway.json`. Then generate a public domain.
 3. Set these variables on the MailHarbor service:
 
    | Variable | Value |

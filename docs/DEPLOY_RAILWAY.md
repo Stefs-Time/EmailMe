@@ -6,8 +6,8 @@ off-site backups. You only set variables; there is nothing to run on your own ma
 ```
 Railway project
 ├── Postgres          Railway database template
-├── MailHarbor        this repo, root directory: portal   → public domain, e.g. mail.example.co.za
-└── Backups (cron)    this repo, root directory: portal, start: node scripts/backup.js   (optional, recommended)
+├── MailHarbor        this repo (root directory empty)   → public domain, e.g. mail.example.co.za
+└── Backups (cron)    this repo, start: node scripts/backup.js   (optional, recommended)
 ```
 
 > **Plan requirement: Railway Pro.** According to Railway's
@@ -17,7 +17,7 @@ Railway project
 >
 > **Verification status:** these steps follow Railway's documented model:
 > - monorepo root directories;
-> - config-as-code (`portal/railway.json`: Dockerfile build, `/healthz` health check, 1 replica);
+> - config-as-code (`railway.json`: Dockerfile build, `/healthz` health check, 1 replica);
 > - `${{Service.VAR}}` references;
 > - `RAILWAY_PUBLIC_DOMAIN`;
 > - cron schedules.
@@ -47,7 +47,9 @@ Railway → **New Project** → **Deploy PostgreSQL**. Keep the service name `Po
 ## 2. MailHarbor service
 
 1. **+ New → GitHub Repo →** this repository. Name the service **MailHarbor**.
-2. *Settings → Source → Root Directory:* `portal`. Railway uses `portal/Dockerfile` and `portal/railway.json`.
+2. *Settings → Source → Root Directory:* leave **empty**. Railway reads `railway.json` at the repository root and builds
+   the root `Dockerfile`. If the build log says **"Railpack failed to prepare the build"**, Railway did not find them:
+   clear the Root Directory setting and redeploy.
 3. *Settings → Networking:* **Generate Domain** (or add your custom domain, see §5).
 4. *Variables:*
 
@@ -134,7 +136,7 @@ Railway's own Postgres backups are a useful first line, but keep an **off-site**
 
 1. Create a bucket on any S3-compatible store (Cloudflare R2, AWS S3, Backblaze B2, Railway storage buckets) and an
    access key limited to that bucket.
-2. **+ New → GitHub Repo →** this repository. Name it **Backups** and set *Root Directory* to `portal`.
+2. **+ New → GitHub Repo →** this repository. Name it **Backups** (root directory empty).
 3. *Settings → Deploy:* set **Custom Start Command** to `node scripts/backup.js` and **Cron Schedule** to `0 0 * * *`.
    Cron runs in UTC, so this is 02:00 in South Africa. Remove the HTTP health check for this service, because it
    inherits `railway.json`.
@@ -194,5 +196,5 @@ Keep **replicas at 1** (set in `railway.json`).
 | Lost the setup code | Redeploy or restart. It is printed on every start until the first administrator exists |
 | Can't sign in / locked out | Set `ADMIN_EMAIL` + `ADMIN_PASSWORD` and redeploy (see §2) |
 | Unsubscribe links point to the wrong address | Settings → General → Public web address (or `PUBLIC_URL`) |
-| Backup job fails: `pg_dump … server version mismatch` | The image ships a recent pg_dump. For a newer server, set build arg `PG_CLIENT_VERSION` in `portal/Dockerfile` |
+| Backup job fails: `pg_dump … server version mismatch` | The image ships a recent pg_dump. For a newer server, set build arg `PG_CLIENT_VERSION` in `Dockerfile` |
 | Bounce mailbox alert | Settings → Bounces → *Test connection* shows the IMAP error (wrong password, IMAP disabled, app password needed) |

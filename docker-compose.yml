@@ -32,7 +32,7 @@ services:
     networks: [internal]
 
   portal:
-    build: ./portal
+    build: .
     image: mailharbor-portal:latest
     restart: unless-stopped
     depends_on:

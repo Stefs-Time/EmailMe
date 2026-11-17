@@ -2,6 +2,7 @@ import { get, post, put } from '../api.js';
 import { html, mount, $, $$, loading, toast, errorToast, confirmModal } from '../ui.js';
 import { createBuilder } from '../builder.js';
 import { enableTagChips } from '../tags.js';
+import { getTemplateSample } from '../samples.js';
 
 /** Starting design for a new template: name header, campaign content, footer. */
 const STARTER = {
@@ -17,7 +18,15 @@ const STARTER = {
 export async function render(el, ctx, [id]) {
   mount(el, loading());
   const isNew = id === 'new';
-  const t = isNew ? { name: 'New template', editor: 'builder', body_json: STARTER, html: '' } : (await get(`/templates/${id}`)).data;
+  let t;
+  if (isNew) {
+    // Started from a ready-made design (Templates → New template → gallery)?
+    const sampleId = ctx.query().get('sample');
+    const sample = sampleId ? await getTemplateSample(sampleId).catch(() => null) : null;
+    t = { name: sample && sample.id !== 'standard' ? `${sample.name} (my copy)` : 'New template', editor: 'builder', body_json: sample?.doc || STARTER, html: '' };
+  } else {
+    t = (await get(`/templates/${id}`)).data;
+  }
   let editor = t.editor === 'builder' ? 'builder' : 'html';
   let builder = null;
   let dirty = false;

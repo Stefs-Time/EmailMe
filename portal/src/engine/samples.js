@@ -168,16 +168,32 @@ const SAMPLES = [
 // Fail fast at startup if a sample is not a valid document.
 for (const s of SAMPLES) renderDocument({ version: 1, blocks: s.blocks });
 
+/** Matching ready-made template (templateSamples.js) per campaign sample; none = the default template. */
+const MATCHING_TEMPLATE = {
+  promotion: 'promotion',
+  'event-invite': 'promotion',
+  'product-launch': 'new-release',
+  'still-interested': 'clean',
+  'find-out-more': 'clean',
+  newsletter: 'clean',
+  welcome: 'clean',
+};
+const TEMPLATE_NAMES = { promotion: 'Promotion', 'new-release': 'New release', clean: 'Clean' };
+
 /** Public list for the gallery. */
 function listSamples() {
-  return SAMPLES.map(({ blocks, ...meta }) => ({ ...meta, blockCount: blocks.length }));
+  return SAMPLES.map(({ blocks, ...meta }) => ({
+    ...meta, blockCount: blocks.length,
+    template: MATCHING_TEMPLATE[meta.id] || null, templateName: TEMPLATE_NAMES[MATCHING_TEMPLATE[meta.id]] || null,
+  }));
 }
 
-/** A fresh copy of a sample's document, subject and preheader. */
+/** A fresh copy of a sample's document, subject, preheader and matching template key. */
 function getSample(sampleId) {
   const s = SAMPLES.find((x) => x.id === sampleId);
   if (!s) return null;
-  return { subject: s.subject, preheader: s.preheader, doc: { version: 1, blocks: JSON.parse(JSON.stringify(s.blocks)) } };
+  return { subject: s.subject, preheader: s.preheader, template: MATCHING_TEMPLATE[s.id] || null,
+    doc: { version: 1, blocks: JSON.parse(JSON.stringify(s.blocks)) } };
 }
 
 module.exports = { listSamples, getSample, SAMPLE_IDS: SAMPLES.map((s) => s.id) };

@@ -151,6 +151,11 @@ function campaignRoutes({ pool, settings, worker }) {
       body.body_json = sample.doc;
       body.subject ||= sample.subject;
       body.preheader ||= sample.preheader;
+      // Use the matching ready-made template (e.g. Promotion) when it still exists.
+      if (body.template_id == null && sample.template) {
+        const { rows: match } = await pool.query('SELECT id FROM portal.templates WHERE sample_key = $1 ORDER BY id LIMIT 1', [sample.template]);
+        if (match[0]) body.template_id = match[0].id;
+      }
     }
     const s = await settings.all();
     const { rows: tpl } = await pool.query('SELECT id FROM portal.templates WHERE is_default LIMIT 1');

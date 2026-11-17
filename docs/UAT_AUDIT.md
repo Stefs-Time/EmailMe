@@ -16,7 +16,7 @@ There have been two rounds:
 | Browser walkthrough | Fresh database → first-run setup with the log code → settings (address, SMTP test, bounce tab) → list + contact → campaign editor (subject, preheader, personalisation tag, button, autosave, readiness) → test send → send now → report → templates → system health |
 | Role crawl | Signed in as **viewer** and **manager**, opened all 21 routes (including deep links to admin-only and edit screens), recorded the menu, every visible action, failed API calls and page errors |
 | Accessibility | axe-core (WCAG 2 A/AA) on every screen in the walkthrough and the role crawl |
-| Functional regression | 22 unit tests + 24 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)) |
+| Functional regression | 22 unit tests + 25 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)) |
 
 ## 2. Round 2 findings and fixes
 
@@ -74,6 +74,23 @@ How it was tested:
 | B8 | Touch | Low | HTML5 drag and drop does not work on phones, and Firefox can't drag a `<button>`. | Tiles are focusable elements; tap or Enter adds below the selected block | Added, tested (phone emulation) |
 
 Result: 15/15 pass, 0 console errors with the CSP enforced, axe 0 violations, no horizontal scroll at 390px.
+
+### Ready-made templates (added 17 Nov 2026, from UAT feedback)
+
+| # | Area | Sev. | Request | Change | Status |
+|---|---|---|---|---|---|
+| R1 | Templates | Medium | Templates to match the campaign samples (clean, promotion, new release). | Clean, Promotion and New release builder templates are installed once (a deleted preset is not re-added). Campaign samples use the matching template, and the gallery shows which. *New template* opens a gallery of all four designs. List badge "Ready-made" | Done, tested |
+
+Browser test (7 steps):
+- the 3 ready-made templates are listed;
+- a server preview of each;
+- the gallery offers 4 designs;
+- Promotion saves as "my copy";
+- the campaign gallery shows "Uses the Promotion template", and the campaign gets it;
+- the preview shows the banner;
+- axe: 0 violations.
+
+The previous builder, template and sample suites still pass.
 
 ### Platform-managed recipient links and mail usage (added 17 Nov 2026, from UAT feedback)
 
@@ -196,7 +213,7 @@ Role crawl (viewer, manager × 21 routes):
 - **Viewer:** no write controls on any screen; the admin-only and edit routes show the permission page; 0 API errors, 0 page errors, 0 axe violations.
 - **Manager:** campaign, template, import, list, contact, suppression and export actions present. Settings, Users, Audit and Lift are absent. 0 API errors, 0 page errors, 0 axe violations.
 
-Acceptance suite: 24/24 pass. Unit tests: 22/22 pass.
+Acceptance suite: 25/25 pass. Unit tests: 22/22 pass.
 
 ## 5. Round 1 (listmonk-based build): findings still relevant
 

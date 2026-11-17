@@ -83,6 +83,13 @@ For an opt-out request by phone or email, use **Actions → Unsubscribe** and no
    | Event invitation | Date, time, venue and an RSVP button |
    | Welcome new subscribers | Saying hello and setting expectations |
 
+   Each sample also picks its **matching template**:
+   - Marketing promotion and Event invitation use **Promotion**;
+   - New product release uses **New release**;
+   - the others use **Clean**;
+   - Simple message uses your default template.
+
+   The gallery shows which template each sample uses, and you can change it in the envelope section.
    Every sample is fully editable. Replace the [bracketed] text and add your images and links; the *Ready to send*
    checklist reminds you about buttons that still need a link. To switch an existing draft to a sample, use
    **Samples** above the builder (Undo brings your previous design back). Give the campaign an internal name and
@@ -217,6 +224,19 @@ Click empty space next to the email for **Page settings**: page background, cont
 content corners and padding. The preview shows the template around sample content and refreshes as you work.
 Press **Save** to keep your changes. Unlike campaigns, templates do not save automatically, because a template change
 affects every campaign that uses it.
+
+**Ready-made templates.** MailHarbor comes with four designs, marked *Ready-made* in the list:
+
+| Template | Look | Best for |
+|---|---|---|
+| MailHarbor standard | Light grey page, your name on top, white card | Everyday emails (the default) |
+| Clean | White and minimal, thin dividers | Updates, newsletters, personal notes |
+| Promotion | Bold navy page, "limited-time offers" banner, white card | Specials, sales, events |
+| New release | Light modern page, "new release" label, rounded card | Product launches, announcements |
+
+Make them yours: open one, select the image at the top and paste your logo's web address, then adjust colours and the
+footer line. **New template** opens the same gallery, so you can start another design from any of them. If you delete
+a ready-made template it stays deleted; campaign samples that used it fall back to your default template.
 
 Mark one template as the **default** for new campaigns. Templates written in HTML still work: use the **HTML** tab
 (the code must contain `{{ content }}`).

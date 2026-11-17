@@ -103,6 +103,10 @@ const G = {
     drag-and-drop builder, with two extra blocks: <strong>Campaign content</strong> (where each campaign appears; exactly one per template) and
     <strong>Footer</strong> (your organisation name, postal address, unsubscribe and "View in browser" links). Click empty space next to the email for
     <em>Page settings</em>. Press <em>Save</em> when done: template changes affect every campaign that uses the template.</p>
+    <p><strong>Ready-made templates:</strong> <em>Clean</em> (white, minimal), <em>Promotion</em> (bold navy with an offers banner) and
+    <em>New release</em> (light and modern) are included. Campaign samples use the matching one automatically, e.g. the Marketing promotion
+    sample uses Promotion. Add your logo by selecting the image at the top of the template and pasting its web address.
+    <em>New template</em> lets you start from any of these designs.</p>
     <div class="tip">Start a new or old list with a small batch. A high bounce rate in the first hour is a sign the list needs cleaning before you continue.</div>`)],
   bounces: ['Bounces explained', raw(`
     <h2>How bounces are handled</h2>

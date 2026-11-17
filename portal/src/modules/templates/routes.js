@@ -10,6 +10,7 @@ const { audit } = require('../../lib/audit');
 const { sanitize, renderMessage, DEFAULT_TEMPLATE } = require('../../engine/render');
 const { SAMPLE } = require('../campaigns/routes');
 const { renderTemplate, templateSchema, starterTemplate, renderDocument } = require('../../engine/blocks');
+const { listTemplateSamples, getTemplateSample, PRESET_IDS } = require('../../engine/templateSamples');
 
 const id = z.coerce.number().int().positive();
 const hasContent = (h) => /\{\{\s*content\s*\}\}/.test(h);
@@ -50,6 +51,33 @@ async function ensureDefaultTemplate(pool) {
                      WHERE editor = 'html' AND html IN ($1, $4)`, [DEFAULT_TEMPLATE, starter.html, starter.json, sanitize(DEFAULT_TEMPLATE)]);
 }
 
+/**
+ * Adds the ready-made template designs (Clean, Promotion, New release) once.
+ * Each preset is installed only the first time: if someone deletes or renames
+ * it, it is not brought back on the next restart.
+ */
+async function ensureTemplatePresets(pool) {
+  const { rows } = await pool.query(`SELECT value FROM portal.sync_state WHERE key = 'template_presets'`);
+  const installed = new Set(rows[0]?.value?.installed || []);
+  const todo = PRESET_IDS.filter((p) => !installed.has(p));
+  if (!todo.length) return;
+  await withTransaction(pool, async (db) => {
+    for (const key of todo) {
+      const sample = getTemplateSample(key);
+      const t = resolveTemplate({ name: sample.name, editor: 'builder', body_json: sample.doc });
+      const exists = await db.query('SELECT 1 FROM portal.templates WHERE sample_key = $1 OR LOWER(name) = LOWER($2)', [key, sample.name]);
+      if (!exists.rowCount) {
+        await db.query(`INSERT INTO portal.templates (name, html, editor, body_json, sample_key) VALUES ($1, $2, 'builder', $3, $4)`,
+          [sample.name, t.html, t.json, key]);
+      }
+      installed.add(key);
+    }
+    await db.query(
+      `INSERT INTO portal.sync_state (key, value) VALUES ('template_presets', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [JSON.stringify({ installed: [...installed] })]);
+  });
+}
+
 const SAMPLE_CONTENT = renderDocument({ blocks: [
   { id: 's1', type: 'heading', props: { text: 'Sample heading' } },
   { id: 's2', type: 'text', props: { html: '<p>Hello {{ first_name }}, this is where each campaign\'s content appears.</p>' } },
@@ -61,10 +89,20 @@ function templateRoutes({ pool, settings }) {
 
   r.get('/', requirePermission('contacts:read'), async (_req, res) => {
     const { rows } = await pool.query(
-      `SELECT t.id, t.name, t.is_default, t.editor, t.created_at, t.updated_at,
+      `SELECT t.id, t.name, t.is_default, t.editor, t.sample_key, t.created_at, t.updated_at,
               (SELECT COUNT(*)::int FROM portal.campaigns c WHERE c.template_id = t.id) AS used_by
          FROM portal.templates t ORDER BY t.is_default DESC, t.name`);
     res.json({ success: true, data: rows });
+  });
+
+  /** Ready-made designs for the "New template" gallery (defined before /:id). */
+  r.get('/samples', requirePermission('contacts:read'), (_req, res) => {
+    res.json({ success: true, data: listTemplateSamples() });
+  });
+  r.get('/samples/:sample', requirePermission('contacts:read'), (req, res) => {
+    const sample = getTemplateSample(String(req.params.sample));
+    if (!sample) throw notFound('Template design not found');
+    res.json({ success: true, data: sample });
   });
 
   r.get('/:id', requirePermission('contacts:read'), async (req, res) => {
@@ -147,4 +185,4 @@ function templateRoutes({ pool, settings }) {
   return r;
 }
 
-module.exports = { templateRoutes, ensureDefaultTemplate };
+module.exports = { templateRoutes, ensureDefaultTemplate, ensureTemplatePresets };

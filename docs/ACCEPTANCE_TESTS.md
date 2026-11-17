@@ -9,7 +9,7 @@ local SMTP server (`test/helpers/smtpSink.js`). That server rejects addresses by
 | `soft-` | 452 4.2.2 |
 | `policy-` | 550 5.7.1 |
 
-All 24 tests pass (17 Nov 2026).
+All 25 tests pass (17 Nov 2026).
 
 ```bash
 cd portal

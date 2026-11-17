@@ -26,7 +26,8 @@ in the app.
     (columns stack). The server validates the design and renders email-safe HTML;
   - a visual editor or raw HTML as alternatives, plus a plain-text part;
   - templates (the frame: header, colours, width, font, footer) designed in the same drag-and-drop builder or in HTML,
-    with a default template;
+    with a default template, plus **ready-made Clean, Promotion and New release templates** that the matching campaign
+    samples use automatically;
   - **8 sample designs** to start from: simple message, marketing promotion, new product release, "Are you still
     interested?", "Want to find out more?", monthly newsletter, event invitation, welcome;
   - **one-click personalisation**: field buttons (First name, Full name, Company… plus imported columns) insert

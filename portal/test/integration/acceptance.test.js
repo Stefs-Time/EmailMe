@@ -123,7 +123,7 @@ before(async () => {
   const { Settings } = require('../../src/lib/settings');
   const { createTransport } = require('../../src/engine/mailer');
   const { Worker } = require('../../src/engine/worker');
-  const { ensureDefaultTemplate } = require('../../src/modules/templates/routes');
+  const { ensureDefaultTemplate, ensureTemplatePresets } = require('../../src/modules/templates/routes');
   const { announceSetupCode } = require('../../src/modules/settings/routes');
   const { createApp } = require('../../src/app');
   const config = loadConfig({ DATABASE_URL: DB, SMTP_HOST: '127.0.0.1', SMTP_PORT: String(sink.port), SMTP_USER: sink.user, SMTP_PASSWORD: sink.pass,
@@ -134,6 +134,7 @@ before(async () => {
   await migrate(pool, logger);
   settings = new Settings(pool, await getOrCreate(pool, 'enc_key'), config);
   await ensureDefaultTemplate(pool);
+  await ensureTemplatePresets(pool);
   await announceSetupCode(pool, logger);
   const transport = createTransport(config);
   worker = new Worker({ pool, settings, transport, logger });
@@ -600,6 +601,55 @@ t('platform-managed links: buttons go to MailHarbor pages (stay subscribed, pref
   assert.ok(usage.data.daily.length === 7);
   assert.equal(usage.data.actions.stayed_subscribed, 1);
   assert.ok(usage.data.byCampaign.some((x) => x.id === c.data.id));
+});
+
+t('ready-made templates: Clean, Promotion and New release installed once; campaign samples use the matching template', async () => {
+  const { ensureTemplatePresets } = require('../../src/modules/templates/routes');
+  const list = (await http('admin', 'GET', '/api/templates')).data;
+  const presets = Object.fromEntries(list.filter((x) => x.sample_key).map((x) => [x.sample_key, x]));
+  assert.deepEqual(Object.keys(presets).sort(), ['clean', 'new-release', 'promotion']);
+  assert.ok(Object.values(presets).every((x) => x.editor === 'builder'));
+
+  const gallery = await http('admin', 'GET', '/api/templates/samples');
+  assert.deepEqual(gallery.data.map((x) => x.id), ['standard', 'clean', 'promotion', 'new-release']);
+  assert.equal((await http('admin', 'GET', '/api/templates/samples/promotion')).data.doc.settings.page_bg, '#0f2846');
+
+  // Samples pick their matching template; the simple message keeps the default.
+  const promo = await http('admin', 'POST', '/api/campaigns', { name: 'Specials', sample: 'promotion' });
+  assert.equal(promo.data.template_id, presets.promotion.id);
+  const launch = await http('admin', 'POST', '/api/campaigns', { name: 'Launch', sample: 'product-launch' });
+  assert.equal(launch.data.template_id, presets['new-release'].id);
+  const plain = await http('admin', 'POST', '/api/campaigns', { name: 'Plain', sample: 'blank' });
+  assert.equal(plain.data.template_id, list.find((x) => x.is_default).id);
+  const samples = (await http('admin', 'GET', '/api/campaigns/samples')).data;
+  assert.equal(samples.find((x) => x.id === 'promotion').templateName, 'Promotion');
+
+  // A delivered email is wrapped in the Promotion design.
+  await addContact('promo-pia@ok.example');
+  const doc = promo.data.body_json;
+  for (const b of doc.blocks.flatMap((x) => (x.type === 'columns' ? x.props.columns.flat() : [x]))) if (b.type === 'button') b.props.url = 'https://shop.acme.example';
+  const put = await http('admin', 'PUT', `/api/campaigns/${promo.data.id}`, {
+    name: 'Specials', subject: 'Specials', preheader: '', from_name: 'Acme', from_email: 'news@acme.example', reply_to: '',
+    template_id: presets.promotion.id, editor: 'builder', body_json: doc, body_text: '', track_opens: false, track_clicks: false, list_ids: [listId],
+  });
+  assert.equal(put.status, 200, JSON.stringify(put));
+  sink.messages.length = 0;
+  assert.equal((await http('admin', 'POST', `/api/campaigns/${promo.data.id}/send`)).status, 200, 'promotion sample is sendable once links are set');
+  await drain();
+  const [m] = sinkTo('promo-pia@ok.example');
+  assert.match(m.parsed.html, /LIMITED-TIME OFFERS/);
+  assert.match(m.parsed.html, /background-color:#0f2846/);
+  assert.match(m.parsed.html, /This month's specials/);
+
+  // Installed once: re-running adds nothing; a deleted preset stays deleted.
+  await ensureTemplatePresets(pool);
+  assert.equal((await pool.query('SELECT COUNT(*)::int AS n FROM portal.templates WHERE sample_key IS NOT NULL')).rows[0].n, 3);
+  await pool.query(`UPDATE portal.campaigns SET template_id = NULL WHERE template_id = $1`, [presets.clean.id]);
+  assert.equal((await http('admin', 'DELETE', `/api/templates/${presets.clean.id}`)).status, 200);
+  await ensureTemplatePresets(pool);
+  assert.equal((await pool.query(`SELECT COUNT(*)::int AS n FROM portal.templates WHERE sample_key = 'clean'`)).rows[0].n, 0, 'deleted preset is not re-added');
+  const welcome = await http('admin', 'POST', '/api/campaigns', { name: 'Welcome', sample: 'welcome' });
+  assert.equal(welcome.data.template_id, list.find((x) => x.is_default).id, 'falls back to the default template');
 });
 
 t('exports and campaign report download as CSV', async () => {

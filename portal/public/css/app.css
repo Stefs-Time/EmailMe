@@ -342,3 +342,4 @@ code { color: #22303f; background: #eef1f5; padding: .1rem .35rem; border-radius
 .overview-page img { display: block; width: 100%; height: auto; border-radius: 6px; box-shadow: 0 2px 10px rgba(22, 54, 95, .14); background: #fff; }
 .overview-page figcaption { text-align: center; margin-top: .4rem; }
 @media (max-width: 575.98px) { .overview-pages { grid-template-columns: 1fr; } }
+.text-teal { color: #0b6b62; }

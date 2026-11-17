@@ -2,7 +2,7 @@
 
 const express = require('express');
 const { z } = require('zod');
-const { parse } = require('../../lib/errors');
+const { parse, notFound } = require('../../lib/errors');
 const { requirePermission } = require('../../middleware/auth');
 const { readOnly } = require('../../db/pool');
 const repo = require('./repo');
@@ -26,9 +26,17 @@ const filterSchema = z.object({
   consent_method: z.string().trim().max(50).optional(),
   created_from: z.coerce.date().optional(),
   created_to: z.coerce.date().optional(),
+  segment_id: z.coerce.number().int().positive().optional(),
 });
 
-function toFilters(q) {
+/** Query → repository filters. A saved segment's rules are loaded from the database. */
+async function toFilters(q, db) {
+  let segmentRules;
+  if (q.segment_id) {
+    const { rows } = await db.query('SELECT rules FROM portal.segments WHERE id = $1', [q.segment_id]);
+    if (!rows[0]) throw notFound('Segment not found');
+    segmentRules = rows[0].rules;
+  }
   return {
     q: q.q || undefined,
     status: q.status,
@@ -37,6 +45,7 @@ function toFilters(q) {
     consentMethod: q.consent_method || undefined,
     createdFrom: q.created_from,
     createdTo: q.created_to,
+    segmentRules,
   };
 }
 
@@ -55,7 +64,7 @@ function contactRoutes(deps) {
       req.query,
     );
     const { rows, total } = await readOnly(deps.pool, (db) =>
-      repo.queryContacts(db, toFilters(q), { page: q.page, perPage: q.per_page, sort: q.sort, dir: q.dir }),
+      toFilters(q, db).then((f) => repo.queryContacts(db, f, { page: q.page, perPage: q.per_page, sort: q.sort, dir: q.dir })),
     );
     res.json({ success: true, data: rows, meta: { total, page: q.page, perPage: q.per_page } });
   });
@@ -63,7 +72,7 @@ function contactRoutes(deps) {
   /** Every id matching the filters (max 5000, the bulk-action limit). */
   r.get('/ids', requirePermission('contacts:write'), async (req, res) => {
     const q = parse(filterSchema, req.query);
-    const data = await readOnly(deps.pool, (db) => repo.matchingIds(db, toFilters(q), 5000));
+    const data = await readOnly(deps.pool, async (db) => repo.matchingIds(db, await toFilters(q, db), 5000));
     res.json({ success: true, data });
   });
 

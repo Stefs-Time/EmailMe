@@ -17,6 +17,22 @@ in the app.
   add/remove from lists, unsubscribe, suppress; a contact page with every email sent, opens, clicks, bounces, consent
   evidence and status history.
 - **Lists:** single or double opt-in (confirmation email with a one-click confirm page).
+- **Sign-up forms:**
+  - **Pages:** each form has its own hosted page and embed code for your website, with your heading, fields, consent
+    statement, button colour and thank-you message or page.
+  - **Consent:** evidence (statement, form, IP address, time) is recorded for POPIA, and double opt-in lists send a
+    confirmation email first.
+  - **Protection:** a hidden spam trap, a signed minimum fill time and rate limits keep bots out. Suppressed addresses
+    are never re-subscribed, and the reply never reveals whether an address is already known.
+- **Saved segments:** audiences built from rules, matched on all or any of them. For example: last opened in the last
+  90 days, source, email domain, any imported column such as city, list membership, status, or date added. Each shows
+  a live count and preview, can filter the contact list and exports, and can narrow a campaign. List membership still
+  carries consent.
+- **Image library:**
+  - **Compression:** uploads are resized for email (max 1200px wide), rotated upright, stripped of metadata (GPS,
+    camera) and compressed to JPEG, or PNG when transparent. Animated GIFs are kept.
+  - **Storage:** images are stored in PostgreSQL (so they're in every backup) and served from a permanent link.
+  - **Use:** pick or upload from the builder's image block. Images used by a campaign or template can't be deleted.
 - **Import wizard:** CSV (comma, semicolon or tab), automatic column matching, custom attributes, validation, duplicate
   detection, matching against existing contacts, suppression check, a required consent basis and a
   **preview before anything is saved**. After the import you get a downloadable row-by-row report.
@@ -33,6 +49,9 @@ in the app.
   - **one-click personalisation**: field buttons (First name, Full name, Company… plus imported columns) insert
     `{{ first_name | "there" }}`-style tags at the cursor in the subject, preview text or any block;
   - a preheader (inbox preview text);
+  - **Google Analytics (UTM) tags** on web links (`utm_source`, `utm_medium`, `utm_campaign`), with defaults and an
+    optional website list in Settings. Each campaign can rename or switch them off. Tags are frozen when sending starts;
+    MailHarbor's own links are never tagged;
   - preview as a sample contact, test sends;
   - a readiness checklist;
   - send now or schedule; pause, resume and cancel.

@@ -13,6 +13,7 @@
  * Values are HTML-escaped in the HTML part.
  */
 const sanitizeHtml = require('sanitize-html');
+const { addUtm, utmParamsFor } = require('./utm');
 
 const TAG_RE = /\{\{\s*([a-zA-Z_][\w.]*)\s*(?:\|\s*"([^"]*)"\s*)?\}\}/g;
 
@@ -147,6 +148,10 @@ function renderMessage({ campaign, templateHtml, contact, token, settings, publi
   };
 
   let content = inlineEditorClasses(campaign.body_html);
+  // UTM tags: frozen on the campaign when it starts (utm_params), live for previews and tests.
+  const started = Boolean(campaign.started_at) || ['sending', 'paused', 'sent', 'cancelled'].includes(campaign.status);
+  const utm = started ? (campaign.utm_params || null) : utmParamsFor(campaign, settings);
+  content = addUtm(content, utm, base);
   if (campaign.track_clicks && !isTest && links) {
     content = trackLinks(content, links, (id) => `${base}/t/c/${token}/${id}`);
   }

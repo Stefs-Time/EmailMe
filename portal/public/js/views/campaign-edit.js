@@ -9,10 +9,14 @@ const TAGS = [
   ['email', 'Email address'], ['org_name', 'Your organisation'],
 ];
 
+/** Mirrors the server's default utm_campaign (slug of the campaign name). */
+const slug = (str) => String(str || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'campaign';
+
 export async function render(el, ctx, [id]) {
   mount(el, loading());
-  const [{ data: c }, { data: facets }, { data: templates }] = await Promise.all([
-    get(`/campaigns/${id}`), get('/contacts/facets'), get('/templates'),
+  const [{ data: c }, { data: facets }, { data: templates }, { data: segments }] = await Promise.all([
+    get(`/campaigns/${id}`), get('/contacts/facets'), get('/templates'), get('/segments'),
   ]);
   if (c.status !== 'draft' && c.status !== 'scheduled') { location.hash = `#/campaigns/${id}`; return undefined; }
   let dirty = false;
@@ -43,6 +47,12 @@ export async function render(el, ctx, [id]) {
               <label class="form-check-label" for="l${l.id}">${l.name}${l.optin === 'double' ? html` <span class="badge text-bg-light">double opt-in</span>` : ''}</label></div>`)
               : html`<div class="text-muted-2">No lists yet. <a href="#/lists">Create a list</a> and add contacts first.</div>`}
           </div>
+          <div class="mt-3"><label class="form-label" for="seg">Narrow to a segment <span class="text-muted-2 small">(optional)</span></label>
+            <select class="form-select" id="seg" name="segment_id">
+              <option value="">Everyone on the selected lists</option>
+              ${segments.map((g) => html`<option value="${g.id}" ${c.segment_id === g.id ? raw('selected') : ''}>${g.name} (${g.counts.eligible} eligible)</option>`)}
+            </select>
+            <div class="form-text">Only people on the selected lists <strong>and</strong> in the segment receive it. <a href="#/segments">Manage segments</a></div></div>
           <div class="mt-2 small" id="estimate"></div>
         </div></div>
         <div class="card mb-3"><div class="card-header">2 · Envelope</div><div class="card-body"><div class="row g-2">
@@ -57,7 +67,11 @@ export async function render(el, ctx, [id]) {
           <div class="col-12 d-flex gap-4 flex-wrap mt-2">
             <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="to" name="track_opens" ${c.track_opens ? raw('checked') : ''}><label class="form-check-label" for="to">Track opens</label></div>
             <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="tc" name="track_clicks" ${c.track_clicks ? raw('checked') : ''}><label class="form-check-label" for="tc">Track link clicks</label></div>
+            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="tu" name="utm_enabled" ${c.utm_enabled !== false ? raw('checked') : ''}><label class="form-check-label" for="tu">Google Analytics (UTM) tags</label></div>
           </div>
+          <div class="col-md-6" id="utm-wrap"><label class="form-label">Campaign name in Google Analytics <span class="text-muted-2 small">(utm_campaign)</span></label>
+            <input class="form-control" name="utm_campaign" maxlength="80" value="${c.utm_campaign || ''}" placeholder="${slug(c.name)}">
+            <div class="form-text">Leave empty to use the campaign name. Applies only if UTM tags are on in Settings → Sending.</div></div>
         </div></div></div>
       </div>
       <div class="col-xl-5">
@@ -134,6 +148,7 @@ export async function render(el, ctx, [id]) {
     template_id: Number(form.template_id.value) || null, editor,
     body_html: editor === 'builder' ? '' : currentHtml(), ...(editor === 'builder' ? { body_json: builder.getDoc() } : {}), body_text: textsrc.value,
     track_opens: form.track_opens.checked, track_clicks: form.track_clicks.checked, list_ids: [...selected],
+    segment_id: Number(form.segment_id.value) || null, utm_enabled: form.utm_enabled.checked, utm_campaign: form.utm_campaign.value.trim(),
   });
 
   async function save() {

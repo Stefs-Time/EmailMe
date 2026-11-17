@@ -16,7 +16,7 @@ There have been two rounds:
 | Browser walkthrough | Fresh database → first-run setup with the log code → settings (address, SMTP test, bounce tab) → list + contact → campaign editor (subject, preheader, personalisation tag, button, autosave, readiness) → test send → send now → report → templates → system health |
 | Role crawl | Signed in as **viewer** and **manager**, opened all 21 routes (including deep links to admin-only and edit screens), recorded the menu, every visible action, failed API calls and page errors |
 | Accessibility | axe-core (WCAG 2 A/AA) on every screen in the walkthrough and the role crawl |
-| Functional regression | 22 unit tests + 25 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)) |
+| Functional regression | 25 unit tests + 29 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)) |
 
 ## 2. Round 2 findings and fixes
 
@@ -74,6 +74,28 @@ How it was tested:
 | B8 | Touch | Low | HTML5 drag and drop does not work on phones, and Firefox can't drag a `<button>`. | Tiles are focusable elements; tap or Enter adds below the selected block | Added, tested (phone emulation) |
 
 Result: 15/15 pass, 0 console errors with the CSP enforced, axe 0 violations, no horizontal scroll at 390px.
+
+### Image library, sign-up forms, saved segments, UTM tagging (added 17 Nov 2026)
+
+| # | Area | Sev. | Finding | Fix | Status |
+|---|---|---|---|---|---|
+| I1 | Security | **High** | The first image library version (sharp 0.34) failed `npm audit`: high-severity CVEs in its bundled libvips, libheif and librsvg. | Upgraded to sharp 0.35.5; audit reports 0 vulnerabilities | Fixed |
+| I2 | Images | Medium | The public `/img/<id>` route also caught the app's own `/img/logo.svg`, so the sidebar logo broke. | Non-library paths fall through to static files | Fixed, verified |
+| I3 | Tracking | Medium | (Found while building I1) The open pixel was served with `Cross-Origin-Resource-Policy: same-origin`, so webmail running in a browser on another origin would refuse to load it and under-count opens. | Pixel and library images are sent `cross-origin` | Fixed |
+| S1 | Segments | **High** | A unit test found that date conditions bound unused parameters, which PostgreSQL rejects: every segment with a date rule would have failed. | Only the chosen operator is compiled; all 16 field/operator pairs verified against PostgreSQL | Fixed, tested |
+| T1 | Feedback | Medium | The "Settings saved" toast covered the Save button on long pages (bottom-left). | Toasts moved bottom-right | Fixed; all browser suites re-run |
+
+The browser test passed all 8 steps:
+- an upload is compressed and listed;
+- the builder picks an image from the library;
+- the segment rule builder shows a live preview and saves;
+- contacts can be filtered by the segment;
+- a campaign can be narrowed to the segment, with its UTM controls;
+- the UTM settings save;
+- a sign-up form can be created, shared and previewed;
+- a visitor signs up on a phone and appears under recent sign-ups.
+
+axe found no violations on the image, segment, form and public form pages. All previous browser suites still pass.
 
 ### Ready-made templates (added 17 Nov 2026, from UAT feedback)
 
@@ -213,7 +235,7 @@ Role crawl (viewer, manager × 21 routes):
 - **Viewer:** no write controls on any screen; the admin-only and edit routes show the permission page; 0 API errors, 0 page errors, 0 axe violations.
 - **Manager:** campaign, template, import, list, contact, suppression and export actions present. Settings, Users, Audit and Lift are absent. 0 API errors, 0 page errors, 0 axe violations.
 
-Acceptance suite: 25/25 pass. Unit tests: 22/22 pass.
+Acceptance suite: 29/29 pass. Unit tests: 25/25 pass.
 
 ## 5. Round 1 (listmonk-based build): findings still relevant
 

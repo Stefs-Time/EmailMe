@@ -36,7 +36,7 @@ function exportRoutes({ pool }) {
 
   r.get('/contacts.csv', async (req, res) => {
     const q = parse(filterSchema, req.query);
-    const filters = toFilters(q);
+    const filters = await toFilters(q, pool);
     await audit(pool, req, 'export.contacts', { details: { filters: q } });
     const { rows: lists } = await pool.query('SELECT id, name FROM portal.lists');
     const listName = new Map(lists.map((l) => [l.id, l.name]));

@@ -108,6 +108,7 @@ function publicRoutes({ pool, settings, logger }) {
   // ---- Tracking ----------------------------------------------------------
   r.get('/t/o/:file', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store, max-age=0');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); // webmail loads it from another origin
     res.type('gif').send(GIF);
     const token = req.params.file.replace(/\.gif$/, '');
     try {

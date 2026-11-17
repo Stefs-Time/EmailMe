@@ -14,12 +14,26 @@ const NOT_SUPPRESSED = (alias = 'c') => `
   NOT EXISTS (SELECT 1 FROM portal.suppressions s WHERE s.email_hash = ${alias}.email_hash AND s.lifted_at IS NULL)
   AND NOT EXISTS (SELECT 1 FROM portal.review_queue r WHERE r.contact_id = ${alias}.id AND r.resolved_at IS NULL)`;
 
-async function countEligible(db, listIds) {
+/**
+ * Optional segment narrowing: "AND <alias>.id IN (contacts matching the segment)".
+ * Segments only narrow an audience; list membership still carries the consent.
+ */
+function segmentClause(rules, params, alias = 'c') {
+  if (!rules) return '';
+  const { BASE_SQL } = require('../modules/contacts/repo');
+  const { compileRules } = require('../modules/segments/rules');
+  const p = (v) => { params.push(v); return `$${params.length}`; };
+  return ` AND ${alias}.id IN (SELECT seg.id FROM (${BASE_SQL}) seg WHERE ${compileRules(rules, p, 'seg')})`;
+}
+
+async function countEligible(db, listIds, segmentRules = null) {
   if (!listIds.length) return 0;
+  const params = [listIds];
+  const seg = segmentClause(segmentRules, params);
   const { rows } = await db.query(
     `SELECT COUNT(DISTINCT c.id)::int AS n FROM portal.contacts c
        JOIN portal.list_members m ON m.contact_id = c.id AND m.status = 'subscribed' AND m.list_id = ANY($1::int[])
-      WHERE ${NOT_SUPPRESSED('c')}`, [listIds]);
+      WHERE ${NOT_SUPPRESSED('c')}${seg}`, params);
   return rows[0].n;
 }
 
@@ -39,4 +53,4 @@ async function stillEligible(db, contactId, campaignId) {
   return { ok: true };
 }
 
-module.exports = { NOT_SUPPRESSED, countEligible, stillEligible };
+module.exports = { NOT_SUPPRESSED, countEligible, stillEligible, segmentClause };

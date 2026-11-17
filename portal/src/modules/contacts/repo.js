@@ -97,6 +97,8 @@ function buildFilters(f) {
   if (f.createdFrom) inner.push(`s.created_at >= ${p(f.createdFrom)}`);
   if (f.createdTo) inner.push(`s.created_at < ${p(f.createdTo)}`);
   if (f.ids && f.ids.length) inner.push(`s.id = ANY(${p(f.ids)}::int[])`);
+  // Saved segment: rules compiled to SQL with bound parameters (segments/rules.js).
+  if (f.segmentRules) outer.push(require('../segments/rules').compileRules(f.segmentRules, p, 'c'));
   if (f.status) {
     if (f.status === 'eligible') outer.push(`c.status = ANY(${p(ELIGIBLE)}::text[])`);
     else if (f.status === 'suppressed') outer.push(`c.suppression_reason IS NOT NULL`);

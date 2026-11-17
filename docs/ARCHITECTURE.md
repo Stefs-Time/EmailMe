@@ -159,8 +159,36 @@ Eligibility for a campaign (`engine/audience.js`) requires all of the following:
 | `GET`/`POST /s/stay/:token` | "Stay subscribed" page / confirm: records `stayed_subscribed`, refreshes engagement, never re-activates a suppressed address |
 | `GET`/`POST /p/:token` | Preference centre: the contact's lists; POST unsubscribes from unticked lists (list level) or from everything (global suppression). It can only opt out, never re-subscribe |
 | `POST /webhooks/bounce` | Provider bounce/complaint events (token, constant-time compare) |
+| `GET /img/:token.(jpg\|png\|gif)` | Image library file from PostgreSQL. `Cache-Control: immutable`, `Cross-Origin-Resource-Policy: cross-origin` (webmail loads it from other origins), `default-src 'none'` CSP. Other `/img/*` paths fall through to static assets |
+| `GET`/`POST /f/:token` | Sign-up form page (`?embed=1` for iframes) / sign-up. Per-response CSP with a style nonce and `frame-ancestors *` (embeddable). Spam protection: honeypot field, an HMAC-signed render time that rejects submissions made in under 2.5 s, and 20 POSTs per 10 min per IP. Same response whatever the outcome |
 
 All public routes are rate-limited (300/min per IP). Links in **test** emails open a "this is a test email" page.
+
+**Image library** (`modules/images`): uploads go through sharp:
+- limited to 50 megapixels against decompression bombs;
+- EXIF rotation applied;
+- resized to at most 1200px wide (animated GIFs: 600px);
+- re-encoded as mozjpeg JPEG (opaque images) or palette PNG (transparency);
+- all metadata dropped, and anything over 3 MB after compression rejected.
+
+Results are de-duplicated by SHA-256 and stored as `bytea` in `portal.images`. Deleting an image is refused while any
+campaign or template HTML references it.
+
+**Saved segments** (`modules/segments`): rules (`{ match: all|any, conditions[] }`) are validated against a fixed
+catalogue of fields and operators. They compile to a SQL boolean over the contact read model, with every value a bound
+parameter. They are used by the contact list, ids and exports (`segment_id` filter), and by campaigns (`segment_id`):
+`countEligible` and `startCampaign` add `AND c.id IN (SELECT … FROM BASE WHERE <segment>)`, so segments only narrow a
+list audience. The segment name is snapshotted on the campaign at send time.
+
+**Sign-up forms** (`modules/forms`): a sign-up checks the suppression register first (no change, outcome `suppressed`).
+Otherwise it creates or updates the contact (blank fields only) and adds memberships insert-only, so an unsubscribed
+list row is never revived. It records a consent record with the statement, form URL, IP and time, and queues the double
+opt-in email. Outcomes are logged in `form_submissions`.
+
+**UTM tagging** (`engine/utm.js`): `utmParamsFor(campaign, settings)` and `addUtm(html)` tag `http(s)` links. They skip
+`{{ }}` links, links already carrying `utm_*`, MailHarbor's own public URL and, with a domain list, other sites. The
+parameters are frozen in `campaigns.utm_params` when sending starts, and links are extracted from the tagged HTML so
+click tracking matches.
 
 **Platform-managed links.** Builder buttons have a `link` destination (`url`, `unsubscribe`, `preferences`, `stay`,
 `view`). Text links can use the same destinations. Everything except `url` is stored as a tag (`{{ unsubscribe_url }}`,
@@ -177,6 +205,9 @@ report (`GET /api/reports/usage`).
 | `users`, `sessions` | Portal accounts (Argon2id), server-side sessions |
 | `contacts` | Email, hash, names, company, source, attributes (jsonb), consent (jsonb), soft-bounce count, last sent/open/click/bounce |
 | `lists`, `list_members` | Lists (single/double opt-in) and memberships (`subscribed`/`unconfirmed`/`unsubscribed`) |
+| `segments` | Saved rule sets (`rules` jsonb); `campaigns.segment_id` / `segment_name` |
+| `forms`, `form_submissions` | Sign-up forms (lists, settings jsonb, public token) and their outcomes |
+| `images` | Image library: compressed bytes (`bytea`), dimensions, sizes, SHA-256, public token |
 | `templates`, `campaigns`, `campaign_lists` | Content and targeting; `campaigns.editor` is `builder`, `visual` or `html`, and a builder campaign keeps its design in `body_json` with the server-rendered result in `body_html`; campaign status `draft → scheduled → sending ⇄ paused → sent` or `cancelled` |
 | `messages` | One row per recipient email (campaign, opt-in, test); token, status, attempts, timestamps, error |
 | `links`, `tracking_events` | Campaign links; opens and clicks |

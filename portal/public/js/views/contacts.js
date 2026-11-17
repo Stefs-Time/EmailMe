@@ -11,13 +11,13 @@ export async function render(el, ctx) {
   const q = ctx.query();
   const state = {
     q: q.get('q') || '', status: q.get('status') || '', list_id: q.get('list_id') || '', source: q.get('source') || '',
-    consent_method: q.get('consent_method') || '', sort: q.get('sort') || 'created_at', dir: q.get('dir') || 'desc',
+    consent_method: q.get('consent_method') || '', segment_id: q.get('segment_id') || '', sort: q.get('sort') || 'created_at', dir: q.get('dir') || 'desc',
     page: Number(q.get('page') || 1), per_page: Number(q.get('per_page')) || 25,
   };
   const selected = new Set();
   let lastTotal = 0;
   mount(el, loading());
-  const { data: facets } = await get('/contacts/facets');
+  const [{ data: facets }, { data: segments }] = await Promise.all([get('/contacts/facets'), get('/segments')]);
   const listName = new Map(facets.lists.map((l) => [l.id, l.name]));
   const canWrite = ctx.can('contacts:write');
 
@@ -40,6 +40,7 @@ export async function render(el, ctx) {
           <select class="form-select" name="list_id" aria-label="List">${options(facets.lists.map((l) => ({ value: l.id, label: l.name })), state.list_id, { blank: 'All lists' })}</select>
           <select class="form-select" name="source" aria-label="Source">${options(facets.sources.map((s) => ({ value: s.v, label: `${s.v} (${num(s.n)})` })), state.source, { blank: 'All sources' })}</select>
           <select class="form-select" name="consent_method" aria-label="Consent method">${options([{ value: 'none', label: 'No consent recorded' }, ...Object.entries(CONSENT_LABELS).map(([value, l]) => ({ value, label: l }))], state.consent_method, { blank: 'Any consent' })}</select>
+          <select class="form-select" name="segment_id" aria-label="Segment">${options(segments.map((g) => ({ value: g.id, label: g.name })), state.segment_id, { blank: 'Any segment' })}</select>
           <button class="btn btn-light" type="button" id="reset">Reset</button>
         </form>
       </div>
@@ -143,7 +144,7 @@ export async function render(el, ctx) {
   form.addEventListener('input', (e) => {
     clearTimeout(timer);
     timer = setTimeout(() => {
-      for (const k of ['q', 'status', 'list_id', 'source', 'consent_method']) state[k] = form[k].value;
+      for (const k of ['q', 'status', 'list_id', 'source', 'consent_method', 'segment_id']) state[k] = form[k].value;
       state.page = 1;
       load();
     }, e.target.name === 'q' ? 300 : 0);
@@ -151,7 +152,7 @@ export async function render(el, ctx) {
   form.addEventListener('submit', (e) => e.preventDefault());
   $('#reset', el).addEventListener('click', () => {
     form.reset();
-    for (const k of ['q', 'status', 'list_id', 'source', 'consent_method']) { state[k] = ''; form[k].value = ''; }
+    for (const k of ['q', 'status', 'list_id', 'source', 'consent_method', 'segment_id']) { state[k] = ''; form[k].value = ''; }
     state.page = 1; load();
   });
   $('#export', el)?.addEventListener('click', () => {

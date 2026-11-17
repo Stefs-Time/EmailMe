@@ -278,7 +278,8 @@ t('tracking: open pixel and click redirect (stored URLs only)', async () => {
   const { rows: l } = await pool.query('SELECT id FROM portal.links WHERE campaign_id = $1', [campaignId]);
   const click = await fetch(`${base}/t/c/${token}/${l[0].id}`, { redirect: 'manual' });
   assert.equal(click.status, 302);
-  assert.equal(click.headers.get('location'), 'https://example.org/offer');
+  // UTM tags are on by default (Settings → Sending): Google Analytics sees the campaign.
+  assert.equal(click.headers.get('location'), 'https://example.org/offer?utm_source=mailharbor&utm_medium=email&utm_campaign=november-news');
   assert.equal((await fetch(`${base}/t/c/${token}/999999`, { redirect: 'manual' })).status, 404);
   await new Promise((r) => setTimeout(r, 200));
   const c = (await http('admin', 'GET', `/api/reports/campaigns/${campaignId}`)).data.campaign;
@@ -650,6 +651,184 @@ t('ready-made templates: Clean, Promotion and New release installed once; campai
   assert.equal((await pool.query(`SELECT COUNT(*)::int AS n FROM portal.templates WHERE sample_key = 'clean'`)).rows[0].n, 0, 'deleted preset is not re-added');
   const welcome = await http('admin', 'POST', '/api/campaigns', { name: 'Welcome', sample: 'welcome' });
   assert.equal(welcome.data.template_id, list.find((x) => x.is_default).id, 'falls back to the default template');
+});
+
+t('image library: uploads are compressed and stored in PostgreSQL, served publicly, protected while in use', async () => {
+  const sharp = require('sharp');
+  const big = await sharp({ create: { width: 2400, height: 1600, channels: 3, background: '#3a7bd5' } }).png().toBuffer();
+  const form = new FormData();
+  form.append('files', new Blob([big], { type: 'image/png' }), 'Summer banner.png');
+  form.append('files', new Blob([Buffer.from('not an image')], { type: 'image/png' }), 'broken.png');
+  const up = await http('admin', 'POST', '/api/images', form);
+  assert.equal(up.status, 201, JSON.stringify(up));
+  const [ok, bad] = up.data;
+  assert.equal(ok.ok, true);
+  assert.equal(ok.image.mime, 'image/jpeg', 'opaque PNG photo stored as JPEG');
+  assert.equal(ok.image.width, 1200);
+  assert.ok(ok.image.bytes < ok.image.original_bytes);
+  assert.equal(ok.image.name, 'Summer banner');
+  assert.equal(bad.ok, false);
+
+  const res = await fetch(base + ok.image.path);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'image/jpeg');
+  assert.equal(res.headers.get('cross-origin-resource-policy'), 'cross-origin');
+  assert.match(res.headers.get('cache-control'), /immutable/);
+  const meta = await sharp(Buffer.from(await res.arrayBuffer())).metadata();
+  assert.equal(meta.width, 1200);
+  assert.equal(meta.exif, undefined, 'metadata stripped');
+
+  const again = new FormData();
+  again.append('files', new Blob([big], { type: 'image/png' }), 'copy.png');
+  assert.equal((await http('admin', 'POST', '/api/images', again)).data[0].existed, true, 'identical image stored once');
+  assert.equal((await fetch(`${base}/img/00000000-0000-0000-0000-000000000000.jpg`)).status, 404);
+
+  // In use by a campaign → cannot be deleted.
+  const c = await http('admin', 'POST', '/api/campaigns', { name: 'With image' });
+  const doc = c.data.body_json;
+  doc.blocks.unshift({ id: 'img1', type: 'image', props: { src: `https://mail.acme.example${ok.image.path}`, alt: 'Banner' } });
+  await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, { name: 'With image', subject: 's', from_email: 'news@acme.example', editor: 'builder', body_json: doc, list_ids: [] });
+  const delUsed = await http('admin', 'DELETE', `/api/images/${ok.image.id}`);
+  assert.equal(delUsed.status, 409);
+  const list = await http('admin', 'GET', '/api/images');
+  assert.ok(list.meta.storage.count >= 1);
+});
+
+t('UTM tagging: Google Analytics tags added to web links (frozen at send), per-campaign off switch', async () => {
+  await http('admin', 'PUT', '/api/settings', { utm_enabled: true, utm_source: 'mailharbor', utm_medium: 'email', utm_domains: '' });
+  await addContact('utm-uma@ok.example');
+  const mk = async (name, utm) => {
+    const c = await http('admin', 'POST', '/api/campaigns', { name });
+    const doc = c.data.body_json;
+    doc.blocks.find((b) => b.type === 'button').props.url = 'https://shop.acme.example/sale?x=1';
+    const r = await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, { name, subject: name, from_email: 'news@acme.example', editor: 'builder',
+      body_json: doc, list_ids: [listId], track_clicks: true, track_opens: false, ...utm });
+    assert.equal(r.status, 200, JSON.stringify(r));
+    return c.data.id;
+  };
+  const tagged = await mk('Spring Sale 2026', { utm_enabled: true, utm_campaign: '' });
+  const plain = await mk('No tags please', { utm_enabled: false });
+  for (const id of [tagged, plain]) {
+    sink.messages.length = 0;
+    assert.equal((await http('admin', 'POST', `/api/campaigns/${id}/send`)).status, 200);
+    await drain();
+    const [m] = sinkTo('utm-uma@ok.example');
+    const click = m.parsed.html.match(/https:\/\/mail\.acme\.example(\/t\/c\/[^"]+)/)[1];
+    const res = await fetch(base + click, { redirect: 'manual' });
+    const loc = res.headers.get('location');
+    if (id === tagged) {
+      assert.equal(loc, 'https://shop.acme.example/sale?x=1&utm_source=mailharbor&utm_medium=email&utm_campaign=spring-sale-2026');
+      assert.deepEqual((await pool.query('SELECT utm_params FROM portal.campaigns WHERE id = $1', [id])).rows[0].utm_params.campaign, 'spring-sale-2026');
+    } else {
+      assert.equal(loc, 'https://shop.acme.example/sale?x=1', 'campaign switched UTM off');
+    }
+    assert.doesNotMatch(m.parsed.html, /\/u\/[0-9a-f-]{36}\?utm_/, 'MailHarbor pages never tagged');
+  }
+});
+
+t('saved segments: rules with bound parameters, contact filter, campaign narrowing, delete protection', async () => {
+  const durban = await http('admin', 'POST', '/api/contacts', { email: 'seg-dee@ok.example', firstName: 'Dee', listIds: [listId], consent: { method: 'web_form' }, attribs: { city: 'Umhlanga' } });
+  await http('admin', 'POST', '/api/contacts', { email: 'seg-cal@ok.example', firstName: 'Cal', listIds: [listId], consent: { method: 'web_form' }, attribs: { city: 'Cape Town' } });
+  const rules = { match: 'all', conditions: [{ field: 'attribute', key: 'city', op: 'is', value: 'umhlanga' }, { field: 'status', op: 'is', value: 'eligible' },
+    { field: 'created_at', op: 'within_days', value: 30 }, { field: 'last_open_at', op: 'not_within_days', value: 90 }] };
+  const pv = await http('admin', 'POST', '/api/segments/preview', { rules });
+  assert.equal(pv.status, 200, JSON.stringify(pv));
+  assert.equal(pv.data.counts.total, 1);
+  assert.equal(pv.data.sample[0].email, 'seg-dee@ok.example');
+
+  // Validation and injection safety
+  assert.equal((await http('admin', 'POST', '/api/segments/preview', { rules: { conditions: [{ field: 'status', op: 'drop table', value: 'x' }] } })).status, 422);
+  assert.equal((await http('admin', 'POST', '/api/segments/preview', { rules: { conditions: [{ field: 'email', op: 'is', value: 'x' }] } })).status, 422);
+  const inj = await http('admin', 'POST', '/api/segments/preview', { rules: { conditions: [{ field: 'source', op: 'is', value: "x'); DROP TABLE portal.contacts; --" }] } });
+  assert.equal(inj.data.counts.total, 0);
+  assert.ok((await pool.query('SELECT COUNT(*)::int AS n FROM portal.contacts')).rows[0].n > 0, 'tables intact');
+
+  const seg = await http('admin', 'POST', '/api/segments', { name: 'Durban', rules });
+  assert.equal(seg.status, 201);
+  assert.equal((await http('admin', 'POST', '/api/segments', { name: 'durban', rules })).status, 409, 'names are unique');
+  const filtered = await http('admin', 'GET', `/api/contacts?segment_id=${seg.data.id}`);
+  assert.deepEqual(filtered.data.map((x) => x.email), ['seg-dee@ok.example']);
+
+  const c = await http('admin', 'POST', '/api/campaigns', { name: 'Durban only' });
+  const doc = c.data.body_json;
+  doc.blocks.find((b) => b.type === 'button').props.url = 'https://acme.example';
+  const put = await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, { name: 'Durban only', subject: 'Hi Durban', from_email: 'news@acme.example',
+    editor: 'builder', body_json: doc, list_ids: [listId], segment_id: seg.data.id });
+  assert.equal(put.status, 200, JSON.stringify(put));
+  const g = await http('admin', 'GET', `/api/campaigns/${c.data.id}`);
+  assert.equal(g.data.eligible, 1, 'segment narrows the list audience');
+  assert.equal((await http('admin', 'DELETE', `/api/segments/${seg.data.id}`)).status, 409, 'in use by a draft');
+  sink.messages.length = 0;
+  assert.equal((await http('admin', 'POST', `/api/campaigns/${c.data.id}/send`)).data.recipients, 1);
+  await drain();
+  assert.deepEqual(sink.messages.map((m) => m.envelope.rcptTo[0].address), ['seg-dee@ok.example']);
+  assert.equal((await pool.query('SELECT segment_name FROM portal.campaigns WHERE id = $1', [c.data.id])).rows[0].segment_name, 'Durban');
+});
+
+t('sign-up forms: consent evidence, double opt-in, bot protection, suppression never bypassed', async () => {
+  const crypto = require('node:crypto');
+  const dbl = await http('admin', 'POST', '/api/lists', { name: 'Form double', optin: 'double' });
+  const f = await http('admin', 'POST', '/api/forms', { name: 'Website footer', list_ids: [listId, dbl.data.id],
+    settings: { fields: { first_name: 'required' }, consent_text: 'Yes, email me news and specials. I can unsubscribe any time.' } });
+  assert.equal(f.status, 201, JSON.stringify(f));
+  const url = `/f/${f.data.token}`;
+  const page = await fetch(base + url);
+  assert.equal(page.status, 200);
+  assert.match(page.headers.get('content-security-policy'), /frame-ancestors \*/);
+  assert.equal(page.headers.get('x-frame-options'), null, 'embeddable');
+  const html = await page.text();
+  assert.match(html, /name="_t" value="[^"]+"/);
+  // A token rendered 5 seconds ago (signed with the app secret), as a person would submit.
+  const t = (Date.now() - 5000).toString(36);
+  const token = `${t}.${crypto.createHmac('sha256', `form:${'x'.repeat(40)}`).update(`${f.data.id}.${t}`).digest('base64url')}`;
+  const submit = (fields) => fetch(base + url, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ _t: token, consent: 'yes', ...fields }).toString() });
+
+  // Bots: no token / too fast / honeypot → "thank you" but nothing stored.
+  let r = await fetch(base + url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'email=bot1@ok.example&first_name=B&consent=yes' });
+  assert.match(await r.text(), /Thank you/);
+  r = await submit({ email: 'bot2@ok.example', first_name: 'B', website: 'http://spam.example' });
+  assert.match(await r.text(), /Thank you/);
+  assert.equal((await pool.query(`SELECT COUNT(*)::int AS n FROM portal.contacts WHERE email LIKE 'bot%'`)).rows[0].n, 0);
+
+  // Validation
+  r = await submit({ email: 'form-fay@ok.example' });
+  assert.equal(r.status, 400);
+  assert.match(await r.text(), /First name is required/);
+  r = await fetch(base + url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ _t: token, email: 'form-fay@ok.example', first_name: 'Fay' }).toString() });
+  assert.match(await r.text(), /tick the box/);
+
+  // A real sign-up
+  r = await submit({ email: 'Form-Fay@OK.example', first_name: 'Fay' });
+  assert.match(await r.text(), /Thank you/);
+  const fay = await contact('form-fay@ok.example');
+  assert.ok(fay, 'contact created');
+  const detail = (await http('admin', 'GET', `/api/contacts/${fay.id}`)).data;
+  assert.equal(detail.contact?.first_name ?? detail.first_name, 'Fay');
+  const subs = Object.fromEntries(detail.subscriptions.map((s) => [s.id, s.status]));
+  assert.equal(subs[listId], 'subscribed');
+  assert.equal(subs[dbl.data.id], 'unconfirmed', 'double opt-in list waits for confirmation');
+  const consent = await pool.query(`SELECT method, evidence FROM portal.consent_records WHERE contact_id = $1 AND source LIKE 'Form:%'`, [fay.id]);
+  assert.equal(consent.rows[0].method, 'web_form');
+  assert.match(consent.rows[0].evidence, /Website footer.*IP.*Statement accepted: "Yes, email me news/);
+  assert.equal((await pool.query(`SELECT COUNT(*)::int AS n FROM portal.messages WHERE kind = 'optin' AND contact_id = $1`, [fay.id])).rows[0].n, 1);
+
+  // Suppressed address: same reply, never re-subscribed.
+  await addContact('form-sam@ok.example');
+  const sam = await contact('form-sam@ok.example');
+  assert.equal((await http('admin', 'POST', '/api/contacts/actions', { action: 'unsubscribe', ids: [sam.id], note: 'asked' })).status, 200);
+  r = await submit({ email: 'form-sam@ok.example', first_name: 'Sam' });
+  assert.match(await r.text(), /Thank you/);
+  assert.equal((await contact('form-sam@ok.example')).status, 'unsubscribed');
+
+  const subsApi = await http('admin', 'GET', `/api/forms/${f.data.id}/submissions`);
+  assert.equal(subsApi.meta.totals.rejected, 2);
+  assert.equal(subsApi.meta.totals.confirmation_sent, 1);
+  assert.equal(subsApi.meta.totals.suppressed, 1);
+
+  // Closed forms
+  await http('admin', 'PUT', `/api/forms/${f.data.id}`, { name: 'Website footer', status: 'disabled', list_ids: [listId], settings: {} });
+  assert.equal((await fetch(base + url)).status, 404);
 });
 
 t('exports and campaign report download as CSV', async () => {

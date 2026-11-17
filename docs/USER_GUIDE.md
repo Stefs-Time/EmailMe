@@ -56,6 +56,60 @@ On a **double opt-in** list, new people receive a confirmation email first. They
 
 Create lists for audiences or interests. Choose *Double opt-in* when people sign up themselves.
 
+### Segments
+A segment is a saved set of rules that keeps itself up to date, for example *Last opened in the last 90 days* AND
+*Imported column "city" is Durban*. Go to **Segments → New segment** and add conditions:
+
+| Condition | Examples |
+|---|---|
+| Status | is Active, is Eligible to receive |
+| List | is subscribed to "Newsletter" |
+| Source, Consent method, Email domain, Company, First name | source is "Expo 2026"; domain ends with ".co.za" |
+| Imported column | "city" is Durban; "branch" has a value |
+| Added, Last opened, Last clicked, Last emailed | in the last 90 days; never; on or after a date |
+| Soft bounces | at least 2 |
+
+Choose whether contacts must match **all** or **any** of the conditions. The live preview shows how many contacts
+match and how many can receive email.
+
+Use a segment in three places:
+- **View contacts** filters the contact list. Exports follow the same filter.
+- **Contacts** has a *Segment* filter.
+- **Campaigns → Narrow to a segment** sends only to people who are on the campaign's lists **and** in the segment.
+
+Segments never add anyone who isn't subscribed: list membership carries the permission to email.
+
+### Sign-up forms
+Go to **Sign-up forms → New form**:
+1. Name the form and choose the list(s) people join.
+2. Choose the fields (first name, last name, company: hidden, optional or required).
+3. Set the heading, intro, consent statement, button text and colour, and a thank-you message. You can send people to
+   your own thank-you page instead.
+4. Save. You get a **link**, for emails, social media or a QR code, and **embed code** to paste into your website.
+
+What happens when someone signs up:
+- A new contact is created, or an existing one updated: blank names are filled in, nothing is overwritten.
+- Their **consent is recorded**: the statement they ticked, the form, the date, time and IP address.
+- **Single opt-in** lists add them straight away.
+- **Double opt-in** lists send a confirmation email first; they join when they click *Confirm*.
+- **Protected:** someone who unsubscribed or bounced is **not** re-subscribed, and the form shows the same thank-you
+  message, so nobody can find out whether an address is on your database.
+- Bots are filtered out automatically. The form page shows recent sign-ups and how many were blocked as spam.
+
+To stop sign-ups, set the form to **Closed**.
+
+### Images
+**Images** is your library of logos, banners and product photos. Upload up to 10 at a time, by button or drag and
+drop. MailHarbor:
+- resizes each image for email (at most 1200px wide);
+- turns phone photos the right way up;
+- removes hidden photo data such as GPS location;
+- compresses the image, typically by 80–95%.
+
+In the builder, select an image block and press **Choose or upload an image**. The image's name fills in its
+description (alt text); improve it if you can. An image used in a campaign or template can't be deleted, because emails
+that were already sent still show it.
+
 ### Update or remove someone
 Open the contact:
 - **Edit** to change details;
@@ -189,6 +243,11 @@ The report also lists the **top links** and a timeline.
 - which campaigns were sent.
 
 Compare these numbers with your SMTP provider's limits.
+
+**Google Analytics.** Links in your campaigns get UTM tags automatically. For example, `?utm_source=mailharbor&utm_medium=email&utm_campaign=november-specials`.
+In Google Analytics you then see visits and sales from each campaign under *Traffic acquisition*, as
+*mailharbor / email*. In the campaign's envelope you can switch tags off, or give the campaign its own name in Google
+Analytics. Administrators set the defaults, or limit tagging to your own website, in **Settings → Sending**.
 
 Benchmarks:
 - A bounce rate above **2%** deserves attention. Above **5%**, the list needs cleaning.

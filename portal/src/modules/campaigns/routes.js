@@ -35,6 +35,10 @@ const campaignBody = z.object({
   track_opens: z.boolean().default(true),
   track_clicks: z.boolean().default(true),
   list_ids: z.array(z.coerce.number().int().positive()).max(50).default([]),
+  // Narrow the list audience to a saved segment (lists still carry the consent).
+  segment_id: z.coerce.number().int().positive().nullable().optional(),
+  utm_enabled: z.boolean().default(true),
+  utm_campaign: z.string().trim().max(80).regex(/^[\w.\- ]*$/, 'Use letters, numbers, - _ . and spaces').default(''),
 });
 
 const SAMPLE = { first_name: 'Thandi', last_name: 'Nkosi', email: 'thandi@example.co.za', company: 'Example (Pty) Ltd', attribs: { city: 'Johannesburg' } };
@@ -55,12 +59,21 @@ function resolveContent(editor, bodyJson, bodyHtml) {
   return { html: sanitize(bodyHtml), json: null };
 }
 
+/** A deleted segment referenced by a stale editor → a clear message instead of a database error. */
+function missingSegment(err) {
+  if (err.code === '23503' && /segment/.test(err.constraint || err.detail || '')) {
+    throw validation('The selected segment no longer exists. Choose another segment or "Everyone on the lists".');
+  }
+  throw err;
+}
+
 async function loadCampaign(db, campaignId) {
   const { rows } = await db.query(
-    `SELECT c.*, u.name AS created_by_name,
+    `SELECT c.*, u.name AS created_by_name, sg.rules AS segment_rules, COALESCE(sg.name, c.segment_name) AS segment_label,
             COALESCE((SELECT JSON_AGG(JSON_BUILD_OBJECT('id', cl.list_id, 'name', cl.list_name) ORDER BY cl.list_name)
                         FROM portal.campaign_lists cl WHERE cl.campaign_id = c.id), '[]') AS lists
-       FROM portal.campaigns c LEFT JOIN portal.users u ON u.id = c.created_by WHERE c.id = $1`, [campaignId]);
+       FROM portal.campaigns c LEFT JOIN portal.users u ON u.id = c.created_by
+       LEFT JOIN portal.segments sg ON sg.id = c.segment_id WHERE c.id = $1`, [campaignId]);
   if (!rows[0]) throw notFound('Campaign not found');
   return rows[0];
 }
@@ -93,7 +106,9 @@ async function readinessProblems(pool, settings, c) {
   }
   if (!(await settings.publicUrl())) problems.push('Set the public URL (Settings → General) so unsubscribe links work.');
   if (!s.org_address) problems.push('Add your organisation\'s postal address (Settings → General); it is shown in every email footer.');
-  if (c.lists.length && !(await countEligible(pool, c.lists.map((l) => l.id)))) problems.push('The selected lists have no eligible recipients.');
+  if (c.lists.length && !(await countEligible(pool, c.lists.map((l) => l.id), c.segment_rules))) {
+    problems.push(c.segment_id ? 'Nobody on the selected lists matches the segment.' : 'The selected lists have no eligible recipients.');
+  }
   return problems;
 }
 
@@ -135,7 +150,7 @@ function campaignRoutes({ pool, settings, worker }) {
 
   r.get('/:id', requirePermission('contacts:read'), async (req, res) => {
     const c = await loadCampaign(pool, parse(id, req.params.id));
-    const eligible = await countEligible(pool, c.lists.map((l) => l.id));
+    const eligible = await countEligible(pool, c.lists.map((l) => l.id), c.segment_rules);
     const problems = EDITABLE.includes(c.status) ? await readinessProblems(pool, settings, c) : [];
     res.json({ success: true, data: { ...c, eligible, problems } });
   });
@@ -164,16 +179,17 @@ function campaignRoutes({ pool, settings, worker }) {
     const created = await withTransaction(pool, async (db) => {
       const { rows } = await db.query(
         `INSERT INTO portal.campaigns (name, subject, preheader, from_name, from_email, reply_to, template_id, editor, body_html, body_text,
-                                       track_opens, track_clicks, created_by, body_json)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+                                       track_opens, track_clicks, created_by, body_json, segment_id, utm_enabled, utm_campaign)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
         [body.name, body.subject || '', body.preheader || '', body.from_name || s.from_name, body.from_email || s.from_email,
           body.reply_to || s.reply_to, body.template_id ?? tpl[0]?.id ?? null, editor,
           content.html, body.body_text || '',
-          body.track_opens ?? s.track_opens, body.track_clicks ?? s.track_clicks, req.user.id, content.json]);
+          body.track_opens ?? s.track_opens, body.track_clicks ?? s.track_clicks, req.user.id, content.json,
+          body.segment_id ?? null, body.utm_enabled ?? true, body.utm_campaign || '']);
       await setLists(db, rows[0].id, body.list_ids || []);
       await audit(db, req, 'campaign.created', { targetType: 'campaign', targetId: rows[0].id, details: { name: body.name } });
       return rows[0].id;
-    });
+    }).catch(missingSegment);
     res.status(201).json({ success: true, data: await loadCampaign(pool, created) });
   });
 
@@ -188,11 +204,13 @@ function campaignRoutes({ pool, settings, worker }) {
       if (!EDITABLE.includes(rows[0].status)) throw conflict(`A ${rows[0].status} campaign can no longer be edited. Duplicate it to send a new version.`);
       await db.query(
         `UPDATE portal.campaigns SET name=$2, subject=$3, preheader=$4, from_name=$5, from_email=$6, reply_to=$7, template_id=$8,
-                editor=$9, body_html=$10, body_text=$11, track_opens=$12, track_clicks=$13, body_json=$14, updated_at=NOW() WHERE id=$1`,
+                editor=$9, body_html=$10, body_text=$11, track_opens=$12, track_clicks=$13, body_json=$14,
+                segment_id=$15, utm_enabled=$16, utm_campaign=$17, updated_at=NOW() WHERE id=$1`,
         [campaignId, body.name, body.subject, body.preheader, body.from_name, body.from_email, body.reply_to, body.template_id ?? null,
-          body.editor, content.html, body.body_text, body.track_opens, body.track_clicks, content.json]);
+          body.editor, content.html, body.body_text, body.track_opens, body.track_clicks, content.json,
+          body.segment_id ?? null, body.utm_enabled, body.utm_campaign]);
       await setLists(db, campaignId, body.list_ids);
-    });
+    }).catch(missingSegment);
     res.json({ success: true, data: await loadCampaign(pool, campaignId) });
   });
 
@@ -201,9 +219,9 @@ function campaignRoutes({ pool, settings, worker }) {
     const newId = await withTransaction(pool, async (db) => {
       const { rows } = await db.query(
         `INSERT INTO portal.campaigns (name, subject, preheader, from_name, from_email, reply_to, template_id, editor, body_html, body_text,
-                                       track_opens, track_clicks, created_by, body_json)
+                                       track_opens, track_clicks, created_by, body_json, segment_id, utm_enabled, utm_campaign)
          SELECT 'Copy of ' || name, subject, preheader, from_name, from_email, reply_to, template_id, editor, body_html, body_text,
-                track_opens, track_clicks, $2, body_json FROM portal.campaigns WHERE id = $1 RETURNING id`, [src.id, req.user.id]);
+                track_opens, track_clicks, $2, body_json, segment_id, utm_enabled, utm_campaign FROM portal.campaigns WHERE id = $1 RETURNING id`, [src.id, req.user.id]);
       await setLists(db, rows[0].id, src.lists.map((l) => l.id).filter(Boolean));
       await audit(db, req, 'campaign.duplicated', { targetType: 'campaign', targetId: rows[0].id, details: { from: src.id } });
       return rows[0].id;
@@ -276,7 +294,7 @@ function campaignRoutes({ pool, settings, worker }) {
     if (!EDITABLE.includes(c.status)) throw conflict(`A ${c.status} campaign cannot be sent`);
     const problems = await readinessProblems(pool, settings, c);
     if (problems.length) throw validation('This campaign is not ready to send', problems.map((m) => ({ message: m })));
-    const n = await startCampaign(pool, campaignId);
+    const n = await startCampaign(pool, campaignId, settings);
     if (n === null) throw conflict('The campaign was already started');
     await audit(pool, req, 'campaign.sent', { targetType: 'campaign', targetId: campaignId, details: { recipients: n } });
     res.json({ success: true, data: { recipients: n } });
@@ -300,9 +318,15 @@ function campaignRoutes({ pool, settings, worker }) {
   r.post('/:id/cancel', requirePermission('campaigns:send'), transition('cancelled', ['sending', 'paused', 'scheduled'], 'cancelled'));
 
   r.get('/:id/estimate', requirePermission('contacts:read'), async (req, res) => {
-    const q = parse(z.object({ list_ids: z.string().default('') }), req.query);
+    const q = parse(z.object({ list_ids: z.string().default(''), segment_id: z.coerce.number().int().positive().optional() }), req.query);
     const listIds = q.list_ids.split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0);
-    res.json({ success: true, data: { eligible: await countEligible(pool, listIds) } });
+    let rules = null;
+    if (q.segment_id) {
+      const { rows } = await pool.query('SELECT rules FROM portal.segments WHERE id = $1', [q.segment_id]);
+      if (!rows[0]) throw notFound('Segment not found');
+      rules = rows[0].rules;
+    }
+    res.json({ success: true, data: { eligible: await countEligible(pool, listIds, rules) } });
   });
 
   void worker;

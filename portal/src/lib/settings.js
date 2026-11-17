@@ -40,6 +40,11 @@ const SCHEMA = z.object({
   bounce_mailbox: mailbox.default({}),
   webhook_token: z.string().default(''),
   backup_stale_hours: z.coerce.number().min(0).max(744).default(0),
+  // Google Analytics campaign tags added to links (campaigns can switch them off).
+  utm_enabled: z.boolean().default(true),
+  utm_source: z.string().trim().max(60).default('mailharbor'),
+  utm_medium: z.string().trim().max(60).default('email'),
+  utm_domains: z.string().trim().max(500).default(''),
 });
 
 // zod 4 returns .default({}) objects as-is, so build nested defaults explicitly.

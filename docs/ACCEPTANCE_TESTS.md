@@ -9,7 +9,7 @@ local SMTP server (`test/helpers/smtpSink.js`). That server rejects addresses by
 | `soft-` | 452 4.2.2 |
 | `policy-` | 550 5.7.1 |
 
-All 25 tests pass (17 Nov 2026).
+All 29 tests pass (17 Nov 2026).
 
 ```bash
 cd portal
@@ -64,12 +64,35 @@ Additional automated checks:
   - the preference centre unsubscribes from unticked lists only, cannot be used to re-subscribe, and "Unsubscribe from
     everything" suppresses;
   - the campaign report counts stayed subscribed, preference changes and unsubscribes;
-  - the mail usage report returns daily volume, totals, recipient actions and campaigns.
+  - the mail usage report returns daily volume, totals, recipient actions and campaigns;
+- image library: a 2400px PNG photo is stored as a 1200px JPEG with no metadata; a broken file is rejected; served
+  publicly with immutable caching and cross-origin loading; identical images are stored once; an image used by a
+  campaign can't be deleted;
+- UTM tagging: a delivered email's tracked click redirects to the URL with `utm_source/medium/campaign` (campaign
+  slug); a campaign with tags switched off redirects to the plain URL; MailHarbor's own links are never tagged;
+- saved segments:
+  - rules on an imported column, status and dates match the right contact, and unknown fields or operators are
+    rejected;
+  - an SQL-injection string is treated as plain text, and the tables stay intact;
+  - names are unique;
+  - the contact filter works;
+  - a campaign narrowed to the segment sends only to it and snapshots the segment name;
+  - deletion is refused while a draft uses the segment;
+- sign-up forms:
+  - the page is embeddable;
+  - missing token, honeypot or bot submissions get "thank you" and nothing is stored;
+  - required fields and consent are enforced;
+  - a real sign-up creates the contact, subscribes it to the single opt-in list, leaves the double opt-in list
+    unconfirmed with one confirmation email, and records consent evidence;
+  - an unsubscribed address gets the same reply and stays unsubscribed;
+  - outcome totals are correct, and closed forms return 404.
 
-**Unit tests** (`npm run test:unit`, 22 tests): configuration rules, secret encryption, rendering and personalisation,
+**Unit tests** (`npm run test:unit`, 25 tests): configuration rules, secret encryption, rendering and personalisation,
 DSN/ARF/auto-reply parsing, bounce classification, SMTP error classification, and the builder renderer (defaults,
 rejection of unsafe URLs, colours and block types, escaping, tag links, column stacking, image widths, click tracking) and the template renderer (complete document, doctype kept,
-a single content slot, footer links, rules on template-only blocks).
+a single content slot, footer links, rules on template-only blocks), UTM tagging rules, segment rule validation and
+compilation (bound parameters only), and image compression (resize, format choice, EXIF rotation, metadata stripping,
+broken files).
 
 **Not automated:**
 - the IMAP layer against a real mailbox (the parser is tested; the connection layer only for failure);

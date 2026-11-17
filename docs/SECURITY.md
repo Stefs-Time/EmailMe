@@ -12,6 +12,9 @@
 | CSRF | Per-session synchronizer token, required in `X-CSRF-Token` on every state-changing API request and compared in constant time. Public recipient forms (unsubscribe, confirm) need no session and only act on the unguessable message token |
 | Authorisation | Server-side permission check on every route; roles viewer / manager / admin; the last active admin cannot be removed |
 | Input | zod validation of bodies, queries and parameters; size limits (JSON 1 MB, CSV 25 MB / 100k rows by default) |
+| Image uploads | Type allow-list; 15 MB upload limit, 50-megapixel decode limit (decompression bombs); re-encoded by sharp (no original bytes kept); EXIF/GPS metadata stripped; served with `nosniff` and `default-src 'none'` CSP. sharp ≥ 0.35.5 (fixes CVEs in its bundled libvips/libheif/librsvg) |
+| Segments | Rules validated against a fixed field/operator catalogue; compiled SQL contains only bound parameters (an injection attempt is matched as plain text) |
+| Sign-up forms | Honeypot, HMAC-signed render time (submissions under 2.5 s or without a token discarded), 20 POSTs per 10 min per IP; identical response for new, existing and suppressed addresses (no enumeration); suppressed addresses never re-subscribed; consent evidence recorded; only form pages may be framed (`frame-ancestors *`), with a nonce-based CSP |
 | SQL | Parameterised queries only; sort columns whitelisted; `LIKE` wildcards escaped |
 | Email content | Campaign and template HTML sanitised on save (sanitize-html allowlist: no scripts, event handlers or `javascript:` URLs); personalisation values HTML-escaped; tags are lookups only, with no expression language (no template injection) |
 | Previews | Rendered email previews and "view in browser" pages are served with a sandbox CSP (no scripts, no same-origin) |

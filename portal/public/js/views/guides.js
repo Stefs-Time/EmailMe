@@ -89,6 +89,17 @@ const G = {
         short description for people who cannot see it.</li>
       <li>The builder warns you when text and background colours are hard to read, and the checklist warns about buttons without a link.</li>
     </ul>
+    <h3>Images, segments, sign-up forms and Google Analytics</h3>
+    <ul>
+      <li><a href="#/images">Images</a>: upload logos and photos (drag and drop). They're resized and compressed for email automatically. In the builder, select an
+        image block and press <em>Choose or upload an image</em>.</li>
+      <li><a href="#/segments">Segments</a>: saved audiences such as "opened in the last 90 days and city is Durban". In a campaign, use
+        <em>Narrow to a segment</em> to send only to people on the lists <strong>and</strong> in the segment.</li>
+      <li><a href="#/forms">Sign-up forms</a>: a link and embed code for your website. Consent is recorded and double opt-in lists send a confirmation
+        email. People who unsubscribed are never re-added.</li>
+      <li>Google Analytics: links get UTM tags automatically, so visits from each campaign show up in Analytics. Rename or switch this off per
+        campaign in the envelope; administrators set the defaults in Settings → Sending.</li>
+    </ul>
     <h3>Unsubscribe, preferences and "stay subscribed": handled by MailHarbor</h3>
     <p>Select a button (or select words and press the link button) and choose where it goes: <em>Unsubscribe page</em>,
       <em>Manage preferences</em> (the person picks which lists to keep), <em>Stay subscribed</em> (for "Are you still interested?" emails)

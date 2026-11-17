@@ -343,3 +343,30 @@ code { color: #22303f; background: #eef1f5; padding: .1rem .35rem; border-radius
 .overview-page figcaption { text-align: center; margin-top: .4rem; }
 @media (max-width: 575.98px) { .overview-pages { grid-template-columns: 1fr; } }
 .text-teal { color: #0b6b62; }
+
+/* Image library */
+.img-drop { display: flex; align-items: center; gap: .75rem; padding: 1rem 1.1rem; border: 2px dashed #b8c7da; border-radius: .75rem; background: #fbfcfd; }
+.img-drop i { color: var(--mh-navy-2); }
+.img-drop.over { border-color: var(--mh-teal); background: var(--mh-teal-soft); }
+.img-drop.busy { opacity: .6; pointer-events: none; }
+.img-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: .75rem; }
+.img-card { display: flex; flex-direction: column; border: 1px solid var(--mh-border); border-radius: .6rem; overflow: hidden; background: #fff; cursor: default; height: 100%; }
+label.img-card { cursor: pointer; }
+.img-thumb { display: flex; align-items: center; justify-content: center; height: 120px; background: repeating-conic-gradient(#f1f4f8 0% 25%, #ffffff 0% 50%) 50% / 16px 16px; }
+.img-thumb img { max-width: 100%; max-height: 120px; object-fit: contain; }
+.img-meta { display: flex; flex-direction: column; padding: .45rem .6rem; min-width: 0; }
+.img-name { font-size: .85rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.btn-check:checked + .img-card { border-color: var(--mh-navy-2); box-shadow: 0 0 0 3px rgba(31, 78, 140, .25); }
+.btn-check:focus-visible + .img-card { outline: 2px solid var(--mh-navy-2); outline-offset: 2px; }
+.img-item { display: flex; flex-direction: column; gap: .35rem; }
+.img-actions { display: flex; gap: .35rem; }
+.img-actions .btn:first-child { flex: 1; }
+
+/* Segments */
+.seg-row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; padding: .45rem 0; border-bottom: 1px dashed var(--mh-border); }
+.seg-row > * { flex: 1 1 150px; min-width: 0; }
+.seg-row > datalist { display: none; }
+.seg-row > button { flex: 0 0 auto; }
+.seg-preview { position: sticky; top: 76px; }
+/* Sign-up forms */
+.form-preview { width: 100%; max-width: 480px; height: 560px; border: 0; background: #fff; border-radius: 8px; }

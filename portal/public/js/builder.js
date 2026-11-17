@@ -12,6 +12,7 @@
 // through the CSSOM (element.style.x = …), which CSP allows.
 import { html, raw, mount, $, $$, formModal, toast } from './ui.js';
 import { tagBar } from './tags.js';
+import { pickImage } from './images.js';
 
 export const BLOCKS = [
   { type: 'heading', label: 'Heading', icon: 'type-h1' },
@@ -252,7 +253,7 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign', cust
         } else {
           const ph = document.createElement('div');
           ph.className = 'bb-placeholder';
-          ph.innerHTML = '<i class="bi bi-image"></i><span>Image: add the image address (https://…) in the panel</span>';
+          ph.innerHTML = '<i class="bi bi-image"></i><span>Image: choose or upload one in the panel</span>';
           body.append(ph);
         }
         break;
@@ -439,8 +440,9 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign', cust
         break;
       }
       case 'image':
-        fields = html`<div class="col-12"><label class="form-label small">Image address (https://…)</label><input type="url" class="form-control form-control-sm" data-prop="src" value="${p.src}" placeholder="https://example.co.za/banner.jpg">
-            <div class="form-text">Host images on your website or file storage. Use JPG or PNG, about 1200px wide.</div></div>
+        fields = html`<div class="col-12"><button type="button" class="btn btn-sm btn-primary w-100" data-pick-image><i class="bi bi-images me-1"></i>${p.src ? 'Change image' : 'Choose or upload an image'}</button>
+            <div class="form-text">Uploads are resized and compressed for email automatically.</div></div>
+          <div class="col-12"><label class="form-label small">…or image address (https://…)</label><input type="url" class="form-control form-control-sm" data-prop="src" value="${p.src}" placeholder="https://example.co.za/banner.jpg"></div>
           <div class="col-12"><label class="form-label small">Description (alt text)</label><input class="form-control form-control-sm" data-prop="alt" value="${p.alt}" maxlength="300" placeholder="What the image shows"></div>
           <div class="col-12"><label class="form-label small">Link when clicked (optional)</label><input type="url" class="form-control form-control-sm" data-prop="href" value="${p.href}" placeholder="https://"></div>
           <div class="col-12"><label class="form-label small">Width: <span data-out="width">${p.width}</span>%</label><input type="range" class="form-range" data-prop="width" data-num min="10" max="100" step="5" value="${p.width}"></div>
@@ -573,6 +575,22 @@ export function createBuilder(root, initial, { onChange, mode = 'campaign', cust
   props.addEventListener('click', (e) => {
     const a = e.target.closest('[data-align]');
     if (a && selectedId) { setProp(selectedId, 'align', a.dataset.align); renderProps(); return; }
+    if (e.target.closest('[data-pick-image]') && selectedId) {
+      const id = selectedId;
+      pickImage({
+        onPick: (img) => {
+          const loc = locate(id);
+          if (!loc) return;
+          record();
+          loc.block.props.src = img.url;
+          if (!loc.block.props.alt?.trim()) loc.block.props.alt = img.name;
+          rerender(id);
+          changed();
+          renderProps();
+        },
+      }).catch((err) => toast(err.message, 'danger'));
+      return;
+    }
     if (e.target.closest('[data-deselect]')) { const id = selectedId; select(null); if (id) $(`.bb-block[data-id="${id}"]`, canvas)?.focus(); return; }
     const cmd = e.target.closest('[data-cmd]');
     const editable = selectedId && $(`.bb-block[data-id="${selectedId}"] .bb-text`, canvas);

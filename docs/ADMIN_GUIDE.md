@@ -72,6 +72,28 @@ SMTP by default; ask them to open it if *System health → SMTP* shows a timeout
   and increase gradually over a few weeks (warm-up).
 - **Tracking defaults:** opens and clicks; each campaign can switch them off.
 - **Send test email** verifies the SMTP settings from the environment end to end.
+- **Google Analytics (UTM) tags:** on by default.
+  - **Values:** `utm_source` (default `mailharbor`), `utm_medium` (default `email`); `utm_campaign` is the campaign's
+    name, or the name set on the campaign.
+  - **Only for these websites:** limits tagging to your own domains. Leave it empty to tag every web link.
+  - **Frozen at send:** tags are fixed when a campaign starts sending, so changing these settings never breaks the
+    tracked links of a campaign in progress.
+
+### Sign-up forms on your website
+*Sign-up forms* gives each form a link and an embed code: an iframe pointing to `https://<your address>/f/<id>?embed=1`.
+- **Embedding:** form pages may be embedded on any website. Every other MailHarbor page refuses to be framed.
+- **Spam protection:**
+  - a hidden spam-trap field;
+  - a signed token that rejects submissions made under 2.5 seconds after the page loaded, or without a token;
+  - a limit of 20 sign-ups per 10 minutes per network.
+- **Rejected submissions** are counted on the form ("blocked as spam") and store no personal data.
+- **Unsubscribed or bounced addresses** are never re-subscribed through a form. Reactivation stays an administrator
+  action with recorded consent.
+
+### Image storage
+Images uploaded to **Images** are stored in PostgreSQL after compression (usually 50–300 KB each), so they're
+included in every database backup and survive redeploys. They're served publicly at `/img/<random id>.jpg`, because
+inboxes must be able to load them. Don't upload anything confidential.
 
 ### Bounces
 - **Bounce address (Return-Path):** the dedicated bounce mailbox address. Delivery failures that occur after sending

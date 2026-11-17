@@ -12,9 +12,10 @@
  *   SMTP unusable      -> message re-queued, campaigns paused, critical alert
  */
 const { renderMessage, DEFAULT_TEMPLATE, escapeHtml } = require('./render');
+const { addUtm, utmParamsFor } = require('./utm');
 const { classifySendError } = require('./mailer');
 const { processBounce } = require('./bounces');
-const { NOT_SUPPRESSED, stillEligible } = require('./audience');
+const { NOT_SUPPRESSED, stillEligible, segmentClause } = require('./audience');
 const { raiseAlert, resolveAlert, recipientEvent } = require('../lib/audit');
 
 const RETRY_MINUTES = [5, 30, 120];
@@ -33,33 +34,42 @@ function extractLinks(html) {
  * message per eligible contact) and switches it to "sending".
  * Returns the number of recipients, or null if it was not startable.
  */
-async function startCampaign(pool, campaignId) {
+async function startCampaign(pool, campaignId, settings = null) {
+  // Freeze the UTM parameters so link tracking matches what is sent, even if Settings change mid-send.
+  const s = settings ? await settings.all() : null;
+  const publicUrl = settings ? await settings.publicUrl() : '';
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `SELECT id, body_html, status FROM portal.campaigns WHERE id = $1 FOR UPDATE`, [campaignId]);
+      `SELECT c.id, c.name, c.body_html, c.status, c.utm_enabled, c.utm_campaign, c.segment_id, sg.name AS seg_name, sg.rules AS seg_rules
+         FROM portal.campaigns c LEFT JOIN portal.segments sg ON sg.id = c.segment_id WHERE c.id = $1 FOR UPDATE OF c`, [campaignId]);
     const c = rows[0];
     if (!c || !['draft', 'scheduled'].includes(c.status)) {
       await client.query('ROLLBACK');
       return null;
     }
+    // Recipients are frozen now: list members (consent), minus suppressions, narrowed by the segment if any.
+    const params = [campaignId];
+    const seg = segmentClause(c.seg_rules, params);
     const ins = await client.query(
       `INSERT INTO portal.messages (kind, campaign_id, contact_id, email)
        SELECT DISTINCT ON (c.id) 'campaign', $1, c.id, c.email
          FROM portal.contacts c
          JOIN portal.list_members m ON m.contact_id = c.id AND m.status = 'subscribed'
          JOIN portal.campaign_lists cl ON cl.list_id = m.list_id AND cl.campaign_id = $1
-        WHERE ${NOT_SUPPRESSED('c')}
+        WHERE ${NOT_SUPPRESSED('c')}${seg}
         ORDER BY c.id
-       ON CONFLICT DO NOTHING`, [campaignId]);
-    for (const url of extractLinks(c.body_html)) {
+       ON CONFLICT DO NOTHING`, params);
+    if (c.segment_id) await client.query('UPDATE portal.campaigns SET segment_name = $2 WHERE id = $1', [campaignId, c.seg_name]);
+    const utm = s ? utmParamsFor(c, s) : null;
+    for (const url of extractLinks(addUtm(c.body_html, utm, publicUrl))) {
       await client.query(
         `INSERT INTO portal.links (campaign_id, url) VALUES ($1, $2) ON CONFLICT (campaign_id, url) DO NOTHING`, [campaignId, url]);
     }
     await client.query(
-      `UPDATE portal.campaigns SET status = 'sending', started_at = NOW(), pause_reason = NULL, updated_at = NOW() WHERE id = $1`,
-      [campaignId]);
+      `UPDATE portal.campaigns SET status = 'sending', started_at = NOW(), pause_reason = NULL, utm_params = $2, updated_at = NOW() WHERE id = $1`,
+      [campaignId, utm]);
     await client.query('COMMIT');
     return ins.rowCount;
   } catch (err) {

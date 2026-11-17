@@ -35,6 +35,14 @@ export async function render(el, ctx, [tabArg]) {
         <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="t1" name="track_opens" ${check(s.track_opens)}><label class="form-check-label" for="t1">Track opens by default</label></div>
         <div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="t2" name="track_clicks" ${check(s.track_clicks)}><label class="form-check-label" for="t2">Track clicks by default</label></div></div>
     </div></div></div>
+    <div class="card mb-3"><div class="card-header">Google Analytics (UTM) tags</div><div class="card-body"><div class="row g-3">
+      <div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="utm" name="utm_enabled" ${check(s.utm_enabled)}><label class="form-check-label" for="utm">Add UTM tags to links in campaigns</label></div>
+        <div class="form-text">Visits from your emails then show up in Google Analytics as <span class="mono">source / medium</span> with the campaign's name. Each campaign can switch this off or use its own name.</div></div>
+      <div class="col-md-4"><label class="form-label">utm_source</label><input class="form-control" name="utm_source" maxlength="60" value="${s.utm_source}"></div>
+      <div class="col-md-4"><label class="form-label">utm_medium</label><input class="form-control" name="utm_medium" maxlength="60" value="${s.utm_medium}"></div>
+      <div class="col-md-4"><label class="form-label">Only for these websites <span class="text-muted-2 small">(optional)</span></label><input class="form-control" name="utm_domains" maxlength="500" value="${s.utm_domains}" placeholder="acme.co.za, shop.acme.co.za">
+        <div class="form-text">Leave empty to tag every web link.</div></div>
+    </div></div></div>
     <div class="card"><div class="card-header">SMTP server <span class="small fw-normal text-muted-2">· set by environment variables</span></div><div class="card-body">
       <dl class="dl-grid mb-3"><dt>Server</dt><dd class="mono">${s.smtp.host}:${s.smtp.port}</dd><dt>Security</dt><dd>${s.smtp.security}</dd>
         <dt>Login</dt><dd>${s.smtp.authenticated ? s.smtp.user : 'none (relay)'}</dd><dt>Connections</dt><dd>${s.smtp.poolSize}</dd></dl>
@@ -92,9 +100,9 @@ export async function render(el, ctx, [tabArg]) {
     e.preventDefault();
     const v = (n) => f.elements[n];
     const body = {};
-    for (const k of ['org_name', 'org_address', 'public_url', 'from_name', 'from_email', 'reply_to', 'bounce_address']) if (v(k) && !v(k).disabled) body[k] = v(k).value.trim();
+    for (const k of ['org_name', 'org_address', 'public_url', 'from_name', 'from_email', 'reply_to', 'bounce_address', 'utm_source', 'utm_medium', 'utm_domains']) if (v(k) && !v(k).disabled) body[k] = v(k).value.trim();
     for (const k of ['send_rate_per_second', 'send_max_per_hour', 'soft_bounce_limit', 'backup_stale_hours']) if (v(k)) body[k] = Number(v(k).value);
-    for (const k of ['track_opens', 'track_clicks', 'global_unsubscribe']) if (v(k)) body[k] = v(k).checked;
+    for (const k of ['track_opens', 'track_clicks', 'global_unsubscribe', 'utm_enabled']) if (v(k)) body[k] = v(k).checked;
     if (v('mb_host')) {
       body.bounce_mailbox = { enabled: v('mb_enabled').checked, host: v('mb_host').value.trim(), port: Number(v('mb_port').value), secure: v('mb_secure').checked,
         user: v('mb_user').value.trim(), folder: v('mb_folder').value.trim() || 'INBOX', after: v('mb_after').value, interval_minutes: Number(v('mb_interval').value) };

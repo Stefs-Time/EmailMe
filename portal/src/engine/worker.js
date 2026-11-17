@@ -87,7 +87,7 @@ class Worker {
     const { rows } = await this.pool.query(
       `SELECT id FROM portal.campaigns WHERE status = 'scheduled' AND send_at <= NOW() ORDER BY send_at LIMIT 10`);
     for (const r of rows) {
-      const n = await startCampaign(this.pool, r.id);
+      const n = await startCampaign(this.pool, r.id, this.settings);
       if (n !== null) this.log.info({ campaign: r.id, recipients: n }, 'scheduled campaign started');
     }
   }

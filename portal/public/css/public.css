@@ -24,3 +24,19 @@ form .btn + .btn { margin-left: 0; }
 .pref-state { font-size: .8rem; color: #5f6b7a; margin-left: 4px; }
 .pref-desc { display: block; font-size: .85rem; color: #5f6b7a; margin: 2px 0 0 30px; }
 .notice { background: #e6f5f3; color: #0b5d55; border-radius: 8px; padding: 10px 12px; font-weight: 600; }
+
+/* Sign-up forms */
+body.embed { background: transparent; min-height: 0; padding: 0; display: block; }
+body.embed .box { border: 0; box-shadow: none; padding: 16px; max-width: none; }
+.form-box { max-width: 460px; }
+.f-row { margin-bottom: 14px; }
+.f-row label { display: block; font-weight: 600; font-size: .92rem; margin-bottom: 4px; }
+.f-row input[type=text], .f-row input[type=email] { width: 100%; box-sizing: border-box; padding: 10px 12px; font-size: 1rem; border: 1px solid #b8c4d3; border-radius: 8px; font-family: inherit; }
+.f-row input:focus-visible { outline: 3px solid #6d97cc; outline-offset: 1px; border-color: var(--accent, #1f4e8c); }
+.f-consent label { font-weight: 400; display: flex; gap: 8px; align-items: flex-start; line-height: 1.45; }
+.f-consent input { width: 18px; height: 18px; margin-top: 2px; flex: none; accent-color: var(--accent, #1f4e8c); }
+.btn-accent { background: var(--accent, #1f4e8c); width: 100%; }
+.btn-accent:hover { filter: brightness(.92); background: var(--accent, #1f4e8c); }
+.f-error { background: #fde8e7; color: #8f1d18; border-radius: 8px; padding: 10px 12px; font-weight: 600; }
+.f-small { font-size: .8rem; margin-top: 12px; }
+.f-hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }

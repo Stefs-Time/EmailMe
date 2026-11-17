@@ -22,6 +22,9 @@ const { campaignRoutes } = require('./modules/campaigns/routes');
 const { templateRoutes } = require('./modules/templates/routes');
 const { settingsRoutes, setupRoutes } = require('./modules/settings/routes');
 const { publicRoutes } = require('./modules/public/routes');
+const { imageRoutes, publicImageRoute } = require('./modules/images/routes');
+const { segmentRoutes } = require('./modules/segments/routes');
+const { formRoutes, publicFormRoutes } = require('./modules/forms/routes');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const NODE_MODULES = path.join(__dirname, '..', 'node_modules');
@@ -72,6 +75,8 @@ function createApp(deps) {
 
   // Recipient-facing pages and provider webhooks (no login).
   app.use(publicRoutes(deps));
+  app.use(publicImageRoute(deps));
+  app.use(publicFormRoutes(deps));
 
   // Static assets: the SPA plus vendored Bootstrap / icons / Chart.js (no CDN).
   const staticOpts = { maxAge: config.isProd ? '1h' : 0, index: false };
@@ -126,6 +131,9 @@ function createApp(deps) {
   app.use('/api/system', systemRoutes(deps));
   app.use('/api/campaigns', campaignRoutes(deps));
   app.use('/api/templates', templateRoutes(deps));
+  app.use('/api/images', imageRoutes(deps));
+  app.use('/api/segments', segmentRoutes(deps));
+  app.use('/api/forms', formRoutes(deps));
   app.use('/api/settings', settingsRoutes(deps));
   app.use('/api', notFoundHandler);
 

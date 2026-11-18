@@ -227,6 +227,7 @@ export const CONSENT_LABELS = {
   email_request: 'Written request by email',
   event_signup: 'Event or trade-show sign-up',
   existing_customer: 'Existing customer (POPIA s69(3))',
+  permission_email: 'Said yes to a permission email',
   other: 'Other (describe in evidence)',
 };
 

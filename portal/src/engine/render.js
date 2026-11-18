@@ -8,7 +8,7 @@
  *   {{ first_name }}  {{ last_name }}  {{ full_name }}  {{ email }}  {{ company }}
  *   {{ attribs.city }}                       any custom attribute
  *   {{ first_name | "there" }}               fallback when empty
- *   {{ unsubscribe_url }}  {{ view_url }}  {{ preferences_url }}  {{ stay_url }}
+ *   {{ unsubscribe_url }}  {{ view_url }}  {{ preferences_url }}  {{ stay_url }}  {{ consent_url }}
  *   {{ org_name }}  {{ org_address }}
  * Values are HTML-escaped in the HTML part.
  */
@@ -142,6 +142,7 @@ function renderMessage({ campaign, templateHtml, contact, token, settings, publi
     email: contact.email || '', company: contact.company || '', attribs: contact.attribs || {},
     unsubscribe_url: unsubscribeUrl, view_url: viewUrl,
     preferences_url: `${base}/p/${token}`, stay_url: `${base}/s/stay/${token}`,
+    consent_url: `${base}/s/consent/${token}`,
     org_name: settings.org_name, org_address: settings.org_address,
     org_address_line: settings.org_address ? ` · ${settings.org_address}` : '',
     subject: campaign.subject, preheader: campaign.preheader || '',

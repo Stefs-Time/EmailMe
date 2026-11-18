@@ -42,6 +42,7 @@ export async function render(el) {
           <li class="list-group-item d-flex justify-content-between"><span>Changed preferences</span><strong>${num(a.preferences_updated || 0)}</strong></li>
           <li class="list-group-item d-flex justify-content-between"><span>Stayed subscribed</span><strong>${num(a.stayed_subscribed || 0)}</strong></li>
           <li class="list-group-item d-flex justify-content-between"><span>Confirmed opt-in</span><strong>${num(a.optin_confirmed || 0)}</strong></li>
+          <li class="list-group-item d-flex justify-content-between"><span>Gave permission</span><strong>${num(a.consent_given || 0)}</strong></li>
         </ul></div></div>
       </div>
       <div class="card mb-3"><div class="card-header">Campaigns sent in this period</div>

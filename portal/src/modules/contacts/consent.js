@@ -11,6 +11,7 @@ const CONSENT_METHODS = [
   'email_request',
   'event_signup',
   'existing_customer',
+  'permission_email',
   'other',
 ];
 

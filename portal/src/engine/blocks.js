@@ -30,6 +30,7 @@ const LINK_TAGS = {
   unsubscribe: '{{ unsubscribe_url }}',
   preferences: '{{ preferences_url }}',
   stay: '{{ stay_url }}',
+  consent: '{{ consent_url }}',
   view: '{{ view_url }}',
 };
 const linkKind = z.enum(['url', ...Object.keys(LINK_TAGS)]);

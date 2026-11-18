@@ -604,6 +604,82 @@ t('platform-managed links: buttons go to MailHarbor pages (stay subscribed, pref
   assert.ok(usage.data.byCampaign.some((x) => x.id === c.data.id));
 });
 
+t('permission request: introduction sample asks for consent; "Yes" records evidence once; suppressed never re-consented', async () => {
+  const l = await http('admin', 'POST', '/api/lists', { name: 'Prospects', optin: 'single' });
+  for (const [email, name] of [['pr-yes@ok.example', 'Yasmin'], ['pr-quiet@ok.example', 'Quinn'], ['pr-out@ok.example', 'Otto']]) {
+    const a = await http('admin', 'POST', '/api/contacts', { email, firstName: name, listIds: [l.data.id], consent: { method: 'other', evidence: 'Business card, Expo 2026' } });
+    assert.equal(a.status, 201, JSON.stringify(a));
+  }
+  const c = await http('admin', 'POST', '/api/campaigns', { name: 'Intro to prospects', sample: 'permission-request' });
+  assert.equal(c.status, 201, JSON.stringify(c));
+  const btn = c.data.body_json.blocks.find((b) => b.type === 'button');
+  assert.equal(btn.props.link, 'consent', 'sample button goes to the permission page');
+  assert.match(c.data.body_html, /href="\{\{ consent_url \}\}"/);
+  const r = await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, {
+    name: 'Intro to prospects', subject: 'May we keep in touch?', preheader: '', from_name: 'Acme', from_email: 'news@acme.example', reply_to: '',
+    template_id: c.data.template_id, editor: 'builder', body_json: c.data.body_json, body_text: '', track_opens: false, track_clicks: true, list_ids: [l.data.id],
+  });
+  assert.equal(r.status, 200, JSON.stringify(r));
+  assert.deepEqual((await http('admin', 'GET', `/api/campaigns/${c.data.id}`)).data.problems, []);
+
+  // A test email's link opens an explanation page and records nothing.
+  sink.messages.length = 0;
+  assert.equal((await http('admin', 'POST', `/api/campaigns/${c.data.id}/test`, { emails: ['tester@ok.example'] })).status, 202);
+  await drain();
+  const testLink = sinkTo('tester@ok.example')[0].parsed.html.match(/https:\/\/mail\.acme\.example(\/s\/consent\/[0-9a-f-]{36})/)[1];
+  let res = await fetch(base + testLink, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: '' });
+  assert.match(await res.text(), /This is a test email/);
+
+  sink.messages.length = 0;
+  assert.equal((await http('admin', 'POST', `/api/campaigns/${c.data.id}/send`)).status, 200);
+  await drain();
+  const linkFor = (email) => sinkTo(email)[0].parsed.html.match(/https:\/\/mail\.acme\.example(\/s\/consent\/[0-9a-f-]{36})/)[1];
+  const yes = linkFor('pr-yes@ok.example');
+  assert.match(sinkTo('pr-yes@ok.example')[0].parsed.html, /\/u\/[0-9a-f-]{36}/, '"No thanks" goes to the unsubscribe page');
+
+  // GET only asks (link scanners); nothing recorded yet.
+  res = await fetch(base + yes);
+  const ask = await res.text();
+  assert.match(ask, /Yes, you may contact me/);
+  assert.match(ask, /No thanks, don't contact me again|No thanks, don&#39;t contact me again/);
+  const yesC = await contact('pr-yes@ok.example');
+  const countGranted = async (id) => (await pool.query(
+    `SELECT 1 FROM portal.consent_records WHERE contact_id = $1 AND method = 'permission_email' AND action = 'granted'`, [id])).rowCount;
+  assert.equal(await countGranted(yesC.id), 0);
+
+  // POST records consent with evidence, once.
+  res = await fetch(base + yes, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: '' });
+  assert.match(await res.text(), /may now email you/);
+  await fetch(base + yes, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: '' });
+  assert.equal(await countGranted(yesC.id), 1, 'clicking twice records one consent');
+  const rec = (await pool.query(`SELECT purpose, source, evidence, campaign_id, obtained_at FROM portal.consent_records
+                                  WHERE contact_id = $1 AND method = 'permission_email'`, [yesC.id])).rows[0];
+  assert.equal(rec.campaign_id, c.data.id);
+  assert.equal(rec.source, 'permission-email');
+  assert.match(rec.purpose, /Marketing emails from/);
+  assert.match(rec.evidence, /Intro to prospects/);
+  assert.ok(rec.obtained_at);
+  const detail = (await http('admin', 'GET', `/api/contacts/${yesC.id}`)).data;
+  assert.equal((detail.contact || detail).consent?.method ?? (await contact('pr-yes@ok.example')).consent?.method, 'permission_email');
+
+  // An unsubscribed (suppressed) address is never turned back into consent by a link.
+  const out = await contact('pr-out@ok.example');
+  const unsub = linkFor('pr-out@ok.example').replace('/s/consent/', '/u/');
+  await fetch(base + unsub, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: '' });
+  res = await fetch(base + linkFor('pr-out@ok.example'), { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: '' });
+  assert.match(await res.text(), /currently unsubscribed/);
+  assert.equal(await countGranted(out.id), 0);
+
+  // Report and usage count it; a segment finds exactly the people who said yes.
+  const rc = (await http('admin', 'GET', `/api/reports/campaigns/${c.data.id}`)).data;
+  assert.equal((rc.campaign || rc).consented, 1);
+  assert.equal((await http('admin', 'GET', '/api/reports/usage?days=7')).data.actions.consent_given, 1);
+  const pv = await http('admin', 'POST', '/api/segments/preview', { rules: { match: 'all', conditions: [
+    { field: 'consent', op: 'is', value: 'permission_email' }, { field: 'status', op: 'is', value: 'eligible' }] } });
+  assert.equal(pv.status, 200, JSON.stringify(pv));
+  assert.deepEqual(pv.data.sample.map((x) => x.email), ['pr-yes@ok.example']);
+});
+
 t('ready-made templates: Clean, Promotion and New release installed once; campaign samples use the matching template', async () => {
   const { ensureTemplatePresets } = require('../../src/modules/templates/routes');
   const list = (await http('admin', 'GET', '/api/templates')).data;

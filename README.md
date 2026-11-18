@@ -58,8 +58,8 @@ instances, not from tenant IDs in a shared database.
   - templates (the frame: header, colours, width, font, footer) designed in the same drag-and-drop builder or in HTML,
     with a default template, plus **ready-made Clean, Promotion and New release templates** that the matching campaign
     samples use automatically;
-  - **8 sample designs** to start from: simple message, marketing promotion, new product release, "Are you still
-    interested?", "Want to find out more?", monthly newsletter, event invitation, welcome;
+  - **9 sample designs** to start from: simple message, marketing promotion, new product release, "Are you still
+    interested?", introduction & permission request, "Want to find out more?", monthly newsletter, event invitation, welcome;
   - **one-click personalisation**: field buttons (First name, Full name, Company… plus imported columns) insert
     `{{ first_name | "there" }}`-style tags at the cursor in the subject, preview text or any block;
   - a preheader (inbox preview text);
@@ -80,7 +80,8 @@ instances, not from tenant IDs in a shared database.
   - the organisation's postal address goes in the footer;
   - an unsubscribe from any list suppresses the person globally (default);
   - **recipient pages run by MailHarbor**: unsubscribe, a **preference centre** (opt out of individual lists or
-    everything), **stay subscribed** (re-engagement) and view in browser. Any button or text link can point to them, and
+    everything), **stay subscribed** (re-engagement), **give permission** (records POPIA consent with campaign, time and IP) and view in
+    browser. Any button or text link can point to them, and
     each recipient's personal link is created automatically at send time. No URLs to manage.
 - **Bounce handling** from three sources:
   - SMTP rejections at send time;
@@ -353,6 +354,7 @@ them, and route anything platform-related to "contact MailHarbor support".
 | [PROVISIONING](docs/internal/PROVISIONING.md) | Onboarding and offboarding a customer instance |
 | [OPERATIONS](docs/internal/OPERATIONS.md) | Backups, upgrades, monitoring, support account, troubleshooting |
 | [DEPLOY_RAILWAY](docs/internal/DEPLOY_RAILWAY.md) | Railway steps per customer project |
+| [SALES_INTRO_EMAIL](docs/internal/SALES_INTRO_EMAIL.md) | Our own MailHarbor introduction & permission email copy |
 | [ARCHITECTURE](docs/internal/ARCHITECTURE.md) | Developers: design, data model, engine |
 | [ACCEPTANCE_TESTS](docs/internal/ACCEPTANCE_TESTS.md) | UAT checklist mapped to the scope |
 | [UAT_AUDIT](docs/internal/UAT_AUDIT.md) | UI/UX/UAT audit findings and fixes |

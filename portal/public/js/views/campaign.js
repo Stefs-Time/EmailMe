@@ -24,6 +24,7 @@ export async function render(el, ctx, [id]) {
       ['Unique opens', c.unique_opens, 'envelope-open', c.rates.open],
       ['Unique clicks', c.unique_clicks, 'cursor', c.rates.click],
       // Platform pages: only shown when the campaign used them
+      ...(c.consented ? [['Gave permission', c.consented, 'person-check', null]] : []),
       ...(c.stayed ? [['Stayed subscribed', c.stayed, 'hand-thumbs-up', null]] : []),
       ...(c.preference_changes ? [['Preference changes', c.preference_changes, 'sliders', null]] : []),
     ];

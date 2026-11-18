@@ -156,6 +156,7 @@ Eligibility for a campaign (`engine/audience.js`) requires all of the following:
 | `GET /t/o/:token.gif` | Open pixel |
 | `GET /t/c/:token/:linkId` | Click redirect, **only** to URLs stored for that campaign (no open redirect) |
 | `GET`/`POST /s/confirm/:token` | Double opt-in confirm page / confirm |
+| `GET`/`POST /s/consent/:token` | Permission request page / confirm: inserts a `consent_records` row (`granted`, method `permission_email`, purpose, campaign, evidence with time and IP), once per contact and campaign; records `consent_given`; never re-consents a suppressed address |
 | `GET`/`POST /s/stay/:token` | "Stay subscribed" page / confirm: records `stayed_subscribed`, refreshes engagement, never re-activates a suppressed address |
 | `GET`/`POST /p/:token` | Preference centre: the contact's lists; POST unsubscribes from unticked lists (list level) or from everything (global suppression). It can only opt out, never re-subscribe |
 | `POST /webhooks/bounce` | Provider bounce/complaint events (token, constant-time compare) |

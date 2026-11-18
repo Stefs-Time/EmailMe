@@ -215,6 +215,63 @@ function publicRoutes({ pool, settings, logger }) {
       <p class="muted">You can <a href="/p/${escapeHtml(m.uuid)}">manage your preferences</a> at any time.</p>` });
   });
 
+  // ---- Give permission (consent request) --------------------------------
+  // GET only shows the question (link scanners prefetch GETs); the POST records
+  // consent with its evidence: campaign, subject, time and IP address.
+  const CONSENT_PURPOSE = (org) => `Marketing emails from ${org}`;
+
+  r.get('/s/consent/:token', async (req, res) => {
+    const s = await settings.all();
+    const m = await messageByToken(req.params.token);
+    if (m?.kind === 'test') return testPage(res, s);
+    if (!m || !m.contact_id) return page(res, { title: 'Link not valid', org: s.org_name, status: 404, body: '<h1>This link is no longer valid</h1>' });
+    return page(res, { title: 'May we keep in touch?', org: s.org_name, body: `<h1>May we keep in touch?</h1>
+      <p>Confirm that <strong>${escapeHtml(s.org_name)}</strong> may send emails to <strong>${escapeHtml(maskEmail(m.contact_email))}</strong> about its products, services and news.</p>
+      <form method="post"><button type="submit" class="btn">Yes, you may contact me</button></form>
+      <p class="muted">You can unsubscribe at any time with the link in every email. Not interested? <a href="/u/${escapeHtml(m.uuid)}">No thanks, don't contact me again</a>.</p>` });
+  });
+
+  r.post('/s/consent/:token', async (req, res) => {
+    const s = await settings.all();
+    const m = await messageByToken(req.params.token);
+    if (m?.kind === 'test') return testPage(res, s);
+    if (!m || !m.contact_id) return page(res, { title: 'Link not valid', org: s.org_name, status: 404, body: '<h1>This link is no longer valid</h1>' });
+    const ok = await withTransaction(pool, async (db) => {
+      const { rows } = await db.query('SELECT email, email_hash FROM portal.contacts WHERE id = $1 FOR UPDATE', [m.contact_id]);
+      const c = rows[0];
+      const sup = await db.query('SELECT 1 FROM portal.suppressions WHERE email_hash = $1 AND lifted_at IS NULL', [c.email_hash]);
+      if (sup.rowCount) return false; // an opt-out is only reversed by an administrator, with recorded reason
+      // One record per campaign: clicking again changes nothing.
+      const dup = await db.query(
+        `SELECT 1 FROM portal.consent_records WHERE contact_id = $1 AND campaign_id IS NOT DISTINCT FROM $2
+            AND action = 'granted' AND method = 'permission_email'`, [m.contact_id, m.campaign_id]);
+      if (dup.rowCount) return true;
+      const camp = m.campaign_id
+        ? (await db.query('SELECT name, subject FROM portal.campaigns WHERE id = $1', [m.campaign_id])).rows[0] : null;
+      const now = new Date();
+      const purpose = CONSENT_PURPOSE(s.org_name);
+      const evidence = `Clicked "Yes, you may contact me" on the permission page for campaign "${camp?.name || '?'}" `
+        + `(subject "${camp?.subject || ''}") at ${now.toISOString()} from ${req.ip}`;
+      await db.query(
+        `INSERT INTO portal.consent_records (contact_id, email, email_hash, action, method, purpose, source, obtained_at, evidence, campaign_id)
+         VALUES ($1, $2, $3, 'granted', 'permission_email', $4, 'permission-email', $5, $6, $7)`,
+        [m.contact_id, c.email, c.email_hash, purpose, now, evidence.slice(0, 1000), m.campaign_id]);
+      await db.query(
+        `UPDATE portal.contacts SET consent = consent || $2::jsonb, last_click_at = NOW(), soft_bounces = 0, updated_at = NOW() WHERE id = $1`,
+        [m.contact_id, JSON.stringify({ status: 'granted', method: 'permission_email', purpose, date: now.toISOString().slice(0, 10), source: 'permission-email' })]);
+      await recipientEvent(db, { contactId: m.contact_id, emailHash: c.email_hash, campaignId: m.campaign_id,
+        type: 'consent_given', details: { ip: req.ip }, actorType: 'recipient' });
+      return true;
+    });
+    if (!ok) {
+      return page(res, { title: 'Unsubscribed', org: s.org_name, body: `<h1>You are currently unsubscribed</h1>
+        <p>To receive our emails again, please contact ${escapeHtml(s.org_name)}${s.reply_to ? ` at ${escapeHtml(s.reply_to)}` : ''}.</p>` });
+    }
+    return page(res, { title: 'Thank you', org: s.org_name, body: `<h1>Thank you!</h1>
+      <p>${escapeHtml(s.org_name)} may now email you. You can unsubscribe at any time with the link in every email.</p>
+      <p class="muted">You can also <a href="/p/${escapeHtml(m.uuid)}">manage your preferences</a>.</p>` });
+  });
+
   // ---- Preference centre --------------------------------------------------
   async function preferenceState(contactId) {
     const { rows: c } = await pool.query('SELECT email, email_hash FROM portal.contacts WHERE id = $1', [contactId]);

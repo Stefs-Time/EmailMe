@@ -22,7 +22,8 @@ SELECT c.id, c.name, c.subject, c.status, c.created_at, c.send_at, c.started_at,
        COALESCE(b.complaint, 0) AS complaints,
        COALESCE(t.opens, 0) AS opens, COALESCE(t.unique_opens, 0) AS unique_opens,
        COALESCE(t.clicks, 0) AS clicks, COALESCE(t.unique_clicks, 0) AS unique_clicks,
-       COALESCE(u.n, 0) AS unsubscribes, COALESCE(u.stayed, 0) AS stayed, COALESCE(u.prefs, 0) AS preference_changes
+       COALESCE(u.n, 0) AS unsubscribes, COALESCE(u.stayed, 0) AS stayed, COALESCE(u.prefs, 0) AS preference_changes,
+       COALESCE(u.consented, 0) AS consented
   FROM portal.campaigns c
   LEFT JOIN LATERAL (
     SELECT COUNT(*)::int AS targeted,
@@ -46,9 +47,10 @@ SELECT c.id, c.name, c.subject, c.status, c.created_at, c.send_at, c.started_at,
   LEFT JOIN LATERAL (
     SELECT COUNT(DISTINCT COALESCE(contact_id::text, email_hash)) FILTER (WHERE event_type = 'unsubscribed')::int AS n,
            COUNT(DISTINCT COALESCE(contact_id::text, email_hash)) FILTER (WHERE event_type = 'stayed_subscribed')::int AS stayed,
-           COUNT(DISTINCT COALESCE(contact_id::text, email_hash)) FILTER (WHERE event_type = 'preferences_updated')::int AS prefs
+           COUNT(DISTINCT COALESCE(contact_id::text, email_hash)) FILTER (WHERE event_type = 'preferences_updated')::int AS prefs,
+           COUNT(DISTINCT COALESCE(contact_id::text, email_hash)) FILTER (WHERE event_type = 'consent_given')::int AS consented
       FROM portal.recipient_events
-     WHERE campaign_id = c.id AND event_type IN ('unsubscribed', 'stayed_subscribed', 'preferences_updated')) u ON TRUE`;
+     WHERE campaign_id = c.id AND event_type IN ('unsubscribed', 'stayed_subscribed', 'preferences_updated', 'consent_given')) u ON TRUE`;
 
 function shapeCampaign(c) {
   const failures = c.hard_bounces + c.soft_bounces + c.review_bounces;
@@ -217,7 +219,7 @@ function reportRoutes({ pool, settings, config }) {
                     FROM portal.messages WHERE sent_at > LEAST(date_trunc('month', NOW()), NOW() - $1 * INTERVAL '1 day')`, [q.days]),
       pool.query(`SELECT event_type, COUNT(*)::int AS n FROM portal.recipient_events
                    WHERE actor_type = 'recipient' AND created_at > NOW() - $1 * INTERVAL '1 day'
-                     AND event_type IN ('unsubscribed', 'stayed_subscribed', 'preferences_updated', 'optin_confirmed')
+                     AND event_type IN ('unsubscribed', 'stayed_subscribed', 'preferences_updated', 'optin_confirmed', 'consent_given')
                    GROUP BY 1`, [q.days]),
       pool.query(`SELECT c.id, c.name, COUNT(m.id)::int AS sent, MIN(m.sent_at) AS first_sent, MAX(m.sent_at) AS last_sent
                     FROM portal.messages m JOIN portal.campaigns c ON c.id = m.campaign_id

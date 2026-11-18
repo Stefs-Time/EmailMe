@@ -59,6 +59,7 @@ export const DESTINATIONS = [
   { value: 'unsubscribe', label: 'Unsubscribe page', tag: '{{ unsubscribe_url }}', hint: 'The contact unsubscribes in one step. Recorded automatically.' },
   { value: 'preferences', label: 'Manage preferences', tag: '{{ preferences_url }}', hint: 'The contact chooses which lists to keep, or unsubscribes from everything.' },
   { value: 'stay', label: 'Stay subscribed (re-engagement)', tag: '{{ stay_url }}', hint: 'The contact confirms they still want your emails. Counted in the campaign report.' },
+  { value: 'consent', label: 'Give permission (consent request)', tag: '{{ consent_url }}', hint: 'The contact confirms you may email them. Recorded on the contact as consent evidence and counted in the campaign report.' },
   { value: 'view', label: 'View in browser', tag: '{{ view_url }}', hint: 'Opens this email as a web page.' },
 ];
 const DEST = Object.fromEntries(DESTINATIONS.map((d) => [d.value, d]));

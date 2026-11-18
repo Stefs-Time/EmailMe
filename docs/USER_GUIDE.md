@@ -132,6 +132,7 @@ For an opt-out request by phone or email, use **Actions → Unsubscribe** and no
    | Marketing promotion | Specials: banner, headline offer, two featured products, call to action |
    | New product release | Announcing something new: hero image, key features, "Find out more" |
    | Are you still interested? | Re-engaging quiet contacts: one button to stay, an easy unsubscribe |
+   | Introduction & permission request | Introducing yourself to new contacts and asking if you may keep emailing them (see below) |
    | Want to find out more? | Following up interest: benefits, a customer quote, "Book a call" |
    | Monthly newsletter | A lead story, two stories side by side, quick news items |
    | Event invitation | Date, time, venue and an RSVP button |
@@ -195,6 +196,7 @@ New campaigns open in the builder. It has three parts:
   | Unsubscribe page | The person unsubscribes in one step |
   | Manage preferences | The person sees their lists, unticks the ones they don't want, or unsubscribes from everything |
   | Stay subscribed | The person confirms they still want your emails ("Are you still interested?" campaigns) |
+  | Give permission | The person agrees that you may email them. Recorded on the contact as consent, with the campaign, time and IP address |
   | View in browser | Opens the email as a web page |
 
   For everything except a web address, MailHarbor creates each person's own link when it sends. There's nothing to
@@ -230,6 +232,7 @@ Open the campaign, or go to **Reports**:
 | Unsubscribes | Opted out from this email |
 | Unique opens / clicks | People who opened / clicked at least once |
 | Stayed subscribed | Confirmed on the "stay subscribed" page (shown when the campaign used it) |
+| Gave permission | Said yes on the permission page (shown when the campaign used it) |
 | Preference changes | Changed their lists on the preference page (shown when used) |
 
 The report also lists the **top links** and a timeline.

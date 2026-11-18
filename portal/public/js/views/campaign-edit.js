@@ -182,6 +182,16 @@ export async function render(el, ctx, [id]) {
     mount($('#ready', el), info.problems.length
       ? html`<div class="card-header">Before you can send</div><ul class="list-group list-group-flush">${info.problems.map((p) => html`<li class="list-group-item small"><i class="bi bi-circle me-2 text-warning"></i>${p}</li>`)}</ul>`
       : html`<div class="card-body d-flex gap-2 align-items-center"><i class="bi bi-check-circle-fill text-success fs-4"></i><div><div class="fw-semibold">Ready to send</div><div class="small text-muted-2">${num(info.eligible)} eligible recipient(s). Send yourself a test first.</div></div></div>`);
+    // Consent requests: POPIA s69 allows one request to a non-customer, and silence is not consent.
+    if (/\{\{\s*consent_url\s*\}\}/.test(info.body_html || '')) {
+      $('#ready', el).insertAdjacentHTML('beforeend', String(html`<div class="card-body border-top small" id="consent-note">
+        <div class="fw-semibold mb-1"><i class="bi bi-person-check me-1 text-teal"></i>This email asks for permission</div>
+        <ul class="mb-0 ps-3">
+          <li>POPIA lets you ask someone who isn't a customer <strong>only once</strong>. Don't resend it to people who didn't answer.</li>
+          <li>"Yes" is recorded on the contact as consent (with the campaign, time and IP address) and counted in the report as <em>Gave permission</em>.</li>
+          <li>Afterwards, email only people who said yes: create a segment with <em>Consent method</em> = <em>Permission email</em>.</li>
+        </ul></div>`));
+    }
     mount($('#estimate', el), html`<i class="bi bi-people me-1"></i><strong>${num(info.eligible)}</strong> contact(s) will receive this campaign <span class="text-muted-2">(suppressed, unsubscribed, unconfirmed and held contacts are excluded)</span>`);
   }
 

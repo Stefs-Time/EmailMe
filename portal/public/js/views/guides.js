@@ -61,8 +61,8 @@ const G = {
     <h2>Sending a campaign</h2>
     <ol>
       <li><a href="#/campaigns">Campaigns</a> → <strong>New campaign</strong>, then pick a starting design: a simple message, a marketing
-        promotion, a new product release, "Are you still interested?", "Want to find out more?", a newsletter, an event invitation or a
-        welcome email. Replace the [bracketed] text and add your images and links. <strong>Samples</strong> above the builder swaps the
+        promotion, a new product release, "Are you still interested?", an introduction &amp; permission request, "Want to find out more?",
+        a newsletter, an event invitation or a welcome email. Replace the [bracketed] text and add your images and links. <strong>Samples</strong> above the builder swaps the
         design of an existing draft (Undo brings it back).</li>
       <li><strong>Who receives it:</strong> tick one or more lists. The number of people who will actually receive it is shown underneath:
         suppressed, unsubscribed, unconfirmed and held contacts are left out automatically.</li>
@@ -100,11 +100,17 @@ const G = {
       <li>Google Analytics: links get UTM tags automatically, so visits from each campaign show up in Analytics. Rename or switch this off per
         campaign in the envelope; administrators set the defaults in Settings → Sending.</li>
     </ul>
-    <h3>Unsubscribe, preferences and "stay subscribed": handled by MailHarbor</h3>
+    <h3>Unsubscribe, preferences, "stay subscribed" and permission: handled by MailHarbor</h3>
     <p>Select a button (or select words and press the link button) and choose where it goes: <em>Unsubscribe page</em>,
-      <em>Manage preferences</em> (the person picks which lists to keep), <em>Stay subscribed</em> (for "Are you still interested?" emails)
-      or <em>View in browser</em>. MailHarbor creates each person's own link when it sends, so there is nothing to set up, and everything they do
+      <em>Manage preferences</em> (the person picks which lists to keep), <em>Stay subscribed</em> (for "Are you still interested?" emails),
+      <em>Give permission</em> (the person agrees that you may email them; recorded as consent with the time and IP address) or <em>View in browser</em>. MailHarbor creates each person's own link when it sends, so there is nothing to set up, and everything they do
       is recorded on the contact and in the campaign report. The footer of your template already links to Unsubscribe and Manage preferences.</p>
+    <h3>Asking new contacts for permission</h3>
+    <p>For people who aren't customers yet and haven't agreed to your emails (for example, business cards from an event), use the
+      <strong>Introduction &amp; permission request</strong> sample. POPIA (s69) allows you to ask them <strong>once</strong>. Everyone who clicks
+      <em>Yes, you may contact me</em> gets a consent record (method <em>Said yes to a permission email</em>); <em>No thanks</em> unsubscribes them for good.
+      People who don't answer have <strong>not</strong> given consent: send later campaigns only to a <a href="#/segments">segment</a> with
+      <em>Consent method</em> = <em>Permission email</em>, and don't send the request to them again.</p>
     <p><a href="#/usage">Mail usage</a> shows how many emails go through your SMTP server per day, this month and in the last hour.</p>
     <h3>While it sends</h3>
     <p>The campaign page updates every few seconds. You can <strong>pause</strong>, <strong>resume</strong> or <strong>cancel</strong>. If your email server

@@ -1,13 +1,17 @@
-# Deploying on Railway
+# Deploying a customer instance on Railway (internal)
 
-MailHarbor runs on Railway as **one application service plus a PostgreSQL database**. An optional cron service adds
-off-site backups. You only set variables; there is nothing to run on your own machine.
+> **Internal.** Railway is our hosting platform; customers are never told about it. Each customer company gets its
+> **own Railway project** (own database, service, backups and domain). Use the [provisioning checklist](PROVISIONING.md)
+> for the whole onboarding; this page has the Railway-specific steps.
+
+A MailHarbor instance runs on Railway as **one application service plus a PostgreSQL database**, with a cron service
+for off-site backups (**required** for customer instances).
 
 ```
 Railway project
 ├── Postgres          Railway database template
 ├── MailHarbor        this repo (root directory empty)   → public domain, e.g. mail.example.co.za
-└── Backups (cron)    this repo, start: node scripts/backup.js   (optional, recommended)
+└── Backups (cron)    this repo, start: node scripts/backup.js   (required for customers)
 ```
 
 > **Plan requirement: Railway Pro.** According to Railway's
@@ -61,6 +65,8 @@ Railway → **New Project** → **Deploy PostgreSQL**. Keep the service name `Po
    | `SMTP_USER` | SMTP username |
    | `SMTP_PASSWORD` | SMTP password |
    | `SMTP_FROM` | optional, e.g. `"Example News <news@example.co.za>"` |
+   | `SUPPORT_EMAIL` | our support address, shown to the customer on the setup screen and in help texts |
+   | `PUBLIC_URL` | once the custom domain works (§5), e.g. `https://mail.customer.co.za`; locks the field for the customer |
 
    That is the whole configuration:
    - Railway sets `PORT` and `RAILWAY_PUBLIC_DOMAIN`, and MailHarbor uses the latter for links in emails;
@@ -74,9 +80,10 @@ Railway → **New Project** → **Deploy PostgreSQL**. Keep the service name `Po
    - starts the sending and bounce worker;
    - passes the `/healthz` health check.
 
-### Optional: administrator from variables
+### Support and recovery account (recommended)
 
-To have an administrator account that always exists (break-glass access), also set the following:
+To have a MailHarbor support account that always exists in the customer's instance (break-glass access), also set the
+following. Use a unique address and password per customer (see [OPERATIONS.md §3](OPERATIONS.md#3-support-and-recovery-account)):
 
 | Variable | Value |
 |---|---|
@@ -85,7 +92,7 @@ To have an administrator account that always exists (break-glass access), also s
 | `ADMIN_NAME` | optional display name |
 
 On every start, MailHarbor creates this account if it is missing. Otherwise it resets the account's password to the
-variable, unlocks it and restores the admin role. In the app the account is marked *managed by environment*: it cannot be
+variable, unlocks it and restores the admin role. In the app the account is marked *Managed by MailHarbor*: it cannot be
 edited, disabled or deleted there. To rotate the password, change the variable and redeploy. To retire the account,
 remove both variables. The account then becomes an ordinary user that an administrator can disable.
 
@@ -149,7 +156,7 @@ Railway's own Postgres backups are a useful first line, but keep an **off-site**
    | `BACKUP_S3_ENDPOINT` | e.g. `https://<account>.r2.cloudflarestorage.com` (omit for AWS S3) |
    | `BACKUP_S3_REGION` | `auto` (R2) or the AWS region |
    | `BACKUP_S3_ACCESS_KEY_ID` / `BACKUP_S3_SECRET_ACCESS_KEY` | the bucket key |
-   | `BACKUP_S3_PREFIX` | `mailharbor/` (optional) |
+   | `BACKUP_S3_PREFIX` | `mailharbor/<customer>/`, one prefix per customer |
    | `BACKUP_RETENTION_DAYS` | `30` |
 
 5. Run it once (*Deploy*). Then check MailHarbor → System health → **Backups**. Each run checks that the archive is

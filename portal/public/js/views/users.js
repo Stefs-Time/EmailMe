@@ -14,7 +14,7 @@ export async function render(el, ctx) {
   async function load() {
     users = (await get('/users')).data;
     mount($('#t', el), html`<div class="table-responsive"><table class="table align-middle"><thead><tr><th>Name</th><th>Role</th><th>Status</th><th>Last sign-in</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
-      ${users.map((u) => html`<tr><td><div class="fw-semibold">${u.name}${u.id === ctx.user.id ? html` <span class="badge text-bg-light">you</span>` : ''}${u.managed_by_env ? html` <span class="badge badge-managed" title="Created and kept in sync from the ADMIN_EMAIL / ADMIN_PASSWORD environment variables">Environment-managed</span>` : ''}</div><div class="small text-muted-2">${u.email}</div></td>
+      ${users.map((u) => html`<tr><td><div class="fw-semibold">${u.name}${u.id === ctx.user.id ? html` <span class="badge text-bg-light">you</span>` : ''}${u.managed_by_env ? html` <span class="badge badge-managed" title="Support and recovery account managed by MailHarbor">Managed by MailHarbor</span>` : ''}</div><div class="small text-muted-2">${u.email}</div></td>
         <td class="text-capitalize">${u.role}</td><td>${u.status === 'active' ? html`<span class="status s-active">Active</span>` : html`<span class="status s-inactive">Disabled</span>`}</td>
         <td class="small">${datetime(u.last_login_at)}</td><td class="text-end"><button class="btn btn-sm btn-light" data-edit="${u.id}">Edit</button></td></tr>`)}</tbody></table></div>`);
   }
@@ -31,8 +31,8 @@ export async function render(el, ctx) {
     const u = users.find((x) => x.id === b.dataset.edit);
     const locked = u.managed_by_env ? raw('disabled') : '';
     formModal({ title: `Edit ${u.name}`, body: html`
-      ${u.managed_by_env ? html`<div class="alert alert-info small"><i class="bi bi-lock me-1"></i>This administrator is controlled by the
-        <code>ADMIN_EMAIL</code> / <code>ADMIN_PASSWORD</code> environment variables (e.g. Railway → Variables). Its role, status and password can only be changed there.</div>` : ''}
+      ${u.managed_by_env ? html`<div class="alert alert-info small"><i class="bi bi-lock me-1"></i>This is the support and recovery account managed by MailHarbor.
+        Its role, status and password can't be changed here. Contact MailHarbor support with any questions.</div>` : ''}
       <div class="mb-2"><label class="form-label" for="u-name">Name</label><input class="form-control" id="u-name" name="name" value="${u.name}" required maxlength="120"></div>
       <div class="mb-2"><label class="form-label" for="u-role">Role</label><select class="form-select" id="u-role" name="role" ${locked}>${options(ROLES, u.role)}</select></div>
       <div class="mb-2"><label class="form-label" for="u-status">Status</label><select class="form-select" id="u-status" name="status" ${locked}>

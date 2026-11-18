@@ -19,7 +19,7 @@ export async function render(el, ctx, [tabArg]) {
         <div class="form-text">Required before sending: every marketing email must identify the sender.</div></div>
       <div class="col-12"><label class="form-label">Public web address</label>
         <input class="form-control" name="public_url" type="url" value="${s.public_url}" placeholder="${s.effective_public_url || 'https://mail.example.co.za'}" ${s.public_url_locked ? raw('disabled') : ''}>
-        <div class="form-text">${s.public_url_locked ? html`Fixed by the PUBLIC_URL variable: <strong>${s.effective_public_url}</strong>.` : s.public_url || !s.effective_public_url ? 'Used in unsubscribe, tracking and "view in browser" links. Must be https:// in production.' : html`Leave empty to use the hosting platform's address (<strong>${s.effective_public_url}</strong>), or enter your custom domain.`}</div></div>
+        <div class="form-text">${s.public_url_locked ? html`Set by MailHarbor for your service: <strong>${s.effective_public_url}</strong>. Contact support to change it.` : s.public_url || !s.effective_public_url ? 'Used in unsubscribe, tracking and "view in browser" links. Must be https:// in production.' : html`Leave empty to use the hosting platform's address (<strong>${s.effective_public_url}</strong>), or enter your custom domain.`}</div></div>
     </div></div></div>`,
     sending: html`<div class="card mb-3"><div class="card-header">Sender</div><div class="card-body"><div class="row g-3">
       <div class="col-md-6"><label class="form-label">From name</label><input class="form-control" name="from_name" value="${s.from_name}" maxlength="120"></div>
@@ -43,13 +43,13 @@ export async function render(el, ctx, [tabArg]) {
       <div class="col-md-4"><label class="form-label">Only for these websites <span class="text-muted-2 small">(optional)</span></label><input class="form-control" name="utm_domains" maxlength="500" value="${s.utm_domains}" placeholder="acme.co.za, shop.acme.co.za">
         <div class="form-text">Leave empty to tag every web link.</div></div>
     </div></div></div>
-    <div class="card"><div class="card-header">SMTP server <span class="small fw-normal text-muted-2">· set by environment variables</span></div><div class="card-body">
+    <div class="card"><div class="card-header">Your mail server (SMTP) <span class="small fw-normal text-muted-2">· connected by MailHarbor</span></div><div class="card-body">
       <dl class="dl-grid mb-3"><dt>Server</dt><dd class="mono">${s.smtp.host}:${s.smtp.port}</dd><dt>Security</dt><dd>${s.smtp.security}</dd>
         <dt>Login</dt><dd>${s.smtp.authenticated ? s.smtp.user : 'none (relay)'}</dd><dt>Connections</dt><dd>${s.smtp.poolSize}</dd></dl>
       <div class="input-group mw-520"><input class="form-control" id="smtp-to" type="email" placeholder="Send a test email to…" value="${ctx.user.email}" aria-label="Test email address">
         <button class="btn btn-outline-primary" type="button" id="smtp-test">Send test email</button></div>
       <div id="smtp-result" class="mt-2 small"></div>
-      <div class="form-text">To change the server or password, update SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD in your hosting variables and redeploy.</div>
+      <div class="form-text">MailHarbor sends through your own mail server. To connect a different server, or if its password changed, send the new details to MailHarbor support. Passwords are never shown or stored in Settings.</div>
     </div></div>`,
     bounces: html`<div class="card mb-3"><div class="card-header">Where bounces go</div><div class="card-body"><div class="row g-3">
       <div class="col-md-6"><label class="form-label">Bounce address (Return-Path)</label><input class="form-control" name="bounce_address" type="email" value="${s.bounce_address}" placeholder="bounces@yourdomain.co.za">
@@ -86,11 +86,11 @@ export async function render(el, ctx, [tabArg]) {
     </div></div>
     <div class="card"><div class="card-header">Backups</div><div class="card-body">
       <label class="form-label">Alert when no successful backup in (hours, 0 = off)</label><input class="form-control mw-200" name="backup_stale_hours" type="number" min="0" max="744" value="${s.backup_stale_hours}">
-      <div class="form-text">Set to 26 once the daily backup job is running (see the administrator guide).</div>
+      <div class="form-text">MailHarbor backs up your database every day. This only controls when a missing backup is flagged on System health (26 is a good value).</div>
     </div></div>`,
   };
 
-  mount(el, html`<div class="page-head"><div><h1>Settings</h1><p>Organisation, sending, bounce handling and compliance. Database and SMTP connection details are set as hosting variables.</p></div></div>
+  mount(el, html`<div class="page-head"><div><h1>Settings</h1><p>Organisation, sending, bounce handling and compliance. Your database and mail server connection are managed by MailHarbor.</p></div></div>
     <ul class="nav nav-tabs mb-3">${TABS.map(([k, l]) => html`<li class="nav-item"><a class="nav-link ${k === tab ? 'active' : ''}" href="#/settings/${k}" ${k === tab ? raw('aria-current="page"') : ''}>${l}</a></li>`)}</ul>
     <form id="sf" novalidate>${sections[tab]}
       <div class="mt-3 d-flex gap-2 align-items-center"><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save settings</button><span class="small text-muted-2" id="saved"></span></div></form>`);

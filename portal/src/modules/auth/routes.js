@@ -26,7 +26,7 @@ function permissionsFor(role) {
   return Object.keys(PERMISSIONS).filter((p) => can(role, p));
 }
 
-function authRoutes({ pool, settings }) {
+function authRoutes({ pool, settings, config }) {
   const r = express.Router();
 
   const loginLimiter = rateLimit({
@@ -53,6 +53,7 @@ function authRoutes({ pool, settings }) {
         csrfToken,
         orgName: s.org_name,
         setupNeeded: rowCount === 0,
+        supportEmail: config?.SUPPORT_EMAIL || null,
       },
     });
   });
@@ -108,7 +109,7 @@ function authRoutes({ pool, settings }) {
 
   r.post('/change-password', requireAuth, async (req, res) => {
     if (req.user.managedByEnv) {
-      throw validation('This account\'s password is set by the ADMIN_PASSWORD environment variable. Change it there (e.g. Railway → Variables) and redeploy.');
+      throw validation('This account is managed by MailHarbor support, so its password cannot be changed here. Contact MailHarbor support.');
     }
     const body = parse(z.object({ currentPassword: z.string().min(1).max(200), newPassword: passwordSchema }), req.body);
     const { rows } = await pool.query('SELECT password_hash FROM portal.users WHERE id = $1', [req.user.id]);

@@ -189,17 +189,20 @@ const G = {
       <tr><td><strong>Viewer</strong></td><td>See the dashboard, contacts, lists and reports. Cannot change anything or export personal data.</td></tr>
       <tr><td><strong>Manager</strong></td><td>Everything a viewer can, plus add/edit contacts, manage lists, import, export, unsubscribe, suppress and resolve reviews.</td></tr>
       <tr><td><strong>Administrator</strong></td><td>Everything, plus manage users, lift suppressions, erase contacts, view the audit log.</td></tr></tbody></table>
-    <p>Accounts lock for 15 minutes after 10 wrong passwords. Administrators reset passwords under <a href="#/users">Users</a>; the environment-managed administrator is reset by changing <code>ADMIN_PASSWORD</code> (see <a href="#/guides/admin">For administrators</a>).</p>`)],
+    <p>Accounts lock for 15 minutes after 10 wrong passwords. Administrators reset passwords under <a href="#/users">Users</a>. An account marked <em>Managed by MailHarbor</em> is the support and recovery account; MailHarbor manages it.</p>`)],
 
   admin: ['For administrators', raw(`
     <h2>For administrators</h2>
-    <h3>What lives where</h3>
-    <ul><li><strong>Hosting variables</strong> (e.g. Railway → Variables): only the database (<code>DATABASE_URL</code>) and the SMTP server
-      (<code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code>, optionally <code>SMTP_FROM</code>).</li>
-      <li><a href="#/settings">Settings</a>: organisation, postal address, sender, sending speed, bounce mailbox, webhook, compliance and backup alerts.</li></ul>
+    <h3>Your service</h3>
+    <p>MailHarbor is a hosted service: your organisation has its own private MailHarbor and its own database, which MailHarbor runs, updates,
+    monitors and backs up. Emails go out through <strong>your own mail server</strong> (SMTP), which MailHarbor connects for you.</p>
+    <ul><li><strong>Managed by MailHarbor</strong>: hosting, database, backups, updates, your web address and the mail server connection.
+      To connect a different mail server or change its password, contact MailHarbor support.</li>
+      <li><strong>Managed by you</strong> in <a href="#/settings">Settings</a>: organisation, postal address, sender, sending speed, bounce mailbox,
+      webhook, Google Analytics tags and compliance options. Under <a href="#/users">Users</a>: who has access.</li></ul>
     <h3>Users and recovery</h3>
-    <p>Create personal accounts under <a href="#/users">Users</a>. If every administrator is locked out, set <code>ADMIN_EMAIL</code> and <code>ADMIN_PASSWORD</code>
-    in the hosting variables and redeploy: that account is created (or repaired) as an active administrator, and is shown as <em>Environment-managed</em>.</p>
+    <p>Create a personal account for everyone who needs access under <a href="#/users">Users</a>, with the lowest role they need. Keep at least two
+    administrators. If every administrator is locked out, contact MailHarbor support: the account marked <em>Managed by MailHarbor</em> is used to restore access.</p>
     <h3>Bounce mailbox</h3>
     <p>Use a mailbox that receives nothing but bounces (for example <code>bounces@yourdomain</code>), set it as the bounce address, and connect it with IMAP.
     Processed messages are moved to a "MailHarbor-Processed" folder (or deleted). Never connect a personal inbox.</p>

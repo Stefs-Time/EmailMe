@@ -1,11 +1,16 @@
 # Security & POPIA
 
+MailHarbor is a hosted service. This page describes how your organisation's MailHarbor protects your data and helps you
+meet POPIA.
+
 ## Controls implemented
 
 | Area | Control |
 |---|---|
-| Transport | HTTPS through Railway or Caddy (Let's Encrypt); HSTS in production; `upgrade-insecure-requests`. SMTP requires TLS before authentication by default (`SMTP_REQUIRE_TLS`), with TLS 1.2 minimum |
-| First run | The setup screen needs a one-time code printed only in the server log, so whoever finds the URL first cannot claim the installation |
+| Isolation | **Dedicated instance and database per customer.** No database, application process, secret, backup or web address is shared with other customers |
+| Hosting | Run, monitored and updated by MailHarbor; security updates applied regularly; daily database backups to encrypted off-site storage, with restricted access |
+| Transport | HTTPS only (TLS certificates managed automatically); HSTS; `upgrade-insecure-requests`. The connection to your mail server requires TLS before authentication, with TLS 1.2 minimum |
+| First run | The setup screen needs a one-time code that MailHarbor sends you separately, so whoever finds the address first cannot claim your service |
 | Authentication | **Argon2id** password hashes; minimum 12 characters including letters and a number; uniform response for unknown users |
 | Brute force | 20 login attempts / 15 min per IP; account locked for 15 min after 10 failures; setup and test endpoints rate-limited |
 | Sessions | Server-side (PostgreSQL); cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` in production; the session is regenerated at login; 8 h rolling expiry; invalidated when the password changes or the user is disabled |
@@ -22,21 +27,21 @@
 | Webhook | Secret token in the URL or the `X-Webhook-Token` header, constant-time comparison; can be rotated in Settings |
 | Output | Auto-escaping HTML in the SPA; strict CSP (`script-src 'self'`, no inline script or style); `frame-ancestors 'none'` |
 | Exports | CSV formula-injection protection; `Cache-Control: no-store`; every export audited; viewers cannot export |
-| Secrets | Infrastructure secrets only in environment variables, validated at startup and redacted from logs. The session secret and encryption key are generated per installation (`portal.app_secrets`). The bounce-mailbox password is encrypted at rest with **AES-256-GCM** and never returned by the API |
-| Errors | Generic messages to clients; details only in server logs |
-| Network (self-hosted) | Only ports 80/443 public; PostgreSQL on an internal Docker network |
+| Secrets | Your mail server password is held in MailHarbor's secured hosting configuration, never in the database, the app or logs. The session secret and encryption key are generated separately for each customer's service. The bounce-mailbox password is encrypted at rest with **AES-256-GCM** and never returned by the API |
+| Errors | Generic messages to users; details only in MailHarbor's internal logs, which exclude passwords, cookies and tokens |
+| Network | Only HTTPS is public; the database is reachable only from your MailHarbor instance |
+| Support access | MailHarbor's support and recovery account (marked *Managed by MailHarbor*) is used only to restore access or at your request; every action appears in your audit log |
 | Audit | Logins and failures, settings changes, contact/list changes, imports, exports, campaign sends/pauses/cancels, suppressions, reactivations, erasures, user changes |
 | Dependencies | Lockfile; `npm audit --omit=dev` reported 0 vulnerabilities at build time (Nov 2026). Quill was deliberately not used because of an open XSS advisory; the editor is a small in-house component |
 
-## Recommendations for operators
+## Your responsibilities
 
-- Use a strong `ADMIN_PASSWORD`, or none: the setup-code flow avoids keeping a password in variables at all.
-- Restrict who has the **admin** role. Give most staff **manager** or **viewer**.
+- Give each person their own account. Restrict the **admin** role and give most staff **manager** or **viewer**.
+- Remove accounts when people leave (Users → Edit → disable).
 - Use a **dedicated** bounce mailbox with an app-specific password, not a person's mailbox.
 - Rotate the webhook token if it may have leaked (Settings → Bounces).
-- Run `npm audit` and update dependencies monthly. Redeploy to pick up base-image security updates.
-- Keep backups encrypted (bucket encryption) and access-restricted. They contain personal data and the generated secrets.
-- On self-hosted servers: SSH keys only, unattended security upgrades, and a firewall allowing only 22/80/443.
+- Keep your mail server credentials private, and tell MailHarbor support if they change or may have leaked.
+- Treat exports as personal information: store them securely and delete them when no longer needed.
 
 ## POPIA support (scope §5)
 

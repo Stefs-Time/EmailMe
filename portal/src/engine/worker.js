@@ -139,7 +139,7 @@ class Worker {
     if (ageH > hours) {
       await raiseAlert(this.pool, 'backup_stale', 'warning', hb
         ? `No successful database backup in the last ${Math.floor(ageH)} hours.`
-        : 'No database backup has been recorded yet. Check the backup job.');
+        : 'No database backup has been recorded yet.');
     } else await resolveAlert(this.pool, 'backup_stale');
   }
 }

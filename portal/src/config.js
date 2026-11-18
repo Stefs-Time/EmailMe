@@ -54,6 +54,8 @@ const schema = z.object({
     .refine((p) => /[a-zA-Z]/.test(p) && /[0-9]/.test(p), 'ADMIN_PASSWORD needs letters and at least one number')
     .optional(),
   ADMIN_NAME: z.string().trim().min(1).max(120).default('Administrator'),
+  // Hosted service: where customers get help (setup code, mail server changes). Shown in the app.
+  SUPPORT_EMAIL: z.string().trim().email().max(254).optional(),
   TRUST_PROXY: z.string().default('1'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   // Background workers can be disabled for one-off scripts and tests.

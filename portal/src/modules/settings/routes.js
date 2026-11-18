@@ -83,14 +83,14 @@ function settingsRoutes({ pool, settings, transport, config, worker }) {
  * code printed in the server log (deploy logs on Railway), so a stranger who
  * finds the URL first cannot claim the installation.
  */
-function setupRoutes({ pool, settings, logger }) {
+function setupRoutes({ pool, settings, logger, config }) {
   const r = express.Router();
   const limiter = rateLimit({ windowMs: 15 * 60000, limit: 20, standardHeaders: 'draft-7', legacyHeaders: false });
 
   const needed = async () => (await pool.query('SELECT 1 FROM portal.users LIMIT 1')).rowCount === 0;
 
   r.get('/status', async (req, res) => {
-    res.json({ success: true, data: { needed: await needed(), suggestedUrl: `${req.protocol}://${req.get('host')}` } });
+    res.json({ success: true, data: { needed: await needed(), suggestedUrl: `${req.protocol}://${req.get('host')}`, supportEmail: config?.SUPPORT_EMAIL || null } });
   });
 
   r.post('/', limiter, async (req, res) => {
@@ -110,7 +110,7 @@ function setupRoutes({ pool, settings, logger }) {
     const got = Buffer.from(body.code.toUpperCase());
     if (!want.length || want.length !== got.length || !crypto.timingSafeEqual(want, got)) {
       logger.warn({ ip: req.ip }, 'setup attempted with a wrong code');
-      throw forbidden('That setup code is not correct. Find it in the server log (Railway → Deployments → Logs).');
+      throw forbidden(`That setup code is not correct. Use the code MailHarbor sent you when your service was created${config?.SUPPORT_EMAIL ? `, or ask ${config.SUPPORT_EMAIL}` : ''}.`);
     }
     const hash = await argon2.hash(body.password, { type: argon2.argon2id });
     const ins = await pool.query(

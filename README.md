@@ -7,6 +7,20 @@ campaigns, sending, open and click tracking, unsubscribes, bounce processing, su
 It needs only two things from outside: a **PostgreSQL database** and an **SMTP server**. Every other setting is managed
 in the app.
 
+> **This README is for the MailHarbor development and operations team.** Customers get the documentation listed under
+> [Customer-facing](#customer-facing), which never mentions the hosting platform, environment variables or servers.
+
+## Service model
+
+MailHarbor is sold as a **hosted, single-tenant service**. Each customer company gets its own instance, its own
+PostgreSQL database, its own web address and its own backups, and sends through its **own** SMTP server. Nothing is
+shared between customers. The application is deliberately single-organisation, so isolation comes from separate
+instances, not from tenant IDs in a shared database.
+
+- **Onboarding a customer:** [docs/internal/PROVISIONING.md](docs/internal/PROVISIONING.md)
+- **Running the fleet** (backups, upgrades, monitoring, support account): [docs/internal/OPERATIONS.md](docs/internal/OPERATIONS.md)
+- **Platform steps** (Railway, current host): [docs/internal/DEPLOY_RAILWAY.md](docs/internal/DEPLOY_RAILWAY.md)
+
 ---
 
 ## Features
@@ -131,7 +145,7 @@ A single Node.js process serves the web app and runs the background worker:
 Each campaign recipient is a row in `portal.messages` with a random token. That token drives the unsubscribe,
 tracking and view-online links and bounce matching, so links never expose an email address or a database ID.
 
-Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Details: [docs/internal/ARCHITECTURE.md](docs/internal/ARCHITECTURE.md).
 
 ## Repository layout
 
@@ -150,12 +164,14 @@ portal/                    the application source
 Dockerfile, railway.json   image + Railway config (built from the repo root)
 docker-compose.yml         self-hosted stack: Caddy + MailHarbor + PostgreSQL + backups
 deploy/                    Caddyfile, restore script
-docs/                      guides (see below)
+docs/                      customer-facing guides + brochure source (see below)
+docs/internal/             operations, provisioning, deployment, architecture, UAT (internal only)
 ```
 
-## Deploy on Railway (recommended hosted option)
+## Deploy an instance on Railway (current hosting platform)
 
-Two services, plus an optional backup cron:
+Per customer: one Railway project with two services plus the backup cron (required for customers). For customer
+instances, follow the full [provisioning checklist](docs/internal/PROVISIONING.md); this is the short version:
 
 1. **New Project → Deploy PostgreSQL.**
 2. **+ New → GitHub Repo →** this repository. Leave *Root Directory* empty: Railway uses the root `Dockerfile` and
@@ -169,6 +185,7 @@ Two services, plus an optional backup cron:
    | `SMTP_PORT` | `587` (or `465`) |
    | `SMTP_USER` / `SMTP_PASSWORD` | SMTP credentials |
    | `SMTP_FROM` | optional default sender, e.g. `"Example News <news@example.co.za>"` |
+   | `SUPPORT_EMAIL` | our support address, shown to the customer |
 
 4. Deploy. In **Deploy Logs**, find `FIRST-RUN SETUP: … enter setup code XXXXXXXXXX`. Open the public domain, enter
    the code and create the first administrator.
@@ -178,9 +195,12 @@ Two services, plus an optional backup cron:
 > **Railway plan:** Railway allows outbound SMTP only on the **Pro plan and above**. Free, Trial and Hobby plans block
 > SMTP ports. MailHarbor sends over SMTP, so use a Pro workspace. Then redeploy the service after upgrading.
 
-Full guide with backups, custom domain and troubleshooting: **[docs/DEPLOY_RAILWAY.md](docs/DEPLOY_RAILWAY.md)**.
+Full guide with backups, custom domain and troubleshooting: **[docs/internal/DEPLOY_RAILWAY.md](docs/internal/DEPLOY_RAILWAY.md)**.
 
-## Self-hosted (Ubuntu Server + Docker Compose)
+## Dedicated VM (Ubuntu Server + Docker Compose)
+
+For a customer that needs a dedicated VM or in-country hosting.
+
 
 Requirements:
 - a server with Docker and the Compose plugin;
@@ -196,7 +216,7 @@ docker compose logs portal | grep "setup code"
 
 Open `https://<DOMAIN>`, enter the setup code and continue as in steps 4–5 above. Caddy obtains the HTTPS certificate
 automatically. Backups are written nightly to `./backups`; restore with `deploy/backup/restore.sh`. See
-[docs/ADMIN_GUIDE.md](docs/ADMIN_GUIDE.md).
+[docs/internal/OPERATIONS.md](docs/internal/OPERATIONS.md).
 
 ## Local development
 
@@ -251,7 +271,8 @@ sending speed, tracking and soft-bounce limit, is set in **Settings** and stored
 | `SMTP_POOL_MAX` | | `3` | Concurrent SMTP connections |
 | `PORT` | | `3000` | Railway sets this |
 | `PUBLIC_URL` | | | Base URL for links in emails. On Railway the public domain is detected; otherwise set it here or in Settings |
-| `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME` | | | Optional break-glass admin, created or repaired on every start (password min. 12 chars) |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME` | | | MailHarbor support and recovery account, created or repaired on every start (password min. 12 chars); shown to the customer as *Managed by MailHarbor*. Set it **after** first-run setup |
+| `SUPPORT_EMAIL` | | | Support address shown to the customer on the setup screen and in error messages |
 | `NODE_ENV` | | `production` | `development` allows non-secure cookies over plain http |
 | `DATABASE_SSL`, `DATABASE_SSL_VERIFY` | | `false`, `true` | TLS to PostgreSQL (not needed on Railway's private network) |
 | `DATABASE_POOL_MAX` | | `10` | |
@@ -299,30 +320,42 @@ Dockerfile is unchanged. In the container:
 - the SMTP connection is verified;
 - `scripts/backup.js` produces a verified dump with pg_dump 18.
 
-Do the [UAT checklist](docs/ACCEPTANCE_TESTS.md) on staging before go-live.
+Do the [UAT checklist](docs/internal/ACCEPTANCE_TESTS.md) on staging before go-live.
 
 ## Known limitations
 
 - One application instance. The sender is safe with more than one (it uses row locks), but scheduling and alerting
   are designed for one; keep Railway replicas at 1.
 - No built-in DKIM signing. Use an SMTP provider that signs with DKIM for your domain.
-- Images are linked by URL; there is no media library or upload.
 - Open tracking is approximate. Apple Mail Privacy Protection pre-loads images, and many clients block them. Treat clicks
   as the reliable engagement signal.
 - No A/B testing, automations or drip sequences.
 
 ## Documentation
 
+### Customer-facing
+
+These describe MailHarbor as a hosted service. Keep hosting platforms, environment variables, servers and logs out of
+them, and route anything platform-related to "contact MailHarbor support".
+
 | Guide | For |
 |---|---|
+| [GETTING_STARTED](docs/GETTING_STARTED.md) | New customers: what we need, first sign-in, first campaign |
 | [USER_GUIDE](docs/USER_GUIDE.md) | Staff: contacts, imports, campaigns, reports |
-| [ADMIN_GUIDE](docs/ADMIN_GUIDE.md) | Administrators: setup, settings, deliverability, backups, operations |
-| [DEPLOY_RAILWAY](docs/DEPLOY_RAILWAY.md) | Railway deployment |
-| [ARCHITECTURE](docs/ARCHITECTURE.md) | Developers: design, data model, engine |
-| [SECURITY](docs/SECURITY.md) | Security controls and POPIA |
-| [ACCEPTANCE_TESTS](docs/ACCEPTANCE_TESTS.md) | UAT checklist mapped to the scope |
-| [UAT_AUDIT](docs/UAT_AUDIT.md) | UI/UX/UAT audit findings and fixes |
+| [ADMIN_GUIDE](docs/ADMIN_GUIDE.md) | Customer administrators: settings, users, DNS, bounces, monitoring |
+| [SECURITY](docs/SECURITY.md) | Security controls, hosting model and POPIA |
 | [Product overview](docs/brochure/mailharbor-overview.html) | Marketing brochure (features + roadmap), source of the PDF |
+
+### Internal
+
+| Guide | For |
+|---|---|
+| [PROVISIONING](docs/internal/PROVISIONING.md) | Onboarding and offboarding a customer instance |
+| [OPERATIONS](docs/internal/OPERATIONS.md) | Backups, upgrades, monitoring, support account, troubleshooting |
+| [DEPLOY_RAILWAY](docs/internal/DEPLOY_RAILWAY.md) | Railway steps per customer project |
+| [ARCHITECTURE](docs/internal/ARCHITECTURE.md) | Developers: design, data model, engine |
+| [ACCEPTANCE_TESTS](docs/internal/ACCEPTANCE_TESTS.md) | UAT checklist mapped to the scope |
+| [UAT_AUDIT](docs/internal/UAT_AUDIT.md) | UI/UX/UAT audit findings and fixes |
 
 The same how-to content is in the app under **Guides**. The product overview brochure is in the app under
 **Product overview**, where it can be viewed and downloaded as a PDF. After changing features, update the brochure

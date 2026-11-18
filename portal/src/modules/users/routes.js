@@ -65,7 +65,7 @@ function userRoutes({ pool }) {
     if (!existing.length) throw notFound('User not found');
     const ex = existing[0];
     if (ex.managed_by_env && ((body.role && body.role !== ex.role) || (body.status && body.status !== ex.status) || body.password)) {
-      throw badRequest('This administrator is managed by the ADMIN_EMAIL / ADMIN_PASSWORD environment variables. Change those variables instead.');
+      throw badRequest('This administrator account is managed by MailHarbor support and cannot be changed here.');
     }
 
     // Keep at least one active admin.

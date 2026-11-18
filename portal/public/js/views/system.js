@@ -40,7 +40,7 @@ export async function render(el, ctx) {
         <div class="card mb-3"><div class="card-header">Backups</div><div class="card-body small">
           ${h.backup ? html`<div class="d-flex gap-2 align-items-start">${icon(h.backup.ok)}<div><div class="fw-semibold">${h.backup.ok ? `Last backup ${ago(h.backup.at)}` : `Last backup FAILED ${ago(h.backup.at)}`}</div>
             ${h.backup.ok ? html`<div class="text-muted-2">${h.backup.file} · ${num(Math.round((h.backup.size || 0) / 1024))} KB</div>` : html`<div class="text-danger">${h.backup.error}</div>`}</div></div>`
-            : html`<div class="d-flex gap-2">${icon(false, 'warning')}<div>No backup recorded yet. Set up the backup job (administrator guide).</div></div>`}</div></div>
+            : html`<div class="d-flex gap-2">${icon(false, 'warning')}<div>No backup recorded yet. Daily backups are run by MailHarbor; if this persists after your first day, contact MailHarbor support.</div></div>`}</div></div>
         <div class="card"><div class="card-header d-flex justify-content-between">Alerts <span class="small fw-normal text-muted-2">${num(openAlerts.length)} open</span></div>
           ${openAlerts.length ? html`<ul class="list-group list-group-flush">${openAlerts.map(alertItem)}</ul>` : html`<div class="card-body text-muted-2"><i class="bi bi-check-circle text-success me-1"></i>No open alerts.</div>`}
           ${resolvedAlerts.length ? html`<details class="resolved-alerts border-top"><summary>Recently resolved (${num(resolvedAlerts.length)})</summary><ul class="list-group list-group-flush">${resolvedAlerts.slice(0, 15).map(alertItem)}</ul></details>` : ''}</div>

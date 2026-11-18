@@ -118,7 +118,7 @@ function renderShell() {
             <span class="rounded-circle bg-primary text-white d-inline-flex align-items-center justify-content-center fw-semibold" aria-hidden="true" id="avatar"></span>
             <span class="d-none d-sm-inline">${u.name}</span></button>
           <ul class="dropdown-menu dropdown-menu-end">
-            <li><span class="dropdown-item-text small text-muted-2">${u.email}<br>Role: <strong>${u.role}</strong>${u.managedByEnv ? html`<br>Managed by environment variables` : ''}</span></li>
+            <li><span class="dropdown-item-text small text-muted-2">${u.email}<br>Role: <strong>${u.role}</strong>${u.managedByEnv ? html`<br>Managed by MailHarbor` : ''}</span></li>
             <li><hr class="dropdown-divider"></li>
             <li><a class="dropdown-item" href="#/account"><i class="bi bi-person me-2"></i>My account</a></li>
             <li><a class="dropdown-item" href="#/guides"><i class="bi bi-journal-text me-2"></i>Guides</a></li>

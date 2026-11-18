@@ -56,19 +56,19 @@ async function dnsChecks(fromEmail, bounceAddress) {
 function smtpHelp(error) {
   const e = String(error || 'Not checked yet');
   if (/timeout|ETIMEDOUT|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH/i.test(e)) {
-    return `${e}. The server could not be reached: check SMTP_HOST/SMTP_PORT. Some hosts block outbound SMTP `
-      + '(on Railway it requires the Pro plan; redeploy after upgrading).';
+    return `${e}. MailHarbor could not reach your mail server. Check that the server is up and accepts connections from MailHarbor, `
+      + 'or ask MailHarbor support to check the connection details.';
   }
-  if (/auth|535|534|credentials|login/i.test(e)) return `${e}. Check SMTP_USER and SMTP_PASSWORD (some providers need an SMTP-specific password).`;
+  if (/auth|535|534|credentials|login/i.test(e)) return `${e}. The mail server rejected the username or password. If it changed, send the new details to MailHarbor support (some providers need an SMTP-specific password).`;
   if (/greeting|wrong version number|ssl|tls/i.test(e)) return `${e}. Port and TLS mode may not match: 465 uses TLS from the start, 587 uses STARTTLS.`;
-  return `${e}. Check the SMTP_* variables.`;
+  return `${e}. Ask MailHarbor support to check the mail server connection details.`;
 }
 
 function configChecks(s, publicUrl, mailboxState) {
   const checks = [];
   const add = (id, ok, title, help, severity = 'warning') => checks.push({ id, ok: Boolean(ok), title, help, severity });
   add('public_url', /^https:\/\//.test(publicUrl || ''), 'Public URL uses HTTPS',
-    'Settings → General → Public URL. Unsubscribe and tracking links use it (on Railway the generated domain is used until you set one).', 'critical');
+    'Settings → General → Public web address. Unsubscribe and tracking links use it.', 'critical');
   add('from_email', s.from_email, 'Default sender address set', 'Settings → Sending → From address.', 'critical');
   add('org_address', s.org_address, 'Postal address for email footers', 'Settings → General → Postal address. Shown in every email (sender identity).', 'critical');
   add('bounce_mailbox', s.bounce_mailbox.enabled && mailboxState?.ok !== false, 'Bounce mailbox connected',

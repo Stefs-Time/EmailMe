@@ -194,7 +194,7 @@ class Sender {
         if (!e.ok) return this.finish(msg, 'skipped', e.reason);
       }
       if (!publicUrl) throw Object.assign(new Error('The public URL is not configured (Settings → General).'), { mhConfig: true });
-      if (!s.from_email) throw Object.assign(new Error('No sender address configured (Settings → Sending or SMTP_FROM).'), { mhConfig: true });
+      if (!s.from_email) throw Object.assign(new Error('No sender address configured (Settings → Sending).'), { mhConfig: true });
 
       let campaign;
       let templateHtml;

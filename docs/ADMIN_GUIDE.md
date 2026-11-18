@@ -1,69 +1,49 @@
 # MailHarbor administrator guide
 
-This guide covers installing, configuring and operating MailHarbor. For Railway, follow
-[DEPLOY_RAILWAY.md](DEPLOY_RAILWAY.md) for the install, then use sections 3–9 here.
+This guide is for the administrators of your organisation's MailHarbor. It covers settings, users, DNS, bounces and
+monitoring. For day-to-day use (contacts, campaigns, reports), see the [user guide](USER_GUIDE.md). If you're new, start
+with [Getting started](GETTING_STARTED.md).
 
-## 1. Before you start
+## 1. Your service
 
-| Decision (scope §15) | What you need |
+MailHarbor is a **hosted service**. Your organisation has its own private MailHarbor, with its own database and web
+address, that no other customer shares. Emails go out through **your own mail server** (SMTP), so your sending
+reputation and provider agreements stay yours.
+
+| Managed by MailHarbor | Managed by you (in the app) |
 |---|---|
-| Hosting | Railway (Pro plan, because SMTP is blocked on lower plans) **or** an Ubuntu Server 22.04/24.04 with Docker. 2 vCPU, 2–4 GB RAM and 40 GB disk is ample for ~250k contacts |
-| SMTP | A sending service or relay that permits marketing email: host, port (587 or 465), username, password |
-| Sending domain | A domain you control, to set SPF, DKIM and DMARC |
-| Bounces | A **dedicated** mailbox with IMAP over TLS (port 993), e.g. `bounces@example.co.za`, **or** provider bounce webhooks |
-| Users | Who needs access, and in which role (viewer / manager / admin) |
+| Hosting, security updates and new versions | Organisation details, sender, sending speed |
+| Your database and daily backups | Users and roles |
+| Monitoring and uptime | Bounce mailbox and webhook |
+| Your web address (e.g. `https://mail.yourcompany.co.za`) | Sign-up forms, images, Google Analytics tags |
+| The connection to your mail server (SMTP) | Compliance options, contacts, lists and campaigns |
+
+Contact MailHarbor support to:
+- connect a different mail server, or update its password;
+- change your web address;
+- restore access if every administrator is locked out;
+- get your setup code again before your first sign-in;
+- request a restore from backup, or a full data export.
+
+## 2. What you need
+
+| Item | Details |
+|---|---|
+| Mail server (SMTP) | A sending service or relay that permits marketing email: host, port (587 or 465), username, password. MailHarbor support connects it for you |
+| Sending domain | A domain you control, to set SPF, DKIM and DMARC (§5) |
+| Bounce mailbox | A **dedicated** mailbox with IMAP over TLS (port 993), e.g. `bounces@yourcompany.co.za`, **or** your provider's bounce webhooks |
+| Users | Who needs access, and in which role (viewer / manager / administrator) |
 
 > Use a dedicated bounce mailbox. MailHarbor moves every processed message to a `MailHarbor-Processed` folder (or
 > deletes it, if you choose that), so it must not be anyone's normal inbox.
 
-## 2. Install (self-hosted)
-
-```bash
-sudo apt update && sudo apt install -y git
-curl -fsSL https://get.docker.com | sudo sh          # Docker Engine + Compose plugin
-sudo usermod -aG docker $USER && newgrp docker
-
-git clone <repo-url> mailharbor && cd mailharbor
-cp .env.example .env
-nano .env                  # DOMAIN, ACME_EMAIL, POSTGRES_PASSWORD (openssl rand -base64 30), SMTP_*
-docker compose up -d --build
-docker compose logs portal | grep "setup code"
-```
-
-Open `https://<DOMAIN>`, enter the setup code and create the first administrator. The code is printed on every start
-until an administrator exists, and stops working afterwards.
-
-### Optional: environment-managed administrator
-
-If `ADMIN_EMAIL` and `ADMIN_PASSWORD` are set in `.env`, that account is re-applied on **every** start:
-- it always exists;
-- it is an active administrator;
-- it has exactly that password.
-
-This gives you break-glass access: to recover a lost login, change the password and run `docker compose up -d portal`.
-In the app it is marked *Managed by environment*, and its role, status and password cannot be changed there. Create
-personal accounts for staff under **Users**.
-
-### Firewall
-
-Only 80/tcp, 443/tcp (and 443/udp for HTTP/3) need to be open inbound. PostgreSQL and the app are on an internal Docker
-network and are never published.
-
-```bash
-sudo ufw allow OpenSSH && sudo ufw allow 80/tcp && sudo ufw allow 443 && sudo ufw enable
-```
-
-Outbound, the server must reach your SMTP host (587/465) and IMAP host (993). Some hosting providers block outbound
-SMTP by default; ask them to open it if *System health → SMTP* shows a timeout.
-
-## 3. Configure (Settings, admin only)
+## 3. Configure (Settings, administrators only)
 
 ### General
 - **Organisation name:** shown in the app, on public pages and in email footers.
 - **Postal address** (required): included in every email footer to identify the sender.
-- **Public web address:** the `https://` address of MailHarbor. All unsubscribe, tracking and view-online links use it.
-  - On Railway the generated domain is used until you enter a custom one.
-  - With Docker Compose it comes from `DOMAIN`.
+- **Public web address:** the `https://` address of your MailHarbor. All unsubscribe, tracking and view-online links
+  use it. MailHarbor usually sets it for you; contact support to change it.
 
 ### Sending
 - **From name / From address:** use an address on your authenticated sending domain. Campaigns can override it.
@@ -71,7 +51,7 @@ SMTP by default; ask them to open it if *System health → SMTP* shows a timeout
 - **Emails per second / Maximum per hour:** stay within your provider's limits. On a new domain start at 2–5 per second
   and increase gradually over a few weeks (warm-up).
 - **Tracking defaults:** opens and clicks; each campaign can switch them off.
-- **Send test email** verifies the SMTP settings from the environment end to end.
+- **Send test email** checks your mail server connection end to end.
 - **Google Analytics (UTM) tags:** on by default.
   - **Values:** `utm_source` (default `mailharbor`), `utm_medium` (default `email`); `utm_campaign` is the campaign's
     name, or the name set on the campaign.
@@ -91,9 +71,9 @@ SMTP by default; ask them to open it if *System health → SMTP* shows a timeout
   action with recorded consent.
 
 ### Image storage
-Images uploaded to **Images** are stored in PostgreSQL after compression (usually 50–300 KB each), so they're
-included in every database backup and survive redeploys. They're served publicly at `/img/<random id>.jpg`, because
-inboxes must be able to load them. Don't upload anything confidential.
+Images uploaded to **Images** are compressed (usually 50–300 KB each) and stored in your database, so they're included
+in every backup. They're served publicly at `/img/<random id>.jpg`, because inboxes must be able to load them. Don't
+upload anything confidential.
 
 ### Bounces
 - **Bounce address (Return-Path):** the dedicated bounce mailbox address. Delivery failures that occur after sending
@@ -108,13 +88,12 @@ inboxes must be able to load them. Don't upload anything confidential.
   `id` de-duplicates retries. Map your provider's event fields to this shape (most providers allow a transform, or a
   small relay function). Rotate the token if it leaks.
 
-### Compliance & backups
+### Compliance
 - **Unsubscribe scope:** *all marketing* (global, the POPIA-safe default) or *only that list*. Choose per-list only if
   you deliberately run preference-based lists and have documented that.
-- **Backup alert:** hours without a successful backup before a warning (0 = off). Set 26 for daily backups.
 
 Then open **System health**. Everything marked critical must be green before the first campaign:
-- SMTP reachable;
+- mail server reachable;
 - sender set;
 - HTTPS public URL;
 - postal address;
@@ -132,7 +111,10 @@ Then open **System health**. Everything marked critical must be green before the
 | Manager | Everything a viewer can, plus: contacts, lists, imports, exports, campaigns (write, test, send), templates, suppress, review queue, System health |
 | Administrator | Everything a manager can, plus: Settings, users, reactivation, erasure, list deletion, audit log |
 
-Accounts lock for 15 minutes after 10 failed sign-ins. Administrators reset passwords under Users → Edit.
+- Accounts lock for 15 minutes after 10 failed sign-ins. Administrators reset passwords under **Users → Edit**.
+- Keep **at least two administrators**, so one can always help the other.
+- An account marked **Managed by MailHarbor** is MailHarbor's support and recovery account. It's used only to restore
+  access or for support work you've asked for, and every action it takes appears in your **Audit log**.
 
 ## 5. DNS and deliverability
 
@@ -140,7 +122,7 @@ Accounts lock for 15 minutes after 10 failed sign-ins. Administrators reset pass
 |---|---|---|
 | SPF | `v=spf1 include:<your-smtp-provider> -all` | One SPF record per domain; checked on System health |
 | DKIM | `selector._domainkey` TXT/CNAME from your provider | MailHarbor does not sign. Your SMTP provider must sign with **your** domain |
-| DMARC | `_dmarc` TXT `v=DMARC1; p=none; rua=mailto:dmarc@example.co.za` | Required by Gmail/Yahoo for bulk senders. Move to `quarantine`/`reject` once reports are clean |
+| DMARC | `_dmarc` TXT `v=DMARC1; p=none; rua=mailto:dmarc@yourcompany.co.za` | Required by Gmail/Yahoo for bulk senders. Move to `quarantine`/`reject` once reports are clean |
 | MX | Normal mail routing for the bounce address's domain | Checked on System health |
 | PTR | Sending IP → hostname | Set by whoever owns the sending IP (your provider) |
 
@@ -152,90 +134,58 @@ Good practice:
 SMTP acceptance is not mailbox verification. The delivery outcome is the source of truth for whether an address is
 valid, and MailHarbor records exactly that.
 
-## 6. Backups and restore (TC16)
+## 6. Backups, updates and availability
 
-### Docker Compose
-- The `backup` service runs `scripts/backup.js` daily at `BACKUP_HOUR` and writes `backups/mailharbor-YYYYmmdd-HHMMSS.dump`.
-  It:
-  - verifies each archive with `pg_restore --list`;
-  - keeps `BACKUP_RETENTION_DAYS` days;
-  - reports on **System health → Backups**.
-- A failure raises a critical alert.
-- **Off-site copy:** set the `BACKUP_S3_*` variables (Cloudflare R2, AWS S3, Backblaze B2, MinIO…). A backup on the same
-  disk is not a backup.
-- Run a backup now: `docker compose run --rm backup node scripts/backup.js`
-- Restore (destructive, asks for confirmation): `./deploy/backup/restore.sh backups/<file>.dump`
+- **Backups:** your database is backed up daily by MailHarbor. A backup includes contacts, campaigns, suppressions,
+  settings, images and the history needed to keep existing unsubscribe links working. To request a restore, contact
+  MailHarbor support.
+- **Updates:** MailHarbor installs security updates and new versions for you. Updates are safe while a campaign is
+  sending:
+  - the email in progress is finished;
+  - sending continues where it stopped;
+  - an email whose outcome can't be confirmed is marked *unknown* instead of being sent twice.
+- **Your data:** at any time you can export contacts (Contacts → Export) and per-contact data (POPIA access requests).
+  A full export is available from MailHarbor support, for example at the end of your contract.
 
-### Railway
-See [DEPLOY_RAILWAY.md §6](DEPLOY_RAILWAY.md#6-backups-cron-service).
-
-The dump contains everything: contacts, campaigns, suppressions, settings and the generated secrets. Existing
-unsubscribe links and the encrypted bounce-mailbox password therefore keep working after a restore. Treat backups as
-sensitive.
-
-Test a restore at least quarterly on a separate machine or Railway environment.
-
-## 7. Upgrades
-
-- **MailHarbor (self-hosted):** `git pull && docker compose up -d --build portal backup`. Migrations run automatically on start.
-- **MailHarbor (Railway):** push to the watched branch.
-
-Upgrades are safe while a campaign is sending:
-- on shutdown, the worker finishes the email in progress and stops;
-- after the restart, sending continues where it stopped;
-- an email interrupted by a hard crash is marked *unknown* instead of being sent twice.
-
-**OS / Docker:**
-- `sudo apt upgrade` monthly;
-- `docker compose pull caddy db && docker compose up -d` for patch updates;
-- do not jump PostgreSQL major versions without a dump/restore.
-
-## 8. Monitoring (scope §8)
+## 7. Monitoring
 
 Dashboard and System health alerts:
 
-| Alert | Trigger |
-|---|---|
-| Emails cannot be sent (critical) | SMTP connection or authentication failure during sending; campaigns auto-paused |
-| Bounce mailbox error (critical) | IMAP connection, login or folder error, or incomplete settings (TC14) |
-| Bounce processing off (warning) | No bounce mailbox enabled |
-| Public URL missing (critical) | No public address, so emails cannot contain working unsubscribe links |
-| Backup failed (critical) / stale (warning) | Backup job error / no success within the configured hours |
+| Alert | Trigger | What to do |
+|---|---|---|
+| Emails cannot be sent (critical) | Mail server connection or sign-in failed during sending; campaigns auto-paused | If your mail server's password or details changed, send the new details to MailHarbor support. Then **Resume** |
+| Bounce mailbox error (critical) | IMAP connection, login or folder error, or incomplete settings | Settings → Bounces → **Test connection** |
+| Bounce processing off (warning) | No bounce mailbox enabled | Set up a bounce mailbox (§3) |
+| Public URL missing (critical) | No public address, so emails cannot contain working unsubscribe links | Contact MailHarbor support |
+| Backup failed / stale | The daily backup didn't complete | MailHarbor is alerted too and will fix it; no action needed |
 
 System health also shows:
 - worker heartbeat;
 - queue size;
 - last mailbox check;
-- SMTP status (re-checked every 5 minutes, or on demand);
+- mail server status (re-checked every 5 minutes, or on demand);
 - DNS checks.
 
-For external monitoring, probe `https://<domain>/healthz` with an uptime checker. It returns 200 when the app and
-database are up.
-
-Logs: `docker compose logs -f portal`, or Railway → Deploy Logs. Logs are JSON (pino) and omit cookies, passwords
-and tokens.
-
-## 9. Common tasks
+## 8. Common tasks
 
 | Task | How |
 |---|---|
-| Recover admin access | Set `ADMIN_EMAIL`/`ADMIN_PASSWORD` and restart (§2), or `node scripts/create-admin.js you@co.za "Name"` with `DATABASE_URL` set |
 | Reset a user's password | Users → Edit |
+| Every administrator locked out | Contact MailHarbor support |
 | Resume a paused campaign | Fix the cause (System health), then campaign → **Resume** |
 | Reactivate a suppressed contact | Suppression → find the address → *Lift* (admin; needs a reason and the new permission basis). The contact page links there |
 | POPIA access / erasure | Contact → *Data export* / *Erase* |
 | See who did what | Audit log (admin) |
 | Rotate the webhook token | Settings → Bounces → *New token*; update the URL at your provider |
+| Change mail server or web address | Contact MailHarbor support |
 
-## 10. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom | Check |
 |---|---|
-| App restarts in a loop | `docker compose logs portal`: usually a missing or invalid variable, which is named in the error |
-| SMTP check: timeout | Outbound SMTP blocked (hosting provider / Railway plan) or wrong host/port |
-| SMTP check: authentication failed | Username/password; some providers need an SMTP-specific credential |
-| Certificates not issued | DNS not pointing at the server yet, or port 80 blocked |
+| Mail server check: timeout or authentication failed | Has your mail server's password or address changed? Send the new details to MailHarbor support. Some providers need an SMTP-specific password |
 | No bounces recorded | Bounce address set? Bounce mailbox green? Some providers rewrite the Return-Path, so use their webhook |
 | Many contacts in the review queue at one domain | Your domain or IP is being blocked there: check SPF/DKIM/DMARC, complaint rate and the provider's postmaster tools before releasing them |
 | Contacts imported but not on a list | Row report: suppressed, previously unsubscribed, or no consent basis |
 | Opens look unrealistically high | Apple Mail Privacy Protection and security scanners pre-load images. Rely on clicks |
+| Anything else | Contact MailHarbor support, with the time it happened and what you saw |

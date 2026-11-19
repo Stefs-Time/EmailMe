@@ -19,7 +19,6 @@ const { suppressionRoutes } = require('./modules/suppression/routes');
 const { reportRoutes } = require('./modules/reports/routes');
 const { systemRoutes } = require('./modules/system/routes');
 const { campaignRoutes } = require('./modules/campaigns/routes');
-const { templateRoutes } = require('./modules/templates/routes');
 const { settingsRoutes, setupRoutes } = require('./modules/settings/routes');
 const { publicRoutes } = require('./modules/public/routes');
 const { imageRoutes, publicImageRoute } = require('./modules/images/routes');
@@ -130,7 +129,6 @@ function createApp(deps) {
   app.use('/api/reports', reportRoutes(deps));
   app.use('/api/system', systemRoutes(deps));
   app.use('/api/campaigns', campaignRoutes(deps));
-  app.use('/api/templates', templateRoutes(deps));
   app.use('/api/images', imageRoutes(deps));
   app.use('/api/segments', segmentRoutes(deps));
   app.use('/api/forms', formRoutes(deps));

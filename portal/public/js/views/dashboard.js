@@ -53,19 +53,19 @@ export async function render(el, ctx) {
     </div>
 
     <div class="row g-3 mb-3">
-      <div class="col-6 col-md-3"><div class="card kpi"><div class="label"><i class="bi bi-envelope-paper"></i>Campaigns</div><div class="value">${num(d.totals.campaigns)}</div><div class="sub">${num(d.totals.active_campaigns)} running or scheduled</div></div></div>
-      <div class="col-6 col-md-3"><div class="card kpi"><div class="label"><i class="bi bi-send-check"></i>Emails sent</div><div class="value">${num(d.totals.emails_sent)}</div><div class="sub">All campaigns</div></div></div>
-      <div class="col-6 col-md-3"><a class="card kpi" href="#/reports"><div class="label"><i class="bi bi-arrow-return-left"></i>Bounces (30 days)</div><div class="value">${num(d.totals.bounces_30d)}</div><div class="sub">See deliverability report</div></a></div>
+      <div class="col-6 col-md-3"><a class="card kpi kpi-link" href="#/campaigns"><div class="label"><i class="bi bi-envelope-paper"></i>Campaigns</div><div class="value">${num(d.totals.campaigns)}</div><div class="sub">${num(d.totals.active_campaigns)} running or scheduled</div></a></div>
+      <div class="col-6 col-md-3"><a class="card kpi kpi-link" href="#/details?kind=messages&message_kind=campaign&state=sent"><div class="label"><i class="bi bi-send-check"></i>Emails sent</div><div class="value">${num(d.totals.emails_sent)}</div><div class="sub">All campaigns</div></a></div>
+      <div class="col-6 col-md-3"><a class="card kpi kpi-link" href="#/details?kind=bounces&days=30"><div class="label"><i class="bi bi-arrow-return-left"></i>Bounces (30 days)</div><div class="value">${num(d.totals.bounces_30d)}</div><div class="sub">Show every bounce</div></a></div>
       <div class="col-6 col-md-3"><a class="card kpi" href="#/suppression"><div class="label"><i class="bi bi-slash-circle"></i>Suppressed</div><div class="value">${num(d.totals.suppressed)}</div><div class="sub">Never re-activated by imports</div></a></div>
     </div>
 
     <div class="row g-3">
       <div class="col-xl-7"><div class="card h-100"><div class="card-header">Contacts added vs suppressed · last 30 days</div>
         <div class="card-body"><div class="chart-box"><canvas id="growth" aria-label="Contacts added and suppressed per day" role="img"></canvas></div></div></div></div>
-      <div class="col-xl-5"><div class="card h-100"><div class="card-header d-flex justify-content-between">Recent bounce activity <a class="small fw-normal" href="#/reports">View all</a></div>
+      <div class="col-xl-5"><div class="card h-100"><div class="card-header d-flex justify-content-between">Recent bounce activity <a class="small fw-normal" href="#/details?kind=bounces&days=30">View all</a></div>
         ${d.recentBounces.length ? html`<div class="table-responsive"><table class="table table-sm table-hover">
           <thead><tr><th>Contact</th><th>Type</th><th>When</th></tr></thead><tbody>
-          ${d.recentBounces.map((b) => html`<tr class="row-link" data-href="#/contacts/${b.subscriber_id}">
+          ${d.recentBounces.map((b) => html`<tr class="${b.contact_id ? 'row-link' : ''}" data-href="${b.contact_id ? `#/contacts/${b.contact_id}` : ''}">
             <td><div class="cell-email">${b.email || '[deleted]'}</div><div class="small text-muted-2">${b.reason}</div></td>
             <td>${bounceBadge(b.classification)}</td><td class="small text-nowrap">${ago(b.bounced_at)}</td></tr>`)}
           </tbody></table></div>` : html`<div class="empty"><i class="bi bi-emoji-smile"></i>No bounces recorded yet.</div>`}
@@ -89,7 +89,7 @@ export async function render(el, ctx) {
 
   el.addEventListener('click', async (e) => {
     const row = e.target.closest('[data-href]');
-    if (row) { location.hash = row.dataset.href; return; }
+    if (row?.dataset.href) { location.hash = row.dataset.href; return; }
     const r = e.target.closest('[data-resolve]');
     if (r) {
       try { await post(`/system/alerts/${r.dataset.resolve}/resolve`); toast('Alert dismissed'); ctx.navigate('#/'); } catch (err) { errorToast(err); }

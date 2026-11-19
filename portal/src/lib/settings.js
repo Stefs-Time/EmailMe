@@ -8,6 +8,7 @@
 const crypto = require('node:crypto');
 const { z } = require('zod');
 const { encrypt, decrypt } = require('./secrets');
+const { parse } = require('./errors');
 
 const mailbox = z.object({
   enabled: z.boolean().default(false),
@@ -45,6 +46,16 @@ const SCHEMA = z.object({
   utm_source: z.string().trim().max(60).default('mailharbor'),
   utm_medium: z.string().trim().max(60).default('email'),
   utm_domains: z.string().trim().max(500).default(''),
+  // Email design: the one frame around every email (replaces templates).
+  email_logo_url: z.union([z.string().trim().max(2000).regex(/^https?:\/\/[^\s"<>]+$/i, 'Use an image address starting with https://'), z.literal('')]).default(''),
+  email_logo_width: z.coerce.number().int().min(40).max(300).default(160),
+  email_header_align: z.enum(['left', 'center']).default('left'),
+  email_brand_color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a colour like #1f4e8c').default('#1f4e8c'),
+  email_heading_color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a colour like #16365f').default('#16365f'),
+  email_background: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a colour like #f4f6f9').default('#f4f6f9'),
+  email_font: z.enum(['arial', 'helvetica', 'verdana', 'trebuchet', 'georgia']).default('arial'),
+  email_footer_text: z.string().trim().max(300).default('You are receiving this because you subscribed or are a customer of {{ org_name }}.'),
+  email_show_preferences: z.boolean().default(true),
 });
 
 // zod 4 returns .default({}) objects as-is, so build nested defaults explicitly.
@@ -113,7 +124,7 @@ class Settings {
   /** Validates and saves a partial update. Returns the list of changed keys. */
   async update(patch, userId) {
     const current = await this.all();
-    const partial = SCHEMA.partial().parse(patch);
+    const partial = parse(SCHEMA.partial(), patch); // invalid values → 422 with the field names
     const changed = [];
     // zod fills defaults even for omitted keys: only write what was sent.
     for (const [key, value] of Object.entries(partial).filter(([k]) => Object.hasOwn(patch, k))) {

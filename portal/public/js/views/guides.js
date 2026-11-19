@@ -62,12 +62,13 @@ const G = {
     <ol>
       <li><a href="#/campaigns">Campaigns</a> → <strong>New campaign</strong>, then pick a starting design: a simple message, a marketing
         promotion, a new product release, "Are you still interested?", an introduction &amp; permission request, "Want to find out more?",
-        a newsletter, an event invitation or a welcome email. Replace the [bracketed] text and add your images and links. <strong>Samples</strong> above the builder swaps the
-        design of an existing draft (Undo brings it back).</li>
-      <li><strong>Who receives it:</strong> tick one or more lists. The number of people who will actually receive it is shown underneath:
-        suppressed, unsubscribed, unconfirmed and held contacts are left out automatically.</li>
-      <li><strong>Envelope:</strong> subject line, preview text (the grey text inboxes show after the subject), sender and template.</li>
-      <li><strong>Content:</strong> design the email in the drag-and-drop <em>Builder</em> (see below).</li>
+        a newsletter, an event invitation or a welcome email. Replace the [bracketed] text and add your images and links. <strong>Start from a sample</strong>
+        above the builder swaps the design of an existing draft (Undo brings it back).</li>
+      <li><strong>1 · Audience:</strong> tick one or more lists, and optionally a segment. The number of people who will actually receive it is shown
+        underneath: suppressed, unsubscribed, unconfirmed and held contacts are left out automatically.</li>
+      <li><strong>2 · Email:</strong> subject line, preview text (the grey text inboxes show after the subject) and the content, designed in the
+        drag-and-drop <em>Builder</em> (see below). The sender comes from Settings; open <em>From</em> only to change it for this campaign.</li>
+      <li><strong>3 · Review &amp; send:</strong> the checklist shows anything still missing; the preview shows the email exactly as recipients see it.</li>
       <li><strong>Personalise:</strong> click where the name should go (subject, preview text, a heading, text or button), then click a field
         button such as <em>First name</em>, <em>Full name</em> or <em>Company</em>. Your imported columns (e.g. <em>City</em>) appear as buttons too.
         Names are inserted with a fallback for contacts without one: <code>{{ first_name | "there" }}</code>. The preview shows real names.</li>
@@ -104,7 +105,7 @@ const G = {
     <p>Select a button (or select words and press the link button) and choose where it goes: <em>Unsubscribe page</em>,
       <em>Manage preferences</em> (the person picks which lists to keep), <em>Stay subscribed</em> (for "Are you still interested?" emails),
       <em>Give permission</em> (the person agrees that you may email them; recorded as consent with the time and IP address) or <em>View in browser</em>. MailHarbor creates each person's own link when it sends, so there is nothing to set up, and everything they do
-      is recorded on the contact and in the campaign report. The footer of your template already links to Unsubscribe and Manage preferences.</p>
+      is recorded on the contact and in the campaign report. The footer of every email already links to Unsubscribe and Manage preferences.</p>
     <h3>Asking new contacts for permission</h3>
     <p>For people who aren't customers yet and haven't agreed to your emails (for example, business cards from an event), use the
       <strong>Introduction &amp; permission request</strong> sample. POPIA (s69) allows you to ask them <strong>once</strong>. Everyone who clicks
@@ -115,15 +116,11 @@ const G = {
     <h3>While it sends</h3>
     <p>The campaign page updates every few seconds. You can <strong>pause</strong>, <strong>resume</strong> or <strong>cancel</strong>. If your email server
     stops accepting mail, sending pauses automatically and an alert appears. Fix the problem, then press Resume.</p>
-    <h3>Templates</h3>
-    <p><a href="#/templates">Templates</a> are the frame around every campaign: logo, name, colours, width, font and footer. They use the same
-    drag-and-drop builder, with two extra blocks: <strong>Campaign content</strong> (where each campaign appears; exactly one per template) and
-    <strong>Footer</strong> (your organisation name, postal address, unsubscribe and "View in browser" links). Click empty space next to the email for
-    <em>Page settings</em>. Press <em>Save</em> when done: template changes affect every campaign that uses the template.</p>
-    <p><strong>Ready-made templates:</strong> <em>Clean</em> (white, minimal), <em>Promotion</em> (bold navy with an offers banner) and
-    <em>New release</em> (light and modern) are included. Campaign samples use the matching one automatically, e.g. the Marketing promotion
-    sample uses Promotion. Add your logo by selecting the image at the top of the template and pasting its web address.
-    <em>New template</em> lets you start from any of these designs.</p>
+    <h3>Header, footer and colours</h3>
+    <p>Every email has the same structure: your logo (or organisation name) at the top, the campaign's content in a white card, and a footer with your
+    postal address and the Unsubscribe, Manage preferences and View in browser links. Administrators set the logo, brand colours, font and footer line
+    in <strong>Settings → Email design</strong>; headings, buttons and links follow those colours unless you pick a colour for a block.
+    A campaign keeps the design it was sent with, even if the design changes later.</p>
     <div class="tip">Start a new or old list with a small batch. A high bounce rate in the first hour is a sign the list needs cleaning before you continue.</div>`)],
   bounces: ['Bounces explained', raw(`
     <h2>How bounces are handled</h2>
@@ -166,6 +163,9 @@ const G = {
       <tr><td><strong>Unsubscribes</strong></td><td>People who unsubscribed using this campaign's link (exact).</td></tr>
       <tr><td><strong>Opens</strong></td><td><em>Indicative only.</em> Apple Mail Privacy Protection and security scanners inflate opens; image blocking hides them.</td></tr>
       <tr><td><strong>Clicks</strong></td><td>The most reliable engagement signal.</td></tr></tbody></table>
+    <h3>Every number opens its details</h3><p>Click any number (on a campaign report, the dashboard, Mail usage or Audience &amp; bounces) to see
+    the people or emails behind it: who bounced and why, who clicked a particular link, which emails went out on a given day. Each list links to the
+    contact, can be searched, and can be downloaded as CSV by managers and administrators.</p>
     <h3>Audience & bounces</h3><p>Shows where contacts came from, their consent basis, growth, and bounce trends. A source with a high bounce rate is a sign of an old or purchased list.</p>`)],
 
   popia: ['Exports & POPIA', raw(`
@@ -204,7 +204,7 @@ const G = {
     monitors and backs up. Emails go out through <strong>your own mail server</strong> (SMTP), which MailHarbor connects for you.</p>
     <ul><li><strong>Managed by MailHarbor</strong>: hosting, database, backups, updates, your web address and the mail server connection.
       To connect a different mail server or change its password, contact MailHarbor support.</li>
-      <li><strong>Managed by you</strong> in <a href="#/settings">Settings</a>: organisation, postal address, sender, sending speed, bounce mailbox,
+      <li><strong>Managed by you</strong> in <a href="#/settings">Settings</a>: organisation, postal address, email design (logo, colours, footer), sender, sending speed, bounce mailbox,
       webhook, Google Analytics tags and compliance options. Under <a href="#/users">Users</a>: who has access.</li></ul>
     <h3>Users and recovery</h3>
     <p>Create a personal account for everyone who needs access under <a href="#/users">Users</a>, with the lowest role they need. Keep at least two

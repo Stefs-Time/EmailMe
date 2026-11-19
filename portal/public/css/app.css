@@ -370,3 +370,18 @@ label.img-card { cursor: pointer; }
 .seg-preview { position: sticky; top: 76px; }
 /* Sign-up forms */
 .form-preview { width: 100%; max-width: 480px; height: 560px; border: 0; background: #fff; border-radius: 8px; }
+
+/* Collapsible option groups in the campaign editor (sender, tracking) */
+.mh-details { border: 1px solid var(--bs-border-color, #dde3ea); border-radius: .5rem; padding: .55rem .85rem; }
+.mh-details > summary { cursor: pointer; list-style-position: outside; }
+.mh-details > summary:focus-visible { outline: 2px solid #1f4e8c; outline-offset: 2px; border-radius: .25rem; }
+.mh-details[open] > summary { margin-bottom: .25rem; }
+
+/* Settings → Email design preview */
+.design-preview { width: 100%; height: 640px; border: 0; background: #f4f6f9; border-radius: .5rem; }
+
+/* Report numbers that open the detail behind them */
+a.kpi-link, a.kpi-link:hover { color: inherit; text-decoration: none; }
+a.kpi-link:hover .value, a.num-link:hover { text-decoration: underline; }
+a.num-link { color: inherit; font-weight: 600; text-decoration: none; }
+.mw-320 { max-width: 320px; }

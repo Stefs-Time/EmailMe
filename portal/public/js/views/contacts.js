@@ -11,7 +11,9 @@ export async function render(el, ctx) {
   const q = ctx.query();
   const state = {
     q: q.get('q') || '', status: q.get('status') || '', list_id: q.get('list_id') || '', source: q.get('source') || '',
-    consent_method: q.get('consent_method') || '', segment_id: q.get('segment_id') || '', sort: q.get('sort') || 'created_at', dir: q.get('dir') || 'desc',
+    consent_method: q.get('consent_method') || '', segment_id: q.get('segment_id') || '',
+    // Date range (from report links, e.g. "added in March"): shown as a removable chip.
+    created_from: q.get('created_from') || '', created_to: q.get('created_to') || '', sort: q.get('sort') || 'created_at', dir: q.get('dir') || 'desc',
     page: Number(q.get('page') || 1), per_page: Number(q.get('per_page')) || 25,
   };
   const selected = new Set();
@@ -43,6 +45,9 @@ export async function render(el, ctx) {
           <select class="form-select" name="segment_id" aria-label="Segment">${options(segments.map((g) => ({ value: g.id, label: g.name })), state.segment_id, { blank: 'Any segment' })}</select>
           <button class="btn btn-light" type="button" id="reset">Reset</button>
         </form>
+        ${state.created_from || state.created_to ? html`<div class="mt-2 small" id="range-chip"><span class="badge text-bg-light border">
+          Added ${state.created_from ? html`from ${state.created_from}` : ''} ${state.created_to ? html`before ${state.created_to}` : ''}
+          <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline" id="range-clear" aria-label="Remove the date filter"><i class="bi bi-x-lg"></i></button></span></div>` : ''}
       </div>
       <div class="bulk-bar m-3 d-none" id="bulk"></div>
       <div id="table">${loading()}</div>
@@ -153,6 +158,11 @@ export async function render(el, ctx) {
   $('#reset', el).addEventListener('click', () => {
     form.reset();
     for (const k of ['q', 'status', 'list_id', 'source', 'consent_method', 'segment_id']) { state[k] = ''; form[k].value = ''; }
+    state.created_from = ''; state.created_to = ''; $('#range-chip', el)?.remove();
+    state.page = 1; load();
+  });
+  $('#range-clear', el)?.addEventListener('click', () => {
+    state.created_from = ''; state.created_to = ''; $('#range-chip', el)?.remove();
     state.page = 1; load();
   });
   $('#export', el)?.addEventListener('click', () => {

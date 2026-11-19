@@ -20,12 +20,13 @@
 
 | Path | Responsibility |
 |---|---|
-| `src/server.js` | Startup order: config → migrations → secrets → settings → env admin → default template → recover interrupted sends → setup code → SMTP transport → worker → HTTP. Graceful shutdown on SIGTERM/SIGINT |
+| `src/server.js` | Startup order: config → migrations → secrets → settings → env admin → one-time email-design upgrade (`lib/emailDesign.js`) → recover interrupted sends → setup code → SMTP transport → worker → HTTP. Graceful shutdown on SIGTERM/SIGINT |
 | `src/config.js` | Validates environment variables (zod); fails fast with a list of problems |
 | `src/lib/settings.js` | Typed settings with defaults, 5 s cache, partial updates, encrypted bounce-mailbox password |
 | `src/lib/secrets.js` | Generated secrets; AES-256-GCM encrypt/decrypt with an HKDF-derived key |
-| `src/engine/blocks.js` | Drag-and-drop builder documents for campaigns and templates: validation (zod), cleaning, and rendering to table-based, inline-styled email HTML with phone stacking |
-| `src/engine/render.js` | Template + content merge, personalisation tags (HTML-escaped, no logic), link rewriting, open pixel, compliance footer, `List-Unsubscribe` headers, plain-text part, HTML sanitising |
+| `src/engine/blocks.js` | Drag-and-drop builder documents for campaigns: validation (zod), cleaning, and rendering to table-based, inline-styled email HTML with phone stacking |
+| `src/engine/layout.js` | The one email layout (header, content card, footer) built from Settings → Email design; brand theme for blocks |
+| `src/engine/render.js` | Layout + content merge (`emailParts`: live for drafts, frozen once started), personalisation tags (HTML-escaped, no logic), link rewriting, open pixel, compliance footer, `List-Unsubscribe` headers, plain-text part, HTML sanitising |
 | `src/engine/sender.js` | Campaign start (recipient snapshot + link table), rate-limited sending, retries, error handling, completion, opt-in confirmation emails |
 | `src/engine/mailer.js` | Pooled nodemailer transport (TLS 1.2+), SMTP error classification |
 | `src/engine/bounces.js`, `bounceRules.js` | DSN/ARF parsing, classification, bounce processing and suppression |
@@ -50,14 +51,21 @@ On every save the server:
 3. renders table-based HTML with inline styles (what email clients support), plus a small `@media` rule that stacks
    columns on phones.
 
-**Templates** use the same builder in template mode (`renderTemplate()`):
-- Two extra block types: `content`, the `{{ content }}` slot (exactly one, top level, cannot be deleted), and `footer`
-  (organisation name and address plus unsubscribe and view-online links).
-- Page `settings`: page and content background, width 480–720px, an email-safe font, corner radius and content padding.
-- The server renders a complete HTML document with a centred, fixed-width layout. Campaign documents may not contain
-  template-only blocks.
-- Migration 003 adds `templates.editor` and `templates.body_json`. An untouched copy of the old built-in HTML template
-  is upgraded to a builder design on startup; any template someone has edited by hand is left as HTML.
+**Email design replaces templates** (migration 007, November 2026):
+- Every email uses one layout from `renderLayout(settings)`: header (logo or `{{ org_name }}`), the content card and a
+  footer with the compliance links. The `email_*` settings (logo, colours, font, footer line, preferences link) are
+  validated like any setting, so the layout only ever contains checked values.
+- Builder blocks with no colour (`''`), or the old stored defaults `#16365f` / `#1f4e8c`, follow the brand theme.
+- Drafts render live from `body_json` with the current design. `startCampaign()` freezes `body_html` and
+  `layout_html` on the campaign, so sends, reports and "view in browser" never change afterwards.
+- `upgradeToEmailDesign()` runs once (`sync_state.email_design_upgrade`): freezes the template HTML of campaigns that
+  already started, copies the default template's look into the `email_*` settings that are not yet set, and converts
+  visual/HTML drafts into builder documents with one HTML block. `portal.templates` and `campaigns.template_id` are left
+  in place but unused, so the change can be rolled back; a later migration can drop them.
+
+**Report details** (`modules/reports/details.js`, `GET /api/reports/details`) back every clickable number: `kind`
+`recipients` (per campaign, by outcome or clicked link), `bounces`, `events` (recipient actions) and `messages`. Filters
+are whitelisted and bound; `format=csv` needs `exports:read`.
 
 The browser's own rendering is never stored or sent. The canvas styles elements through the CSSOM, because the app's
 CSP blocks inline style attributes. Switching a design to the HTML editor uses the server-rendered HTML. Switching
@@ -173,7 +181,7 @@ All public routes are rate-limited (300/min per IP). Links in **test** emails op
 - all metadata dropped, and anything over 3 MB after compression rejected.
 
 Results are de-duplicated by SHA-256 and stored as `bytea` in `portal.images`. Deleting an image is refused while any
-campaign or template HTML references it.
+campaign (content or frozen layout) or the email design's logo references it.
 
 **Saved segments** (`modules/segments`): rules (`{ match: all|any, conditions[] }`) are validated against a fixed
 catalogue of fields and operators. They compile to a SQL boolean over the contact read model, with every value a bound
@@ -209,7 +217,7 @@ report (`GET /api/reports/usage`).
 | `segments` | Saved rule sets (`rules` jsonb); `campaigns.segment_id` / `segment_name` |
 | `forms`, `form_submissions` | Sign-up forms (lists, settings jsonb, public token) and their outcomes |
 | `images` | Image library: compressed bytes (`bytea`), dimensions, sizes, SHA-256, public token |
-| `templates`, `campaigns`, `campaign_lists` | Content and targeting; `campaigns.editor` is `builder`, `visual` or `html`, and a builder campaign keeps its design in `body_json` with the server-rendered result in `body_html`; campaign status `draft → scheduled → sending ⇄ paused → sent` or `cancelled` |
+| `campaigns`, `campaign_lists` | Content and targeting; content is a builder document in `body_json` (`editor = 'builder'`), with the server-rendered result in `body_html` and, once started, the frozen `layout_html`. (`templates` is unused since migration 007); campaign status `draft → scheduled → sending ⇄ paused → sent` or `cancelled` |
 | `messages` | One row per recipient email (campaign, opt-in, test); token, status, attempts, timestamps, error |
 | `links`, `tracking_events` | Campaign links; opens and clicks |
 | `bounce_events` | Every bounce with source, codes, classification, action taken |

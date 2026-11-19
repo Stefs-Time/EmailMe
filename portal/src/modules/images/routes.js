@@ -5,7 +5,7 @@
  *   GET    /api/images            list (newest first, search by name)
  *   POST   /api/images            upload up to 10 files (multipart "files"); compressed and stored
  *   PATCH  /api/images/:id        rename
- *   DELETE /api/images/:id        delete (refused while a campaign or template uses it)
+ *   DELETE /api/images/:id        delete (refused while a campaign or the email design uses it)
  * Public:  GET /img/:token.:ext  (see publicImageRoute)
  */
 const express = require('express');
@@ -55,7 +55,7 @@ function imageRoutes({ pool, settings, logger }) {
         storage: { count: usage[0].n, bytes: Number(usage[0].bytes), original_bytes: Number(usage[0].original) } } });
   });
 
-  r.post('/', requirePermission('templates:write'), (req, res, next) => {
+  r.post('/', requirePermission('campaigns:write'), (req, res, next) => {
     upload.array('files', 10)(req, res, (err) => {
       if (err?.code === 'LIMIT_FILE_SIZE') return next(badRequest('Images can be up to 15 MB before compression'));
       if (err?.code === 'LIMIT_FILE_COUNT') return next(badRequest('Upload up to 10 images at a time'));
@@ -83,7 +83,7 @@ function imageRoutes({ pool, settings, logger }) {
     return res.status(201).json({ success: true, data: results });
   });
 
-  r.patch('/:id', requirePermission('templates:write'), async (req, res) => {
+  r.patch('/:id', requirePermission('campaigns:write'), async (req, res) => {
     const imageId = parse(id, req.params.id);
     const b = parse(z.object({ name: z.string().trim().min(1).max(120) }), req.body);
     const { rows } = await pool.query(
@@ -93,17 +93,17 @@ function imageRoutes({ pool, settings, logger }) {
     res.json({ success: true, data: await shape(rows[0]) });
   });
 
-  r.delete('/:id', requirePermission('templates:write'), async (req, res) => {
+  r.delete('/:id', requirePermission('campaigns:write'), async (req, res) => {
     const imageId = parse(id, req.params.id);
     const { rows } = await pool.query('SELECT token, name FROM portal.images WHERE id = $1', [imageId]);
     if (!rows[0]) throw notFound('Image not found');
     // Sent emails keep pointing at the image, so refuse while anything uses it.
     const needle = `%/img/${rows[0].token}%`;
     const { rows: used } = await pool.query(
-      `SELECT 'campaign' AS kind, name FROM portal.campaigns WHERE body_html LIKE $1
-       UNION ALL SELECT 'template', name FROM portal.templates WHERE html LIKE $1 LIMIT 5`, [needle]);
+      `SELECT 'campaign' AS kind, name FROM portal.campaigns WHERE body_html LIKE $1 OR layout_html LIKE $1
+       UNION ALL SELECT 'email design', 'logo' FROM portal.settings WHERE key = 'email_logo_url' AND value::text LIKE $1 LIMIT 5`, [needle]);
     if (used.length) {
-      throw conflict(`This image is used by ${used.map((u) => `${u.kind} "${u.name}"`).join(', ')}. Emails that were already sent would lose it, so it can't be deleted.`);
+      throw conflict(`This image is used by ${used.map((u) => (u.kind === 'email design' ? 'the email design (logo)' : `${u.kind} "${u.name}"`)).join(', ')}. Emails that were already sent would lose it, so it can't be deleted.`);
     }
     await pool.query('DELETE FROM portal.images WHERE id = $1', [imageId]);
     await audit(pool, req, 'image.deleted', { details: { name: rows[0].name } });

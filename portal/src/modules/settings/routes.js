@@ -12,6 +12,18 @@ const { isValidEmail } = require('../../lib/email');
 const { describeSmtp } = require('../../engine/mailer');
 const { testMailbox } = require('../../engine/mailbox');
 const { passwordSchema, permissionsFor } = require('../auth/routes');
+const { SETTINGS_SCHEMA } = require('../../lib/settings');
+const { renderMessage } = require('../../engine/render');
+
+const SAMPLE = { first_name: 'Thandi', last_name: 'Nkosi', email: 'thandi@example.co.za', company: 'Example (Pty) Ltd', attribs: {} };
+const PREVIEW_DOC = {
+  version: 1,
+  blocks: [
+    { id: 'p1', type: 'heading', props: { text: 'Hello {{ first_name | "there" }}', level: 1 } },
+    { id: 'p2', type: 'text', props: { html: '<p>This is how every email looks: your header, the campaign in the white card, and the footer with your address and the unsubscribe link. <a href="https://example.co.za">Links</a> use your brand colour.</p>' } },
+    { id: 'p3', type: 'button', props: { label: 'Buttons use your brand colour', url: 'https://example.co.za' } },
+  ],
+};
 
 function settingsRoutes({ pool, settings, transport, config, worker }) {
   const r = express.Router();
@@ -25,6 +37,30 @@ function settingsRoutes({ pool, settings, transport, config, worker }) {
     const changed = await settings.update(req.body || {}, req.user.id);
     await audit(pool, req, 'settings.updated', { details: { changed } });
     res.json({ success: true, data: { ...(await settings.forUi()), smtp: describeSmtp(config) } });
+  });
+
+  /**
+   * Sample email with the email design, for the Settings preview. Unsaved values
+   * come in the query string and are validated like a save (nothing is stored).
+   * Served sandboxed: no scripts, no same-origin access.
+   */
+  r.get('/email-preview', async (req, res) => {
+    const draft = {};
+    for (const [k, v] of Object.entries(req.query)) {
+      if (!k.startsWith('email_') || typeof v !== 'string' || !SETTINGS_SCHEMA.shape[k]) continue;
+      const value = k === 'email_show_preferences' ? v === 'true' : v;
+      const ok = SETTINGS_SCHEMA.shape[k].safeParse(value);
+      if (ok.success) draft[k] = ok.data;
+    }
+    const s = { ...(await settings.all()), ...draft };
+    const msg = renderMessage({
+      campaign: { status: 'draft', editor: 'builder', body_json: PREVIEW_DOC, subject: 'Preview', preheader: '', track_opens: false, track_clicks: false, utm_enabled: false },
+      contact: SAMPLE, token: '00000000-0000-0000-0000-000000000000', settings: s,
+      publicUrl: (await settings.publicUrl()) || 'https://example.invalid', isTest: true,
+    });
+    res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'; font-src https: data:");
+    res.setHeader('Cache-Control', 'no-store');
+    res.type('html').send(msg.html);
   });
 
   /** Sends one real email straight through SMTP and reports the server's answer (TC01). */

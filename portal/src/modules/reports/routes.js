@@ -7,6 +7,7 @@ const { requirePermission } = require('../../middleware/auth');
 const { streamCsv } = require('../../lib/csv');
 const { getState } = require('../../engine/worker');
 const repo = require('../contacts/repo');
+const { detailRoutes } = require('./details');
 
 /**
  * Campaign metrics (scope §3.8) from the per-recipient message log.
@@ -138,9 +139,9 @@ function reportRoutes({ pool, settings, config }) {
     const { rows } = await pool.query(`${CAMPAIGN_METRICS} WHERE c.id = $1`, [id]);
     if (!rows[0]) throw notFound('Campaign not found');
     const links = await pool.query(`
-      SELECT l.url, COUNT(t.id)::int AS clicks, COUNT(DISTINCT t.message_id)::int AS unique_clicks
+      SELECT l.id, l.url, COUNT(t.id)::int AS clicks, COUNT(DISTINCT t.message_id)::int AS unique_clicks
         FROM portal.links l LEFT JOIN portal.tracking_events t ON t.link_id = l.id AND t.kind = 'click'
-       WHERE l.campaign_id = $1 GROUP BY l.url ORDER BY clicks DESC LIMIT 25`, [id]);
+       WHERE l.campaign_id = $1 GROUP BY l.id, l.url ORDER BY clicks DESC LIMIT 25`, [id]);
     const timeline = await pool.query(`
       SELECT date_trunc('hour', t.at) AS at, t.kind, COUNT(*)::int AS n FROM (
         SELECT sent_at AS at, 'sent' AS kind FROM portal.messages WHERE campaign_id = $1 AND kind = 'campaign' AND sent_at IS NOT NULL
@@ -168,7 +169,8 @@ function reportRoutes({ pool, settings, config }) {
                          (SELECT COUNT(*)::int FROM portal.contacts s WHERE s.created_at >= d AND s.created_at < d + INTERVAL '1 month') AS added,
                          (SELECT COUNT(*)::int FROM portal.suppressions p WHERE p.created_at >= d AND p.created_at < d + INTERVAL '1 month') AS suppressed
                     FROM generate_series(date_trunc('month', NOW()) - INTERVAL '11 months', date_trunc('month', NOW()), INTERVAL '1 month') d`),
-      pool.query(`SELECT COALESCE(NULLIF(c.source, ''), '(none)') AS source, c.status, COUNT(*)::int AS n FROM (${repo.BASE_SQL}) c GROUP BY 1, 2`),
+      pool.query(`SELECT COALESCE(NULLIF(c.source, ''), '(none)') AS source, c.status, (c.suppression_reason IS NOT NULL) AS suppressed,
+                         COUNT(*)::int AS n FROM (${repo.BASE_SQL}) c GROUP BY 1, 2, 3`),
     ]);
     res.json({ success: true, data: { bySource: bySource.rows, byConsent: byConsent.rows, byDomain: byDomain.rows,
       byMonth: byMonth.rows, byStatusSource: byStatusSource.rows } });
@@ -238,6 +240,7 @@ function reportRoutes({ pool, settings, config }) {
     } });
   });
 
+  detailRoutes(r, { pool });
   return r;
 }
 

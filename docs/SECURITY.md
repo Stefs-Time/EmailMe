@@ -21,7 +21,7 @@ meet POPIA.
 | Segments | Rules validated against a fixed field/operator catalogue; compiled SQL contains only bound parameters (an injection attempt is matched as plain text) |
 | Sign-up forms | Honeypot, HMAC-signed render time (submissions under 2.5 s or without a token discarded), 20 POSTs per 10 min per IP; identical response for new, existing and suppressed addresses (no enumeration); suppressed addresses never re-subscribed; consent evidence recorded; only form pages may be framed (`frame-ancestors *`), with a nonce-based CSP |
 | SQL | Parameterised queries only; sort columns whitelisted; `LIKE` wildcards escaped |
-| Email content | Campaign and template HTML sanitised on save (sanitize-html allowlist: no scripts, event handlers or `javascript:` URLs); personalisation values HTML-escaped; tags are lookups only, with no expression language (no template injection) |
+| Email content | Campaign content validated and rendered on the server, and sanitised (sanitize-html allowlist: no scripts, event handlers or `javascript:` URLs); personalisation values HTML-escaped; tags are lookups only, with no expression language (no template injection) |
 | Previews | Rendered email previews and "view in browser" pages are served with a sandbox CSP (no scripts, no same-origin) |
 | Links | Click tracking redirects only to URLs stored for that campaign (no open redirect). Recipient tokens are random UUIDs |
 | Webhook | Secret token in the URL or the `X-Webhook-Token` header, constant-time comparison; can be rotated in Settings |
@@ -50,7 +50,7 @@ meet POPIA.
 | Store consent date and source | Consent record per contact (method, purpose, date, source, evidence, recorded by) |
 | How and why permission was obtained | `method`, `purpose` and `evidence` fields; required on manual add and import |
 | Double opt-in | Double opt-in lists with a confirmation email; a GET never confirms (link scanners), the person clicks *Confirm* |
-| Unsubscribe in every email | Unsubscribe link (footer added automatically if a template lacks it) and RFC 8058 one-click headers |
+| Unsubscribe in every email | Every email's footer has the unsubscribe link (one is added if it would ever be missing) and RFC 8058 one-click headers |
 | Identify the sender | Organisation name and postal address in every footer; sending is blocked until they are set |
 | Suppression record | Permanent `portal.suppressions` register, checked at campaign start and again before every send |
 | No re-import of suppressed contacts | Import preview and commit exclude suppressed addresses |

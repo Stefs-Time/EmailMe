@@ -14,7 +14,7 @@ test('builder: starter document renders with personalisation intact', () => {
 
 test('builder: defaults are applied to missing props', () => {
   const { doc } = renderDocument({ blocks: [{ id: 'a', type: 'button' }, { id: 'b', type: 'columns' }] });
-  assert.equal(doc.blocks[0].props.bg, '#1f4e8c');
+  assert.equal(doc.blocks[0].props.bg, '', 'empty = follow the brand colour');
   assert.equal(doc.blocks[0].props.align, 'center');
   assert.deepEqual(doc.blocks[1].props.columns, [[], []]);
 });
@@ -78,42 +78,53 @@ test('builder: existing HTML becomes one HTML block', () => {
   assert.match(html, /<p>Old content<\/p>/);
 });
 
-test('template builder: renders a complete document around {{ content }}', () => {
-  const { renderTemplate, starterTemplate } = require('../../src/engine/blocks');
+test('email design: one layout around every email, built from settings', () => {
+  const { renderLayout } = require('../../src/engine/layout');
   const { sanitize } = require('../../src/engine/render');
-  const t = renderTemplate({ ...starterTemplate(), settings: { width: 640, font: 'georgia', page_bg: '#e8f1ef' } });
-  assert.equal((t.html.match(/\{\{ content \}\}/g) || []).length, 1);
-  assert.match(t.html, /max-width:640px/);
-  assert.match(t.html, /background-color:#e8f1ef/);
-  assert.match(t.html, /Georgia/);
-  const clean = sanitize(t.html);
-  assert.match(clean, /^<!doctype html>/, 'doctype kept after sanitising');
-  assert.match(clean, /href="\{\{ unsubscribe_url \}\}"/);
+  const layout = renderLayout({ email_background: '#e8f1ef', email_font: 'georgia', email_logo_url: 'https://cdn.example/logo.png',
+    email_logo_width: 120, email_header_align: 'center', email_footer_text: 'Proudly <local>', email_show_preferences: false });
+  assert.equal((layout.match(/\{\{ content \}\}/g) || []).length, 1);
+  assert.match(layout, /background-color:#e8f1ef/);
+  assert.match(layout, /Georgia/);
+  assert.match(layout, /src="https:\/\/cdn\.example\/logo\.png"[^>]*width="120"/);
+  assert.match(layout, /Proudly &lt;local&gt;/, 'footer text is escaped');
+  assert.doesNotMatch(layout, /preferences_url/);
+  assert.match(layout, /href="\{\{ unsubscribe_url \}\}"/);
+  assert.match(sanitize(layout), /^<!doctype html>/, 'doctype kept after sanitising');
+  // Invalid values never reach the HTML.
+  const bad = renderLayout({ email_background: 'red;x:expression(1)', email_logo_url: 'javascript:alert(1)', email_logo_width: 9999 });
+  assert.doesNotMatch(bad, /expression|javascript/);
+  assert.match(bad, /<span[^>]*>\{\{ org_name \}\}<\/span>/, 'organisation name when there is no logo');
 
-  const { renderDocument, starterDocument } = require('../../src/engine/blocks');
   const m = renderMessage({
     campaign: { subject: 's', body_html: renderDocument(starterDocument()).html, track_clicks: false, track_opens: false },
-    templateHtml: clean, contact: { first_name: 'Thandi' }, token: 'tok',
+    contact: { first_name: 'Thandi' }, token: 'tok',
     settings: { org_name: 'Acme', org_address: '1 Road' }, publicUrl: 'https://mh.example',
   });
   assert.match(m.html, /Hello Thandi/);
   assert.equal((m.html.match(/https:\/\/mh\.example\/u\/tok/g) || []).length, 1, 'footer link used; no second footer added');
   assert.match(m.html, /Acme · 1 Road/);
+  assert.match(m.html, /href="https:\/\/mh\.example\/p\/tok"/, 'preferences link shown by default');
 });
 
-test('template builder: needs exactly one top-level content block; campaigns cannot use template blocks', () => {
-  const { renderTemplate, renderDocument } = require('../../src/engine/blocks');
-  assert.throws(() => renderTemplate({ blocks: [{ id: 'f', type: 'footer' }] }));
-  assert.throws(() => renderTemplate({ blocks: [{ id: 'a', type: 'content' }, { id: 'b', type: 'content' }] }));
-  assert.throws(() => renderTemplate({ blocks: [{ id: 'c', type: 'columns', props: { columns: [[{ id: 'x', type: 'content' }], []] } }] }));
-  assert.throws(() => renderTemplate({ settings: { width: 2000 }, blocks: [{ id: 'a', type: 'content' }] }));
-  assert.throws(() => renderTemplate({ settings: { font: 'Comic Sans' }, blocks: [{ id: 'a', type: 'content' }] }));
-  assert.throws(() => renderDocument({ blocks: [{ id: 'a', type: 'content' }] }));
+test('email design: headings, buttons and links follow the brand colours unless set per block', () => {
+  const brand = { email_brand_color: '#aa0011', email_heading_color: '#003322' };
+  const { html } = renderDocument({ blocks: [
+    { id: 'h', type: 'heading', props: { text: 'Hi' } },
+    { id: 'o', type: 'heading', props: { text: 'Old default', color: '#16365f' } },
+    { id: 'x', type: 'heading', props: { text: 'Own colour', color: '#123456' } },
+    { id: 'b', type: 'button', props: { label: 'Go', url: 'https://a.example' } },
+    { id: 't', type: 'text', props: { html: '<p><a href="https://a.example">link</a></p>' } },
+  ] }, brand);
+  assert.equal((html.match(/color:#003322/g) || []).length, 2, 'unset and old-default headings follow the brand');
+  assert.match(html, /color:#123456/, 'a chosen colour is kept');
+  assert.match(html, /bgcolor="#aa0011"/);
+  assert.match(html, /<a style="color:#aa0011/);
+  assert.throws(() => renderDocument({ blocks: [{ id: 'a', type: 'content' }] }), 'template-only blocks no longer exist');
   assert.throws(() => renderDocument({ blocks: [{ id: 'f', type: 'footer' }] }));
 });
 
 test('builder: platform-managed link destinations', () => {
-  const { renderDocument, renderTemplate, starterTemplate } = require('../../src/engine/blocks');
   const { html } = renderDocument({ blocks: [
     { id: 'a', type: 'button', props: { label: 'Unsubscribe', link: 'unsubscribe' } },
     { id: 'b', type: 'button', props: { label: 'Preferences', link: 'preferences' } },
@@ -132,8 +143,4 @@ test('builder: platform-managed link destinations', () => {
   assert.match(m.html, /href="https:\/\/mh\.example\/p\/tok"/);
   assert.match(m.html, /href="https:\/\/mh\.example\/s\/stay\/tok"/);
   assert.match(m.html, /href="https:\/\/mh\.example\/t\/c\/tok\/9"/, 'web addresses are still click-tracked');
-
-  assert.match(renderTemplate(starterTemplate()).html, /href="\{\{ preferences_url \}\}"/, 'template footer links to preferences');
-  const noPrefs = renderTemplate({ ...starterTemplate(), blocks: starterTemplate().blocks.map((b) => (b.type === 'footer' ? { ...b, props: { prefs: false } } : b)) });
-  assert.doesNotMatch(noPrefs.html, /preferences_url/);
 });

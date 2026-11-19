@@ -9,7 +9,7 @@ const { Settings } = require('./lib/settings');
 const { ensureEnvAdmin } = require('./lib/envAdmin');
 const { createTransport } = require('./engine/mailer');
 const { Worker } = require('./engine/worker');
-const { ensureDefaultTemplate, ensureTemplatePresets } = require('./modules/templates/routes');
+const { upgradeToEmailDesign } = require('./lib/emailDesign');
 const { announceSetupCode } = require('./modules/settings/routes');
 const { recoverInterrupted } = require('./modules/imports/service');
 const { createApp } = require('./app');
@@ -35,8 +35,7 @@ async function main() {
   const encKey = await getOrCreate(pool, 'enc_key');
   const settings = new Settings(pool, encKey, config);
   await ensureEnvAdmin(pool, config, logger);
-  await ensureDefaultTemplate(pool);
-  await ensureTemplatePresets(pool);
+  await upgradeToEmailDesign(pool, settings, logger);
   await recoverInterrupted(pool);
   await announceSetupCode(pool, logger);
 

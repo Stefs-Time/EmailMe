@@ -1,7 +1,10 @@
 import { get, put, post } from '../api.js';
 import { html, raw, mount, $, $$, loading, toast, errorToast, num, ago } from '../ui.js';
+import { pickImage } from '../images.js';
 
-const TABS = [['general', 'General'], ['sending', 'Sending'], ['bounces', 'Bounces'], ['compliance', 'Compliance & backups']];
+const TABS = [['general', 'General'], ['design', 'Email design'], ['sending', 'Sending'], ['bounces', 'Bounces'], ['compliance', 'Compliance & backups']];
+const FONTS = [['arial', 'Arial'], ['helvetica', 'Helvetica'], ['verdana', 'Verdana'], ['trebuchet', 'Trebuchet MS'], ['georgia', 'Georgia (serif)']];
+const DESIGN_KEYS = ['email_logo_url', 'email_logo_width', 'email_header_align', 'email_brand_color', 'email_heading_color', 'email_background', 'email_font', 'email_footer_text', 'email_show_preferences'];
 
 export async function render(el, ctx, [tabArg]) {
   const tab = TABS.some(([k]) => k === tabArg) ? tabArg : 'general';
@@ -21,6 +24,31 @@ export async function render(el, ctx, [tabArg]) {
         <input class="form-control" name="public_url" type="url" value="${s.public_url}" placeholder="${s.effective_public_url || 'https://mail.example.co.za'}" ${s.public_url_locked ? raw('disabled') : ''}>
         <div class="form-text">${s.public_url_locked ? html`Set by MailHarbor for your service: <strong>${s.effective_public_url}</strong>. Contact support to change it.` : s.public_url || !s.effective_public_url ? 'Used in unsubscribe, tracking and "view in browser" links. Must be https:// in production.' : html`Leave empty to use the hosting platform's address (<strong>${s.effective_public_url}</strong>), or enter your custom domain.`}</div></div>
     </div></div></div>`,
+    design: html`<div class="row g-3">
+      <div class="col-xl-5"><div class="card"><div class="card-body"><div class="row g-3">
+        <div class="col-12"><p class="small text-muted-2 mb-0">Every email uses this design: your logo or name at the top, the campaign in a white card, and a footer with your
+          address and the unsubscribe and preferences links. Campaigns only contain their content. Sent campaigns keep the design they were sent with.</p></div>
+        <div class="col-12"><label class="form-label" for="d-logo">Logo <span class="text-muted-2 small">(optional; without one, your organisation name is shown)</span></label>
+          <div class="input-group"><input class="form-control" id="d-logo" name="email_logo_url" type="url" value="${s.email_logo_url}" placeholder="https://…">
+            <button class="btn btn-outline-secondary" type="button" id="d-pick"><i class="bi bi-images me-1"></i>Images</button></div></div>
+        <div class="col-6"><label class="form-label" for="d-lw">Logo width (px)</label><input class="form-control" id="d-lw" name="email_logo_width" type="number" min="40" max="300" value="${s.email_logo_width}"></div>
+        <div class="col-6"><label class="form-label" for="d-al">Header position</label><select class="form-select" id="d-al" name="email_header_align">
+          ${[['left', 'Left'], ['center', 'Centred']].map(([k, l]) => html`<option value="${k}" ${s.email_header_align === k ? raw('selected') : ''}>${l}</option>`)}</select></div>
+        <div class="col-4"><label class="form-label" for="d-brand">Brand colour</label><input class="form-control form-control-color w-100" id="d-brand" name="email_brand_color" type="color" value="${s.email_brand_color}">
+          <div class="form-text">Buttons and links</div></div>
+        <div class="col-4"><label class="form-label" for="d-head">Headings</label><input class="form-control form-control-color w-100" id="d-head" name="email_heading_color" type="color" value="${s.email_heading_color}"></div>
+        <div class="col-4"><label class="form-label" for="d-bg">Background</label><input class="form-control form-control-color w-100" id="d-bg" name="email_background" type="color" value="${s.email_background}"></div>
+        <div class="col-12"><label class="form-label" for="d-font">Font</label><select class="form-select" id="d-font" name="email_font">
+          ${FONTS.map(([k, l]) => html`<option value="${k}" ${s.email_font === k ? raw('selected') : ''}>${l}</option>`)}</select>
+          <div class="form-text">Email-safe fonts that every device has.</div></div>
+        <div class="col-12"><label class="form-label" for="d-foot">Footer line</label><input class="form-control" id="d-foot" name="email_footer_text" maxlength="300" value="${s.email_footer_text}">
+          <div class="form-text">Shown under your organisation name and postal address. You can use {{ org_name }}.</div></div>
+        <div class="col-12"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" role="switch" id="d-prefs" name="email_show_preferences" ${check(s.email_show_preferences)}><label class="form-check-label" for="d-prefs">Show a "Manage preferences" link in the footer</label></div>
+          <div class="form-text">The unsubscribe and "View in browser" links are always included.</div></div>
+      </div></div></div></div>
+      <div class="col-xl-7"><div class="card"><div class="card-header">Preview <span class="small text-muted-2">· updates as you change the design (not saved until you press Save)</span></div>
+        <div class="card-body p-2"><iframe id="d-preview" class="design-preview" title="Email design preview" sandbox="allow-popups"></iframe></div></div></div>
+    </div>`,
     sending: html`<div class="card mb-3"><div class="card-header">Sender</div><div class="card-body"><div class="row g-3">
       <div class="col-md-6"><label class="form-label">From name</label><input class="form-control" name="from_name" value="${s.from_name}" maxlength="120"></div>
       <div class="col-md-6"><label class="form-label">From address</label><input class="form-control" name="from_email" type="email" value="${s.from_email}">
@@ -90,7 +118,7 @@ export async function render(el, ctx, [tabArg]) {
     </div></div>`,
   };
 
-  mount(el, html`<div class="page-head"><div><h1>Settings</h1><p>Organisation, sending, bounce handling and compliance. Your database and mail server connection are managed by MailHarbor.</p></div></div>
+  mount(el, html`<div class="page-head"><div><h1>Settings</h1><p>Organisation, email design, sending, bounce handling and compliance. Your database and mail server connection are managed by MailHarbor.</p></div></div>
     <ul class="nav nav-tabs mb-3">${TABS.map(([k, l]) => html`<li class="nav-item"><a class="nav-link ${k === tab ? 'active' : ''}" href="#/settings/${k}" ${k === tab ? raw('aria-current="page"') : ''}>${l}</a></li>`)}</ul>
     <form id="sf" novalidate>${sections[tab]}
       <div class="mt-3 d-flex gap-2 align-items-center"><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save settings</button><span class="small text-muted-2" id="saved"></span></div></form>`);
@@ -101,8 +129,9 @@ export async function render(el, ctx, [tabArg]) {
     const v = (n) => f.elements[n];
     const body = {};
     for (const k of ['org_name', 'org_address', 'public_url', 'from_name', 'from_email', 'reply_to', 'bounce_address', 'utm_source', 'utm_medium', 'utm_domains']) if (v(k) && !v(k).disabled) body[k] = v(k).value.trim();
-    for (const k of ['send_rate_per_second', 'send_max_per_hour', 'soft_bounce_limit', 'backup_stale_hours']) if (v(k)) body[k] = Number(v(k).value);
-    for (const k of ['track_opens', 'track_clicks', 'global_unsubscribe', 'utm_enabled']) if (v(k)) body[k] = v(k).checked;
+    for (const k of ['send_rate_per_second', 'send_max_per_hour', 'soft_bounce_limit', 'backup_stale_hours', 'email_logo_width']) if (v(k)) body[k] = Number(v(k).value);
+    for (const k of ['track_opens', 'track_clicks', 'global_unsubscribe', 'utm_enabled', 'email_show_preferences']) if (v(k)) body[k] = v(k).checked;
+    for (const k of ['email_logo_url', 'email_header_align', 'email_brand_color', 'email_heading_color', 'email_background', 'email_font', 'email_footer_text']) if (v(k)) body[k] = v(k).value.trim();
     if (v('mb_host')) {
       body.bounce_mailbox = { enabled: v('mb_enabled').checked, host: v('mb_host').value.trim(), port: Number(v('mb_port').value), secure: v('mb_secure').checked,
         user: v('mb_user').value.trim(), folder: v('mb_folder').value.trim() || 'INBOX', after: v('mb_after').value, interval_minutes: Number(v('mb_interval').value) };
@@ -115,6 +144,26 @@ export async function render(el, ctx, [tabArg]) {
       if (v('mb_password')) v('mb_password').value = '';
     } catch (err) { errorToast(err); }
   });
+
+  // Email design: live preview from the unsaved values (rendered by the server, shown sandboxed).
+  const preview = $('#d-preview', el);
+  if (preview) {
+    let t;
+    const refresh = () => {
+      const q = new URLSearchParams();
+      for (const k of DESIGN_KEYS) {
+        const input = f.elements[k];
+        if (input) q.set(k, input.type === 'checkbox' ? String(input.checked) : input.value.trim());
+      }
+      preview.src = `/api/settings/email-preview?${q}`;
+    };
+    f.addEventListener('input', () => { clearTimeout(t); t = setTimeout(refresh, 400); });
+    f.addEventListener('change', () => { clearTimeout(t); t = setTimeout(refresh, 100); });
+    $('#d-pick', el).addEventListener('click', () => pickImage({
+      onPick: (img) => { f.elements.email_logo_url.value = img.url; refresh(); },
+    }));
+    refresh();
+  }
 
   $('#smtp-test', el)?.addEventListener('click', async (e) => {
     e.target.disabled = true;

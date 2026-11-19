@@ -15,7 +15,7 @@ reputation and provider agreements stay yours.
 | Hosting, security updates and new versions | Organisation details, sender, sending speed |
 | Your database and daily backups | Users and roles |
 | Monitoring and uptime | Bounce mailbox and webhook |
-| Your web address (e.g. `https://mail.yourcompany.co.za`) | Sign-up forms, images, Google Analytics tags |
+| Your web address (e.g. `https://mail.yourcompany.co.za`) | Email design (logo, colours, footer), sign-up forms, images, Google Analytics tags |
 | The connection to your mail server (SMTP) | Compliance options, contacts, lists and campaigns |
 
 Contact MailHarbor support to:
@@ -45,8 +45,19 @@ Contact MailHarbor support to:
 - **Public web address:** the `https://` address of your MailHarbor. All unsubscribe, tracking and view-online links
   use it. MailHarbor usually sets it for you; contact support to change it.
 
+### Email design
+Every email uses one layout: header (your logo, or your organisation name), the campaign's content in a white card, and
+a footer with your organisation name and postal address, an optional footer line, and the Unsubscribe, Manage
+preferences and View in browser links. There are no per-campaign templates.
+- **Logo**, its width and position; **brand colour** (buttons and links), **heading colour**, **background** and
+  **font**; the **footer line**; whether to show *Manage preferences*.
+- Content blocks follow these colours unless someone picks a colour for a block.
+- The preview updates as you type; changes apply when you press **Save settings**.
+- Campaigns already sent keep the design they were sent with, including on their *View in browser* page.
+
 ### Sending
-- **From name / From address:** use an address on your authenticated sending domain. Campaigns can override it.
+- **From name / From address:** use an address on your authenticated sending domain. New campaigns use it unless
+  someone sets a different sender in the campaign.
 - **Reply-to:** optional; where replies go.
 - **Emails per second / Maximum per hour:** stay within your provider's limits. On a new domain start at 2–5 per second
   and increase gradually over a few weeks (warm-up).
@@ -108,7 +119,7 @@ Then open **System health**. Everything marked critical must be green before the
 | Role | Can |
 |---|---|
 | Viewer | Read dashboards, contacts, lists, campaigns, reports. No exports |
-| Manager | Everything a viewer can, plus: contacts, lists, imports, exports, campaigns (write, test, send), templates, suppress, review queue, System health |
+| Manager | Everything a viewer can, plus: contacts, lists, imports, exports, campaigns (write, test, send), images, suppress, review queue, System health |
 | Administrator | Everything a manager can, plus: Settings, users, reactivation, erasure, list deletion, audit log |
 
 - Accounts lock for 15 minutes after 10 failed sign-ins. Administrators reset passwords under **Users → Edit**.

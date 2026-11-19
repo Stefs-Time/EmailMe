@@ -88,7 +88,7 @@ async function newCampaign(name, lists = [listId], body = '<p>Hello {{ first_nam
   const c = await http('admin', 'POST', '/api/campaigns', { name });
   const r = await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, {
     name, subject: `${name} for {{ first_name }}`, preheader: 'Preview', from_name: 'Acme', from_email: 'news@acme.example', reply_to: '',
-    template_id: c.data.template_id, editor: 'visual', body_html: body, body_text: '', track_opens: true, track_clicks: true, list_ids: lists,
+    body_html: body, track_opens: true, track_clicks: true, list_ids: lists,
   });
   assert.equal(r.status, 200, JSON.stringify(r));
   return c.data.id;
@@ -123,7 +123,7 @@ before(async () => {
   const { Settings } = require('../../src/lib/settings');
   const { createTransport } = require('../../src/engine/mailer');
   const { Worker } = require('../../src/engine/worker');
-  const { ensureDefaultTemplate, ensureTemplatePresets } = require('../../src/modules/templates/routes');
+  const { upgradeToEmailDesign } = require('../../src/lib/emailDesign');
   const { announceSetupCode } = require('../../src/modules/settings/routes');
   const { createApp } = require('../../src/app');
   const config = loadConfig({ DATABASE_URL: DB, SMTP_HOST: '127.0.0.1', SMTP_PORT: String(sink.port), SMTP_USER: sink.user, SMTP_PASSWORD: sink.pass,
@@ -133,8 +133,7 @@ before(async () => {
   await pool.query('DROP SCHEMA IF EXISTS portal CASCADE');
   await migrate(pool, logger);
   settings = new Settings(pool, await getOrCreate(pool, 'enc_key'), config);
-  await ensureDefaultTemplate(pool);
-  await ensureTemplatePresets(pool);
+  await upgradeToEmailDesign(pool, settings, logger);
   await announceSetupCode(pool, logger);
   const transport = createTransport(config);
   worker = new Worker({ pool, settings, transport, logger });
@@ -433,7 +432,7 @@ t('drag-and-drop builder: new campaigns start in the builder; the server validat
   assert.equal(c.data.body_json.blocks.length, 3, 'starter design');
 
   const base = { name: 'Builder campaign', subject: 'Designed for {{ first_name }}', preheader: '', from_name: 'Acme', from_email: 'news@acme.example',
-    reply_to: '', template_id: c.data.template_id, editor: 'builder', body_text: '', track_opens: true, track_clicks: true, list_ids: [listId] };
+    reply_to: '', editor: 'builder', body_text: '', track_opens: true, track_clicks: true, list_ids: [listId] };
   const bad = await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, { ...base, body_json: { blocks: [{ id: 'x', type: 'button', props: { url: 'javascript:alert(1)' } }] } });
   assert.equal(bad.status, 422, 'invalid design rejected');
   assert.ok(bad.error.details.some((d) => d.field.includes('url')));
@@ -471,45 +470,70 @@ t('drag-and-drop builder: new campaigns start in the builder; the server validat
   assert.equal(copy.data.body_json.blocks.length, 3, 'duplicate keeps the design');
 });
 
-t('template builder: default template is a builder design; templates are validated, rendered and wrap campaigns', async () => {
-  const list = await http('admin', 'GET', '/api/templates');
-  const def = list.data.find((x) => x.is_default);
-  assert.equal(def.editor, 'builder', 'built-in template is a drag-and-drop design');
+t('email design: one layout from Settings wraps every email; sent campaigns keep the design they were sent with', async () => {
+  // Validated like any setting.
+  assert.equal((await http('admin', 'PUT', '/api/settings', { email_brand_color: 'red' })).status, 422);
+  assert.equal((await http('admin', 'PUT', '/api/settings', { email_logo_url: 'javascript:alert(1)' })).status, 422);
+  assert.equal((await http('viewer', 'GET', '/api/settings/email-preview')).status, 403, 'design is an administrator setting');
+  const saved = await http('admin', 'PUT', '/api/settings', {
+    email_logo_url: 'https://cdn.acme.example/logo.png', email_brand_color: '#aa0011', email_heading_color: '#003322',
+    email_background: '#eef3f1', email_font: 'georgia', email_footer_text: 'Proudly South African.', email_show_preferences: false,
+  });
+  assert.equal(saved.status, 200, JSON.stringify(saved));
 
-  const noContent = await http('admin', 'POST', '/api/templates', { name: 'Broken', editor: 'builder', body_json: { blocks: [{ id: 'f', type: 'footer' }] } });
-  assert.equal(noContent.status, 422);
-  const htmlNoContent = await http('admin', 'POST', '/api/templates', { name: 'Broken', html: '<p>no slot</p>' });
-  assert.equal(htmlNoContent.status, 422);
+  // Preview: unsaved values in the query string, nothing stored.
+  const pv = await http('admin', 'GET', '/api/settings/email-preview?email_brand_color=%23123456&email_logo_url=', undefined, { raw: true });
+  const pvHtml = await pv.text();
+  assert.match(pv.headers.get('content-security-policy'), /sandbox/);
+  assert.match(pvHtml, /background-color:#123456/, 'preview uses the unsaved brand colour');
+  assert.doesNotMatch(pvHtml, /logo\.png/, 'and the unsaved (empty) logo');
+  assert.equal((await settings.all()).email_brand_color, '#aa0011', 'preview does not save');
 
-  const design = { version: 1, settings: { page_bg: '#e8f1ef', width: 640 }, blocks: [
-    { id: 'l', type: 'image', props: { src: 'https://cdn.acme.example/logo.png', alt: 'Acme logo', width: 40 } },
-    { id: 'c', type: 'content' },
-    { id: 'f', type: 'footer', props: { text: 'Proudly South African.' } },
-  ] };
-  const created = await http('admin', 'POST', '/api/templates', { name: 'Spring brand', editor: 'builder', body_json: design });
-  assert.equal(created.status, 201, JSON.stringify(created));
-  const t = (await http('admin', 'GET', `/api/templates/${created.data.id}`)).data;
-  assert.equal(t.editor, 'builder');
-  assert.equal(t.body_json.settings.width, 640);
-  assert.match(t.html, /\{\{ content \}\}/);
-
-  await addContact('tpl-tom@ok.example');
-  const c = await http('admin', 'POST', '/api/campaigns', { name: 'Uses spring brand' });
+  await addContact('design-dee@ok.example');
+  const c = await http('admin', 'POST', '/api/campaigns', { name: 'Uses the design' });
+  assert.equal(c.data.from_email, '', 'sender left empty means Settings → Sending');
+  assert.equal((await http('admin', 'GET', `/api/campaigns/${c.data.id}`)).data.defaults.design.brand, '#aa0011', 'editor gets the brand colours');
   c.data.body_json.blocks.find((b) => b.type === 'button').props.url = 'https://acme.example/spring';
   const r = await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, {
-    name: 'Uses spring brand', subject: 'Spring', preheader: '', from_name: 'Acme', from_email: 'news@acme.example', reply_to: '',
-    template_id: created.data.id, editor: 'builder', body_json: c.data.body_json, body_text: '', track_opens: false, track_clicks: false, list_ids: [listId],
+    name: 'Uses the design', subject: 'Spring', preheader: '', from_name: '', from_email: '', reply_to: '',
+    body_json: c.data.body_json, track_opens: false, track_clicks: false, list_ids: [listId],
   });
   assert.equal(r.status, 200, JSON.stringify(r));
   sink.messages.length = 0;
   assert.equal((await http('admin', 'POST', `/api/campaigns/${c.data.id}/send`)).status, 200);
   await drain();
-  const [m] = sinkTo('tpl-tom@ok.example');
+  const [m] = sinkTo('design-dee@ok.example');
   assert.ok(m, 'delivered');
-  assert.match(m.parsed.html, /alt="Acme logo"/);
+  assert.match(m.parsed.html, /src="https:\/\/cdn\.acme\.example\/logo\.png"/, 'logo header');
+  assert.match(m.parsed.html, /background-color:#eef3f1/, 'page background');
+  assert.match(m.parsed.html, /Georgia/, 'font');
+  assert.match(m.parsed.html, /bgcolor="#aa0011"/, 'button follows the brand colour');
+  assert.match(m.parsed.html, /color:#003322/, 'heading follows the heading colour');
   assert.match(m.parsed.html, /Proudly South African\./);
-  assert.match(m.parsed.html, /Hello tpl-tom/);
-  assert.equal((m.parsed.html.match(/\/u\/[0-9a-f-]{36}/g) || []).length, 1, 'one unsubscribe link (from the template footer)');
+  assert.doesNotMatch(m.parsed.html, /Manage preferences/, 'preferences link switched off');
+  assert.equal((m.parsed.html.match(/\/u\/[0-9a-f-]{36}/g) || []).length, 1, 'exactly one unsubscribe link (from the footer)');
+  assert.equal(m.parsed.from.value[0].address, 'news@acme.example', 'sender from Settings');
+
+  // Frozen: changing the design later never changes what was sent.
+  const frozen = (await pool.query('SELECT layout_html FROM portal.campaigns WHERE id = $1', [c.data.id])).rows[0].layout_html;
+  assert.match(frozen, /#eef3f1/);
+  await http('admin', 'PUT', '/api/settings', { email_brand_color: '#0055ff', email_background: '#ffffff' });
+  const { rows: msg } = await pool.query(`SELECT uuid FROM portal.messages WHERE campaign_id = $1 AND kind = 'campaign'`, [c.data.id]);
+  const view = await (await fetch(`${base}/v/${msg[0].uuid}`)).text();
+  assert.match(view, /bgcolor="#aa0011"/, 'view in browser shows the colours it was sent with');
+  assert.doesNotMatch(view, /#0055ff/);
+  const draft = await http('admin', 'POST', '/api/campaigns', { name: 'New look' });
+  const pv2 = await (await http('admin', 'GET', `/api/campaigns/${draft.data.id}/preview`, undefined, { raw: true })).text();
+  assert.match(pv2, /bgcolor="#0055ff"/, 'drafts use the current design');
+  await http('admin', 'PUT', '/api/settings', { email_logo_url: '', email_background: '#f4f6f9', email_brand_color: '#1f4e8c', email_show_preferences: true });
+
+  // Raw HTML from API clients becomes one HTML block in the builder.
+  const api = await http('admin', 'PUT', `/api/campaigns/${draft.data.id}`, { name: 'New look', subject: 'x', body_html: '<p>From the API <script>x()</script></p>', list_ids: [listId] });
+  assert.equal(api.status, 200, JSON.stringify(api));
+  assert.equal(api.data.editor, 'builder');
+  assert.equal(api.data.body_json.blocks[0].type, 'html');
+  assert.doesNotMatch(api.data.body_html, /<script/);
+  assert.equal((await http('admin', 'GET', '/api/templates')).status, 404, 'templates are gone');
 });
 
 t('samples and personalisation chips: ready-made designs; imported columns offered as fields', async () => {
@@ -547,7 +571,7 @@ t('platform-managed links: buttons go to MailHarbor pages (stay subscribed, pref
   design.blocks.push({ id: 'pb', type: 'button', props: { label: 'Manage preferences', link: 'preferences' } });
   const r = await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, {
     name: 'Still interested?', subject: 'Still interested?', preheader: '', from_name: 'Acme', from_email: 'news@acme.example', reply_to: '',
-    template_id: c.data.template_id, editor: 'builder', body_json: design, body_text: '', track_opens: false, track_clicks: true, list_ids: [l2.data.id],
+    editor: 'builder', body_json: design, body_text: '', track_opens: false, track_clicks: true, list_ids: [l2.data.id],
   });
   assert.equal(r.status, 200, JSON.stringify(r));
   assert.deepEqual((await http('admin', 'GET', `/api/campaigns/${c.data.id}`)).data.problems, [], 'no URL needed for platform links');
@@ -617,7 +641,7 @@ t('permission request: introduction sample asks for consent; "Yes" records evide
   assert.match(c.data.body_html, /href="\{\{ consent_url \}\}"/);
   const r = await http('admin', 'PUT', `/api/campaigns/${c.data.id}`, {
     name: 'Intro to prospects', subject: 'May we keep in touch?', preheader: '', from_name: 'Acme', from_email: 'news@acme.example', reply_to: '',
-    template_id: c.data.template_id, editor: 'builder', body_json: c.data.body_json, body_text: '', track_opens: false, track_clicks: true, list_ids: [l.data.id],
+    editor: 'builder', body_json: c.data.body_json, body_text: '', track_opens: false, track_clicks: true, list_ids: [l.data.id],
   });
   assert.equal(r.status, 200, JSON.stringify(r));
   assert.deepEqual((await http('admin', 'GET', `/api/campaigns/${c.data.id}`)).data.problems, []);
@@ -680,53 +704,116 @@ t('permission request: introduction sample asks for consent; "Yes" records evide
   assert.deepEqual(pv.data.sample.map((x) => x.email), ['pr-yes@ok.example']);
 });
 
-t('ready-made templates: Clean, Promotion and New release installed once; campaign samples use the matching template', async () => {
-  const { ensureTemplatePresets } = require('../../src/modules/templates/routes');
-  const list = (await http('admin', 'GET', '/api/templates')).data;
-  const presets = Object.fromEntries(list.filter((x) => x.sample_key).map((x) => [x.sample_key, x]));
-  assert.deepEqual(Object.keys(presets).sort(), ['clean', 'new-release', 'promotion']);
-  assert.ok(Object.values(presets).every((x) => x.editor === 'builder'));
+t('upgrade from templates: started campaigns keep their template; the default template becomes the email design; old drafts become builder documents', async () => {
+  const { upgradeToEmailDesign } = require('../../src/lib/emailDesign');
+  const tpl = (await pool.query(`INSERT INTO portal.templates (name, html, editor, body_json, is_default) VALUES ('Old brand',
+    '<html><body style="background:#123123">OLD {{ content }} <a href="{{ unsubscribe_url }}">Unsubscribe</a></body></html>', 'builder',
+    $1, FALSE) RETURNING id`, [{ version: 1, settings: { page_bg: '#123123', font: 'verdana' }, blocks: [
+    { id: 'l', type: 'image', props: { src: 'https://cdn.acme.example/old-logo.png', align: 'center' } }, { id: 'c', type: 'content' },
+    { id: 'f', type: 'footer', props: { text: 'Old footer', prefs: false } }] }])).rows[0].id;
+  await pool.query('UPDATE portal.templates SET is_default = FALSE');
+  await pool.query('UPDATE portal.templates SET is_default = TRUE WHERE id = $1', [tpl]);
+  const sent = (await pool.query(`INSERT INTO portal.campaigns (name, subject, status, started_at, template_id, editor, body_html)
+    VALUES ('Sent long ago', 'Old', 'sent', NOW() - INTERVAL '30 days', $1, 'visual', '<p>Old content</p>') RETURNING id`, [tpl])).rows[0].id;
+  const legacy = (await pool.query(`INSERT INTO portal.campaigns (name, subject, status, editor, body_html)
+    VALUES ('Old HTML draft', 'Draft', 'draft', 'html', '<p>Hand-written <b>HTML</b></p>') RETURNING id`)).rows[0].id;
+  await pool.query(`DELETE FROM portal.settings WHERE key IN ('email_font', 'email_logo_url', 'email_header_align', 'email_footer_text', 'email_show_preferences')`);
+  await pool.query(`DELETE FROM portal.sync_state WHERE key = 'email_design_upgrade'`);
+  await pool.query(`UPDATE portal.campaigns SET layout_html = NULL WHERE id = $1`, [sent]);
+  settings.invalidate();
 
-  const gallery = await http('admin', 'GET', '/api/templates/samples');
-  assert.deepEqual(gallery.data.map((x) => x.id), ['standard', 'clean', 'promotion', 'new-release']);
-  assert.equal((await http('admin', 'GET', '/api/templates/samples/promotion')).data.doc.settings.page_bg, '#0f2846');
+  await upgradeToEmailDesign(pool, settings, null);
+  const c = (await pool.query('SELECT layout_html FROM portal.campaigns WHERE id = $1', [sent])).rows[0];
+  assert.match(c.layout_html, /OLD \{\{ content \}\}/, 'sent campaign keeps its template');
+  const view = await http('admin', 'GET', `/api/campaigns/${sent}/preview`, undefined, { raw: true });
+  assert.match(await view.text(), /OLD <p>Old content<\/p>/);
+  const s = await settings.all();
+  assert.equal(s.email_font, 'verdana');
+  assert.equal(s.email_logo_url, 'https://cdn.acme.example/old-logo.png');
+  assert.equal(s.email_header_align, 'center');
+  assert.equal(s.email_footer_text, 'Old footer');
+  assert.equal(s.email_show_preferences, false);
+  assert.equal(s.email_background, '#f4f6f9', 'a value already set is not overwritten');
+  const d = (await http('admin', 'GET', `/api/campaigns/${legacy}`)).data;
+  assert.equal(d.editor, 'builder');
+  assert.equal(d.body_json.blocks[0].type, 'html');
+  assert.match(d.body_json.blocks[0].props.html, /Hand-written <b>HTML<\/b>/);
 
-  // Samples pick their matching template; the simple message keeps the default.
-  const promo = await http('admin', 'POST', '/api/campaigns', { name: 'Specials', sample: 'promotion' });
-  assert.equal(promo.data.template_id, presets.promotion.id);
-  const launch = await http('admin', 'POST', '/api/campaigns', { name: 'Launch', sample: 'product-launch' });
-  assert.equal(launch.data.template_id, presets['new-release'].id);
-  const plain = await http('admin', 'POST', '/api/campaigns', { name: 'Plain', sample: 'blank' });
-  assert.equal(plain.data.template_id, list.find((x) => x.is_default).id);
-  const samples = (await http('admin', 'GET', '/api/campaigns/samples')).data;
-  assert.equal(samples.find((x) => x.id === 'promotion').templateName, 'Promotion');
+  // Runs once.
+  await pool.query(`UPDATE portal.campaigns SET layout_html = 'changed' WHERE id = $1`, [sent]);
+  await upgradeToEmailDesign(pool, settings, null);
+  assert.equal((await pool.query('SELECT layout_html FROM portal.campaigns WHERE id = $1', [sent])).rows[0].layout_html, 'changed');
+  await http('admin', 'PUT', '/api/settings', { email_logo_url: '', email_header_align: 'left', email_show_preferences: true, email_font: 'arial' });
+});
 
-  // A delivered email is wrapped in the Promotion design.
-  await addContact('promo-pia@ok.example');
-  const doc = promo.data.body_json;
-  for (const b of doc.blocks.flatMap((x) => (x.type === 'columns' ? x.props.columns.flat() : [x]))) if (b.type === 'button') b.props.url = 'https://shop.acme.example';
-  const put = await http('admin', 'PUT', `/api/campaigns/${promo.data.id}`, {
-    name: 'Specials', subject: 'Specials', preheader: '', from_name: 'Acme', from_email: 'news@acme.example', reply_to: '',
-    template_id: presets.promotion.id, editor: 'builder', body_json: doc, body_text: '', track_opens: false, track_clicks: false, list_ids: [listId],
-  });
-  assert.equal(put.status, 200, JSON.stringify(put));
+t('report details: every number opens exactly the recipients or events behind it', async () => {
+  const l = await http('admin', 'POST', '/api/lists', { name: 'Drill-down', optin: 'single' });
+  const people = ['dd-ann@ok.example', 'dd-ben@ok.example', 'dd-cat@ok.example', 'dd-dan@ok.example'];
+  for (const email of people) await http('admin', 'POST', '/api/contacts', { email, firstName: email.slice(3, 6), listIds: [l.data.id], consent: { method: 'web_form' } });
+  const id = await newCampaign('Drill-down campaign', [l.data.id]);
   sink.messages.length = 0;
-  assert.equal((await http('admin', 'POST', `/api/campaigns/${promo.data.id}/send`)).status, 200, 'promotion sample is sendable once links are set');
+  assert.equal((await http('admin', 'POST', `/api/campaigns/${id}/send`)).status, 200);
   await drain();
-  const [m] = sinkTo('promo-pia@ok.example');
-  assert.match(m.parsed.html, /LIMITED-TIME OFFERS/);
-  assert.match(m.parsed.html, /background-color:#0f2846/);
-  assert.match(m.parsed.html, /This month's specials/);
+  const tok = async (email) => (await pool.query(`SELECT id, uuid FROM portal.messages WHERE campaign_id = $1 AND email = $2`, [id, email])).rows[0];
+  const ann = await tok('dd-ann@ok.example');
+  const ben = await tok('dd-ben@ok.example');
+  const cat = await tok('dd-cat@ok.example');
+  const { rows: links } = await pool.query('SELECT id FROM portal.links WHERE campaign_id = $1', [id]);
+  await fetch(`${base}/t/o/${ann.uuid}.gif`);
+  await fetch(`${base}/t/o/${ben.uuid}.gif`);
+  await fetch(`${base}/t/c/${ben.uuid}/${links[0].id}`, { redirect: 'manual' });
+  await webhook({ email: 'dd-cat@ok.example', type: 'hard', reason: '550 5.1.1 user unknown', message_id: cat.uuid, id: 'dd-1' });
+  await fetch(`${base}/u/${ann.uuid}`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'List-Unsubscribe=One-Click' });
+  await new Promise((r) => setTimeout(r, 200));
 
-  // Installed once: re-running adds nothing; a deleted preset stays deleted.
-  await ensureTemplatePresets(pool);
-  assert.equal((await pool.query('SELECT COUNT(*)::int AS n FROM portal.templates WHERE sample_key IS NOT NULL')).rows[0].n, 3);
-  await pool.query(`UPDATE portal.campaigns SET template_id = NULL WHERE template_id = $1`, [presets.clean.id]);
-  assert.equal((await http('admin', 'DELETE', `/api/templates/${presets.clean.id}`)).status, 200);
-  await ensureTemplatePresets(pool);
-  assert.equal((await pool.query(`SELECT COUNT(*)::int AS n FROM portal.templates WHERE sample_key = 'clean'`)).rows[0].n, 0, 'deleted preset is not re-added');
-  const welcome = await http('admin', 'POST', '/api/campaigns', { name: 'Welcome', sample: 'welcome' });
-  assert.equal(welcome.data.template_id, list.find((x) => x.is_default).id, 'falls back to the default template');
+  const report = (await http('admin', 'GET', `/api/reports/campaigns/${id}`)).data.campaign;
+  const detail = async (q) => {
+    const r = await http('viewer', 'GET', `/api/reports/details?kind=recipients&campaign=${id}&${q}`);
+    assert.equal(r.status, 200, JSON.stringify(r));
+    return r;
+  };
+  const emails = (r) => r.data.map((x) => x.email).sort();
+  // Each tile's number equals the rows it opens.
+  for (const [outcome, n] of [['all', report.targeted], ['sent', report.sent], ['opened', report.unique_opens], ['clicked', report.unique_clicks],
+    ['hard', report.hard_bounces], ['bounced', report.delivery_failures], ['unsubscribed', report.unsubscribes]]) {
+    assert.equal((await detail(`outcome=${outcome}`)).meta.total, n, outcome);
+  }
+  assert.deepEqual(emails(await detail('outcome=opened')), ['dd-ann@ok.example', 'dd-ben@ok.example']);
+  assert.deepEqual(emails(await detail(`outcome=clicked&link=${links[0].id}`)), ['dd-ben@ok.example']);
+  assert.deepEqual(emails(await detail('outcome=hard')), ['dd-cat@ok.example']);
+  assert.deepEqual(emails(await detail('outcome=unsubscribed')), ['dd-ann@ok.example']);
+  assert.deepEqual(emails(await detail('outcome=not_opened')), ['dd-cat@ok.example', 'dd-dan@ok.example']);
+  const row = (await detail('outcome=clicked')).data[0];
+  assert.equal(row.clicks, 1);
+  assert.equal(row.opens, 1);
+  assert.ok(row.contact_id, 'rows link to the contact');
+  const page = await detail('outcome=all&per_page=2&page=2');
+  assert.equal(page.data.length, 2);
+  assert.equal(page.meta.total, 4);
+  assert.deepEqual(emails(await detail('outcome=all&q=dd-dan')), ['dd-dan@ok.example']);
+
+  // Bounces, recipient actions and messages
+  const b = await http('viewer', 'GET', `/api/reports/details?kind=bounces&campaign=${id}&classification=hard&domain=ok.example`);
+  assert.deepEqual(b.data.map((x) => x.email), ['dd-cat@ok.example']);
+  assert.equal(b.data[0].code, '5.1.1');
+  const ev = await http('viewer', 'GET', `/api/reports/details?kind=events&type=unsubscribed&campaign=${id}`);
+  assert.deepEqual(ev.data.map((x) => x.email), ['dd-ann@ok.example']);
+  const ms = await http('viewer', 'GET', `/api/reports/details?kind=messages&campaign=${id}&state=sent&days=1`);
+  assert.equal(ms.meta.total, 4);
+  assert.equal((await http('viewer', 'GET', `/api/reports/details?kind=messages&campaign=${id}&state=sent&since=${encodeURIComponent(new Date(Date.now() + 60000).toISOString())}`)).meta.total, 0);
+
+  // Validation, permissions and CSV
+  assert.equal((await http('viewer', 'GET', '/api/reports/details?kind=recipients')).status, 422, 'campaign required');
+  assert.equal((await http('viewer', 'GET', '/api/reports/details?kind=nope')).status, 422);
+  assert.equal((await http('viewer', 'GET', `/api/reports/details?kind=recipients&campaign=${id}&outcome=drop%20table`)).status, 422);
+  assert.equal((await http('viewer', 'GET', '/api/reports/details?kind=bounces&domain=x%27%3B--')).status, 422);
+  assert.equal((await http('viewer', 'GET', `/api/reports/details?kind=recipients&campaign=${id}&format=csv`, undefined, { raw: true })).status, 403, 'viewers cannot export');
+  const csv = await http('admin', 'GET', `/api/reports/details?kind=recipients&campaign=${id}&outcome=opened&format=csv`, undefined, { raw: true });
+  assert.equal(csv.status, 200);
+  assert.match(csv.headers.get('content-type'), /text\/csv/);
+  const text = await csv.text();
+  assert.match(text, /Email,Name,Delivery/);
+  assert.equal(text.trim().split(/\r\n/).length, 3, 'header + 2 opened');
 });
 
 t('image library: uploads are compressed and stored in PostgreSQL, served publicly, protected while in use', async () => {

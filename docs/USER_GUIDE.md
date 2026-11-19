@@ -107,7 +107,7 @@ drop. MailHarbor:
 - compresses the image, typically by 80–95%.
 
 In the builder, select an image block and press **Choose or upload an image**. The image's name fills in its
-description (alt text); improve it if you can. An image used in a campaign or template can't be deleted, because emails
+description (alt text); improve it if you can. An image used in a campaign or as your logo can't be deleted, because emails
 that were already sent still show it.
 
 ### Update or remove someone
@@ -123,52 +123,56 @@ For an opt-out request by phone or email, use **Actions → Unsubscribe** and no
 
 ## Campaigns
 
+### How a campaign is put together
+Every email has the same structure, so a campaign is only its content:
+
+| Part | Where it comes from |
+|---|---|
+| Header: your logo, or your organisation name | **Settings → Email design** (administrators) |
+| Content: headings, text, images, buttons… | The campaign, built in the drag-and-drop builder |
+| Footer: organisation name and postal address, a footer line, Unsubscribe · Manage preferences · View in browser | **Settings → General** and **Email design** |
+| Sender (From, Reply-to) | **Settings → Sending**, unless the campaign sets its own |
+
+Headings, buttons and links use your brand colours unless you pick a colour for a block. When a campaign is sent, its
+content and design are frozen: changing the design later never changes emails that were already sent.
+
 ### Write
-1. Go to **Campaigns → New campaign** (or the button at the bottom-left) and pick a starting design:
+Go to **Campaigns → New campaign** and pick a starting design:
 
-   | Sample | Use it for |
-   |---|---|
-   | Simple message | A greeting, a paragraph and a button |
-   | Marketing promotion | Specials: banner, headline offer, two featured products, call to action |
-   | New product release | Announcing something new: hero image, key features, "Find out more" |
-   | Are you still interested? | Re-engaging quiet contacts: one button to stay, an easy unsubscribe |
-   | Introduction & permission request | Introducing yourself to new contacts and asking if you may keep emailing them (see below) |
-   | Want to find out more? | Following up interest: benefits, a customer quote, "Book a call" |
-   | Monthly newsletter | A lead story, two stories side by side, quick news items |
-   | Event invitation | Date, time, venue and an RSVP button |
-   | Welcome new subscribers | Saying hello and setting expectations |
+| Sample | Use it for |
+|---|---|
+| Simple message | A greeting, a paragraph and a button |
+| Marketing promotion | Specials: banner, headline offer, two featured products, call to action |
+| New product release | Announcing something new: hero image, key features, "Find out more" |
+| Are you still interested? | Re-engaging quiet contacts: one button to stay, an easy unsubscribe |
+| Introduction & permission request | Introducing yourself to new contacts and asking if you may keep emailing them (see below) |
+| Want to find out more? | Following up interest: benefits, a customer quote, "Book a call" |
+| Monthly newsletter | A lead story, two stories side by side, quick news items |
+| Event invitation | Date, time, venue and an RSVP button |
+| Welcome new subscribers | Saying hello and setting expectations |
 
-   Each sample also picks its **matching template**:
-   - Marketing promotion and Event invitation use **Promotion**;
-   - New product release uses **New release**;
-   - the others use **Clean**;
-   - Simple message uses your default template.
+The editor has three steps:
 
-   The gallery shows which template each sample uses, and you can change it in the envelope section.
-   Every sample is fully editable. Replace the [bracketed] text and add your images and links; the *Ready to send*
-   checklist reminds you about buttons that still need a link. To switch an existing draft to a sample, use
-   **Samples** above the builder (Undo brings your previous design back). Give the campaign an internal name and
-   choose a template.
-2. Fill in:
-   - **Subject**;
-   - **Preheader**: the grey preview text next to the subject in the inbox;
-   - **From**: leave empty to use the default sender;
-   - **Lists**.
+1. **Audience.** Tick the lists, and optionally narrow them to a saved segment. The count shows **how many people will
+   receive it**, already excluding suppressed, unconfirmed and held contacts.
+2. **Email.**
+   - **Subject** and **Preview text** (the grey text next to the subject in the inbox).
+   - **Campaign name**: internal, used in reports.
+   - **From**: shows the sender from Settings. Open it only to use a different sender for this campaign.
+   - **Tracking**: opens, clicks and Google Analytics tags are on by default. Open it to switch them off or rename the
+     campaign in Google Analytics.
+   - **Content**: build the email in the builder (see below). **Start from a sample** replaces the content with a
+     ready-made design; Undo brings the previous one back.
+3. **Review & send.** The checklist on the right lists anything still missing, for example a subject line or a button
+   without a link. **Preview** shows the email exactly as a recipient sees it, with your header and footer.
 
-   The panel on the right shows **how many people will receive it**. That count already excludes suppressed,
-   unconfirmed and held contacts.
-3. Design the content in the **Builder** (see *The drag-and-drop builder* below). The **Plain text** tab is generated
-   automatically; edit it if you want. If you prefer to write or paste HTML, use the **Visual** or **HTML** editor.
-   Converting a design to HTML is one-way: it comes back into the builder as a single HTML block.
-4. **Personalise** with the quick-click field buttons: **First name**, **Full name**, **Last name**, **Company**,
-   **Email**, **Your organisation**, plus your own imported columns (for example **City**). Click where the name should go
-   (in the subject, preview text, a heading, text or a button), then click the field: it is inserted right there, as a
-   tag such as `{{ first_name | "there" }}`. The text after `|` is used when a contact has no first name. The buttons are
-   under the preview text (for the subject) and above the email (for the content). The Preview shows real names.
-5. MailHarbor saves as you type. **Preview** shows the email as a sample contact would see it.
+**Personalise** with the quick-click field buttons: **First name**, **Full name**, **Last name**, **Company**,
+**Email**, **Your organisation**, plus your own imported columns (for example **City**). Click where the name should go
+(in the subject, preview text, a heading, text or a button), then click the field: it is inserted right there, as a
+tag such as `{{ first_name | "there" }}`. The text after `|` is used when a contact has no first name. The Preview
+shows real names.
 
-Every email automatically includes an unsubscribe link and your organisation's postal address. If you remove the
-unsubscribe link from the template, MailHarbor adds a footer anyway.
+MailHarbor saves as you type. The plain-text version of the email is generated automatically.
 
 ### The drag-and-drop builder
 New campaigns open in the builder. It has three parts:
@@ -201,10 +205,9 @@ New campaigns open in the builder. It has three parts:
 
   For everything except a web address, MailHarbor creates each person's own link when it sends. There's nothing to
   copy or set up. Everything those pages do is recorded on the contact and in the campaign report.
-- The builder warns when text and background colours are hard to read. The *Ready to send* checklist also warns about
+- The builder warns when text and background colours are hard to read. The *Review & send* checklist also warns about
   web-address buttons without a link and images without a description.
-
-The campaign's **Template** (in the envelope section) adds the header and footer around the design; **Preview** shows both.
+- Need raw HTML? Use the **HTML** block. Scripts and unsafe code are removed when it's saved.
 
 ### Test, then send
 1. Click **Send test** and enter up to 5 addresses. Check the email on your phone and on a computer, and click every link.
@@ -235,6 +238,10 @@ Open the campaign, or go to **Reports**:
 | Gave permission | Said yes on the permission page (shown when the campaign used it) |
 | Preference changes | Changed their lists on the preference page (shown when used) |
 
+**Every number opens the people behind it.** Click *Hard bounces* to see who bounced and why, *Unique clicks* to see
+who clicked, or a link's *People* count to see who clicked that link. Each list shows delivery status, opens, clicks,
+bounces and what the person did, links to the contact, and can be downloaded as CSV (managers and administrators).
+
 The report also lists the **top links** and a timeline.
 
 **Mail usage** (menu → Insights) shows everything MailHarbor sends through your SMTP server:
@@ -245,7 +252,8 @@ The report also lists the **top links** and a timeline.
 - what recipients did (unsubscribed, changed preferences, stayed subscribed, confirmed opt-in);
 - which campaigns were sent.
 
-Compare these numbers with your SMTP provider's limits.
+Every number and every day in the chart opens the emails behind it. Compare these numbers with your SMTP provider's
+limits.
 
 **Google Analytics.** Links in your campaigns get UTM tags automatically. For example, `?utm_source=mailharbor&utm_medium=email&utm_campaign=november-specials`.
 In Google Analytics you then see visits and sales from each campaign under *Traffic acquisition*, as
@@ -264,6 +272,9 @@ Benchmarks:
 - growth;
 - bounce trends by day, code and domain.
 
+Here too, every number opens its contacts or bounces: a source, a consent method, a month's growth, a bounce code or
+a domain.
+
 ### Review queue
 When a mail server rejects an email as **policy or spam** (code 5.7.x), the person is not wrongly marked as bounced. They
 are **held for review** and receive nothing until someone decides:
@@ -273,35 +284,17 @@ are **held for review** and receive nothing until someone decides:
 If many contacts at the same domain appear here, the problem is usually your sending reputation, not those people.
 Tell your administrator.
 
-### Templates
-**Templates** are the frame around every campaign: logo, name, colours, width, font and footer. They are designed in
-the same drag-and-drop builder, with two extra blocks:
+### Email design (administrators)
+**Settings → Email design** sets the look of every email:
+- **Logo**: choose one from Images or paste its address, with its width and position. Without a logo, your
+  organisation name is shown.
+- **Brand colour** (buttons and links), **heading colour** and **background**.
+- **Font**: email-safe fonts that every device has.
+- **Footer line** under your name and address, and whether to show a *Manage preferences* link. The unsubscribe and
+  *View in browser* links are always included.
 
-- **Campaign content**: marks where each campaign's design appears. A template has exactly one, and it cannot be
-  deleted or put inside columns. Move it to place blocks above (header) and below (footer) it.
-- **Footer**: your organisation name and postal address (from Settings → General), an optional extra line, and the
-  unsubscribe and "View in browser" links.
-
-Click empty space next to the email for **Page settings**: page background, content background, email width, font,
-content corners and padding. The preview shows the template around sample content and refreshes as you work.
-Press **Save** to keep your changes. Unlike campaigns, templates do not save automatically, because a template change
-affects every campaign that uses it.
-
-**Ready-made templates.** MailHarbor comes with four designs, marked *Ready-made* in the list:
-
-| Template | Look | Best for |
-|---|---|---|
-| MailHarbor standard | Light grey page, your name on top, white card | Everyday emails (the default) |
-| Clean | White and minimal, thin dividers | Updates, newsletters, personal notes |
-| Promotion | Bold navy page, "limited-time offers" banner, white card | Specials, sales, events |
-| New release | Light modern page, "new release" label, rounded card | Product launches, announcements |
-
-Make them yours: open one, select the image at the top and paste your logo's web address, then adjust colours and the
-footer line. **New template** opens the same gallery, so you can start another design from any of them. If you delete
-a ready-made template it stays deleted; campaign samples that used it fall back to your default template.
-
-Mark one template as the **default** for new campaigns. Templates written in HTML still work: use the **HTML** tab
-(the code must contain `{{ content }}`).
+The preview updates as you change things; press **Save settings** to apply. Drafts and future campaigns use the new
+design. Campaigns already sent keep the design they were sent with.
 
 ## Exports
 **Exports** offers:
@@ -334,7 +327,7 @@ Files are CSV and open in Excel. Each export is recorded in the audit log.
 | Role | Can |
 |---|---|
 | Viewer | View dashboards, contacts, lists, campaigns and reports (read-only, no exports) |
-| Manager | Everything a viewer can, plus: add and edit contacts and lists, import, export, write and send campaigns, edit templates, unsubscribe, suppress, resolve reviews, view System health |
+| Manager | Everything a viewer can, plus: add and edit contacts and lists, import, export, write and send campaigns, manage images, unsubscribe, suppress, resolve reviews, view System health |
 | Administrator | Everything a manager can, plus: Settings, users, reactivate suppressed contacts, erase contacts, delete lists, audit log |
 
 ## FAQ

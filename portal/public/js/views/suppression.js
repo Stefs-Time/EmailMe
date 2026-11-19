@@ -5,7 +5,9 @@ const REASONS = ['hard_bounce', 'complaint', 'unsubscribe', 'manual', 'blocklist
 
 export async function render(el, ctx) {
   const q = ctx.query();
-  const state = { q: q.get('q') || '', reason: '', include_lifted: 'false', page: 1 };
+  // created_from / created_to come from report links (e.g. "suppressed in March").
+  const state = { q: q.get('q') || '', reason: q.get('reason') || '', include_lifted: 'false',
+    created_from: q.get('created_from') || '', created_to: q.get('created_to') || '', page: 1 };
   mount(el, html`<div class="page-head"><div><h1>Suppression list</h1>
       <p>Addresses that must never receive marketing. Imports, list changes and campaigns cannot override this list.</p></div>
     <div class="d-flex gap-2 flex-wrap">
@@ -13,9 +15,11 @@ export async function render(el, ctx) {
       ${ctx.can('suppression:add') ? html`<button class="btn btn-primary" id="add"><i class="bi bi-plus-lg me-1"></i>Suppress addresses</button>` : ''}</div></div>
     <div class="card"><div class="card-body border-bottom"><form class="filter-bar" id="f">
       <input class="form-control search" name="q" placeholder="Search email" value="${state.q}" aria-label="Search">
-      <select class="form-select" name="reason" aria-label="Reason">${options(REASONS, '', { blank: 'All reasons' })}</select>
+      <select class="form-select" name="reason" aria-label="Reason">${options(REASONS, state.reason, { blank: 'All reasons' })}</select>
       <div class="form-check ms-2"><input class="form-check-input" type="checkbox" name="lifted" id="lifted"><label class="form-check-label" for="lifted">Include lifted</label></div>
-    </form></div><div id="t">${loading()}</div></div>`);
+    </form>
+    ${state.created_from || state.created_to ? html`<div class="mt-2 small" id="range-chip"><span class="badge text-bg-light border">Suppressed ${state.created_from ? `from ${state.created_from}` : ''} ${state.created_to ? `before ${state.created_to}` : ''}
+      <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline" id="range-clear" aria-label="Remove the date filter"><i class="bi bi-x-lg"></i></button></span></div>` : ''}</div><div id="t">${loading()}</div></div>`);
 
   let rows = [];
   async function load() {
@@ -25,7 +29,7 @@ export async function render(el, ctx) {
     mount($('#t', el), html`<div class="table-responsive"><table class="table table-hover align-middle">
       <thead><tr><th>Email</th><th>Reason</th><th>Source</th><th>Suppressed</th><th>By</th><th><span class="visually-hidden">Actions</span></th></tr></thead><tbody>
       ${rows.map((s) => html`<tr><td class="cell-email">${s.email || html`<span class="text-muted-2">[erased – hash only]</span>`}
-          ${s.subscriber_id ? html`<a class="small ms-1" href="#/contacts/${s.subscriber_id}">view</a>` : ''}
+          ${s.contact_id ? html`<a class="small ms-1" href="#/contacts/${s.contact_id}">view</a>` : ''}
           ${s.lifted_at ? html`<div class="small text-success">Lifted ${datetime(s.lifted_at)}: ${s.lift_reason}</div>` : ''}</td>
         <td><span class="status s-${{ hard_bounce: 'hard_bounced', complaint: 'complaint', unsubscribe: 'unsubscribed' }[s.reason] || 'blocklisted'}">${label(s.reason)}</span></td>
         <td class="small">${s.source}${s.details?.note ? html`<div class="text-muted-2">“${s.details.note}”</div>` : ''}${s.details?.reason ? html`<div class="text-muted-2">${s.details.reason}</div>` : ''}</td>
@@ -59,6 +63,11 @@ export async function render(el, ctx) {
     t = setTimeout(() => { state.q = f.q.value; state.reason = f.reason.value; state.include_lifted = f.lifted.checked ? 'true' : 'false'; state.page = 1; load(); }, 300);
   });
   f.addEventListener('submit', (e) => e.preventDefault());
+  $('#range-clear', el)?.addEventListener('click', () => {
+    state.created_from = ''; state.created_to = ''; state.page = 1;
+    $('#range-chip', el).classList.add('d-none');
+    load();
+  });
   $('#csv', el)?.addEventListener('click', () => download(`/exports/suppressions.csv?include_lifted=${state.include_lifted}`));
   $('#add', el)?.addEventListener('click', () => formModal({
     title: 'Suppress addresses', submitLabel: 'Suppress', danger: true,

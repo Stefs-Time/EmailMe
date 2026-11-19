@@ -1,4 +1,4 @@
-// Galleries of ready-made designs: campaign samples and template designs.
+// Gallery of ready-made campaign designs (samples).
 import { get } from './api.js';
 import { html, raw, formModal } from './ui.js';
 
@@ -6,7 +6,7 @@ const cache = {};
 const load = async (url) => { cache[url] ||= (await get(url)).data; return cache[url]; };
 
 /** A radio-card gallery in a dialog. `onPick(id, item)` runs on confirm; throw to keep it open. */
-function gallery({ title, intro, submitLabel, items, note, extra, onPick }) {
+function gallery({ title, intro, submitLabel, items, note, onPick }) {
   formModal({
     title, submitLabel, size: 'modal-lg',
     body: html`${intro ? html`<p class="small text-muted-2">${intro}</p>` : ''}
@@ -16,7 +16,7 @@ function gallery({ title, intro, submitLabel, items, note, extra, onPick }) {
         <label class="sample-card" for="smp-${s.id}">
           <i class="bi bi-${s.icon}" aria-hidden="true"></i>
           <span><strong>${s.name}</strong><span class="d-block small text-muted-2">${s.description}</span>
-            ${extra ? extra(s) : ''}</span>
+</span>
         </label></div>`)}</div></fieldset>
       ${note ? html`<p class="small text-muted-2 mt-3 mb-0">${note}</p>` : ''}`,
     onSubmit: async (fd) => {
@@ -26,26 +26,13 @@ function gallery({ title, intro, submitLabel, items, note, extra, onPick }) {
   });
 }
 
-/** Campaign samples (content designs). Each shows the template it uses. */
+/** Campaign samples (content designs). Every email gets the header and footer from Settings → Email design. */
 export async function pickSample({ title = 'Start a new campaign', intro = '', submitLabel = 'Create campaign', onPick }) {
   const items = await load('/campaigns/samples');
   gallery({
     title, intro, submitLabel, items, onPick,
-    extra: (s) => (s.templateName ? html`<span class="d-block small mt-1 text-teal"><i class="bi bi-layout-text-window me-1"></i>Uses the ${s.templateName} template</span>` : ''),
-    note: 'Every sample is fully editable. Replace the [bracketed] text, add your images and links, and the "Ready to send" checklist tells you what is still missing. You can change the template in the envelope section.',
+    note: 'Every sample is fully editable. Replace the [bracketed] text, add your images and links, and the "Review & send" checklist tells you what is still missing. Your logo, colours and footer are added automatically.',
   });
 }
 
 export const getSample = async (id) => (await get(`/campaigns/samples/${encodeURIComponent(id)}`)).data;
-
-/** Template designs (the frame around campaigns). */
-export async function pickTemplateSample({ onPick }) {
-  const items = await load('/templates/samples');
-  gallery({
-    title: 'New template', submitLabel: 'Start designing', items, onPick,
-    intro: 'Choose a starting design. You can change everything (logo, colours, width, font and footer) in the builder.',
-    note: 'Tip: add your logo by selecting the image at the top and pasting its web address.',
-  });
-}
-
-export const getTemplateSample = async (id) => (await get(`/templates/samples/${encodeURIComponent(id)}`)).data;

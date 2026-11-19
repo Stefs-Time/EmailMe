@@ -27,7 +27,6 @@ const PERMISSIONS = {
   'system:read': ['manager', 'admin'],
   'campaigns:write': ['manager', 'admin'],
   'campaigns:send': ['manager', 'admin'],
-  'templates:write': ['manager', 'admin'],
   'settings:manage': ['admin'],
 };
 

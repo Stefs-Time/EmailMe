@@ -28,6 +28,7 @@ sending reputation stays yours.
 Open **System health** in the app. Every item marked critical must be green:
 
 - [ ] **Settings → General:** postal address
+- [ ] **Settings → Email design:** your logo and brand colour
 - [ ] **Settings → Sending:** From name and address (on your sending domain), then **Send test email**
 - [ ] **Settings → Bounces:** bounce mailbox, then **Test connection**
 - [ ] DNS: SPF and DMARC green on System health; DKIM set up at your mail provider
@@ -37,8 +38,8 @@ Open **System health** in the app. Every item marked critical must be green:
 
 1. **Lists → New list**, then **Import** a CSV. Record how and when people gave permission: having an address isn't
    consent.
-2. **Campaigns → New campaign**: choose the list, build the email with drag and drop or a template, and send a test to
-   yourself.
+2. **Campaigns → New campaign**: choose the list, start from a sample design, build the email with drag and drop, and
+   send a test to yourself.
 3. Start on a small, engaged list. On a new domain, keep the sending speed low (2–5 emails per second) for the first
    few weeks.
 4. Watch **Reports** for bounces and complaints.
@@ -46,7 +47,7 @@ Open **System health** in the app. Every item marked critical must be green:
 ## Help
 
 - In the app: **Guides** in the menu.
-- [User guide](USER_GUIDE.md): contacts, lists, campaigns, templates, reports.
+- [User guide](USER_GUIDE.md): contacts, lists, campaigns, email design, reports.
 - [Administrator guide](ADMIN_GUIDE.md): settings, users, DNS, bounces, monitoring.
 - [Security & POPIA](SECURITY.md): how your data is protected.
 - Anything else, including mail server changes or lost access: contact MailHarbor support.

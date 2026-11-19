@@ -46,18 +46,22 @@ instances, not from tenant IDs in a shared database.
   - **Compression:** uploads are resized for email (max 1200px wide), rotated upright, stripped of metadata (GPS,
     camera) and compressed to JPEG, or PNG when transparent. Animated GIFs are kept.
   - **Storage:** images are stored in PostgreSQL (so they're in every backup) and served from a permanent link.
-  - **Use:** pick or upload from the builder's image block. Images used by a campaign or template can't be deleted.
+  - **Use:** pick or upload from the builder's image block or as the logo. Images used by a campaign or the logo can't be deleted.
 - **Import wizard:** CSV (comma, semicolon or tab), automatic column matching, custom attributes, validation, duplicate
   detection, matching against existing contacts, suppression check, a required consent basis and a
   **preview before anything is saved**. After the import you get a downloadable row-by-row report.
-- **Campaigns:**
+- **Email design (Settings):** one fixed, compliant structure for every email. A header (logo or organisation name),
+  the campaign's content in a white card, and a footer with organisation name, postal address, a footer line and the
+  Unsubscribe / Manage preferences / View in browser links. Logo, brand and heading colours, background, font and
+  footer line are settings with a live preview. There are no per-campaign templates.
+- **Campaigns** in three steps (Audience → Email → Review & send):
   - a **drag-and-drop email builder**: headings, text, buttons, images, two-column layouts, dividers, spacers and HTML
     blocks, edited directly on a WYSIWYG canvas, with undo/redo, colour-contrast warnings and phone-friendly output
-    (columns stack). The server validates the design and renders email-safe HTML;
-  - a visual editor or raw HTML as alternatives, plus a plain-text part;
-  - templates (the frame: header, colours, width, font, footer) designed in the same drag-and-drop builder or in HTML,
-    with a default template, plus **ready-made Clean, Promotion and New release templates** that the matching campaign
-    samples use automatically;
+    (columns stack). The server validates the design and renders email-safe HTML. Headings, buttons and links follow
+    the brand colours unless set per block;
+  - the sender comes from Settings unless a campaign overrides it; the plain-text part is generated;
+  - **frozen at send:** a campaign's content and design are stored when it starts, so later design changes never
+    alter what was sent or its "view in browser" page;
   - **9 sample designs** to start from: simple message, marketing promotion, new product release, "Are you still
     interested?", introduction & permission request, "Want to find out more?", monthly newsletter, event invitation, welcome;
   - **one-click personalisation**: field buttons (First name, Full name, Company… plus imported columns) insert
@@ -98,7 +102,8 @@ instances, not from tenant IDs in a shared database.
   | Complaint | suppressed immediately |
 - **Suppression that cannot be bypassed:** imports, list changes and manual adds never reactivate an unsubscribed,
   bounced, complained or blocklisted address. Reactivation is admin-only and needs a documented new permission basis.
-- **Reports:**
+- **Reports, with every number clickable:** each count opens the recipients, emails, bounces or contacts behind it
+  (`#/details`), with search, paging, a link to each contact and CSV download for managers and administrators.
   - per campaign: recipients, sent, failed, hard and soft bounces, complaints, unsubscribes, unique opens and clicks,
     stayed subscribed, preference changes, top links, a timeline;
   - **mail usage** through your SMTP server: sent today / this month / last hour (against the hourly limit), the queue,
@@ -156,7 +161,7 @@ portal/                    the application source
     server.js              startup: migrations → secrets → settings → admin → worker → HTTP
     config.js              environment variables (validated at startup)
     engine/                sender, renderer, SMTP, bounce parsing/rules, IMAP mailbox, worker
-    modules/               REST API by feature (contacts, lists, imports, campaigns, templates,
+    modules/               REST API by feature (contacts, lists, imports, campaigns, images, forms, segments,
                            settings, reports, exports, suppression, users, system, public pages)
     db/migrations/         SQL schema
   public/                  single-page web app (Bootstrap 5, no build step)
@@ -303,8 +308,8 @@ Verified in the build environment:
   - double opt-in;
   - reactivation and POPIA erasure;
   - SMTP outage → auto-pause → resume.
-- **Browser walkthrough (Playwright):** setup, settings, lists, contacts, the campaign editor, test send, send, report,
-  templates, system health. An axe accessibility scan found no violations on those pages.
+- **Browser walkthrough (Playwright):** setup, settings (including Email design), lists, contacts, the campaign editor,
+  test send, send, report drill-downs, usage, system health. An axe accessibility scan found no violations on those pages.
 - **Drag-and-drop builder (Playwright):** 15-step walkthrough with the CSP enforced, covering palette drags, nested
   columns, handle reordering, in-place editing, undo, test send, HTML conversion and phone width. It passed with no
   console errors and no axe violations.
@@ -342,7 +347,7 @@ them, and route anything platform-related to "contact MailHarbor support".
 | Guide | For |
 |---|---|
 | [GETTING_STARTED](docs/GETTING_STARTED.md) | New customers: what we need, first sign-in, first campaign |
-| [USER_GUIDE](docs/USER_GUIDE.md) | Staff: contacts, imports, campaigns, reports |
+| [USER_GUIDE](docs/USER_GUIDE.md) | Staff: contacts, imports, campaigns, email design, reports |
 | [ADMIN_GUIDE](docs/ADMIN_GUIDE.md) | Customer administrators: settings, users, DNS, bounces, monitoring |
 | [SECURITY](docs/SECURITY.md) | Security controls, hosting model and POPIA |
 | [Product overview](docs/brochure/mailharbor-overview.html) | Marketing brochure (features + roadmap), source of the PDF |

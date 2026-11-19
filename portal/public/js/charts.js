@@ -36,6 +36,13 @@ function base() {
 
 const shortDay = (d) => new Date(d).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
 
+/** Makes bars open their details: onPick(index) runs for the bar (or day) that was clicked. */
+function clickable(o, onPick) {
+  if (!onPick) return;
+  o.onClick = (_evt, elements) => { if (elements.length) onPick(elements[0].index); };
+  o.onHover = (evt, elements) => { if (evt.native?.target) evt.native.target.style.cursor = elements.length ? 'pointer' : ''; };
+}
+
 export function lineChart(canvas, labels, series) {
   return new Chart(canvas, {
     type: 'line',
@@ -50,8 +57,9 @@ export function lineChart(canvas, labels, series) {
   });
 }
 
-export function stackedBars(canvas, labels, series) {
+export function stackedBars(canvas, labels, series, onPick = null) {
   const o = base();
+  clickable(o, onPick);
   o.scales.x.stacked = true;
   o.scales.y.stacked = true;
   return new Chart(canvas, {
@@ -67,8 +75,9 @@ export function stackedBars(canvas, labels, series) {
   });
 }
 
-export function hbar(canvas, labels, data, key = 'added') {
+export function hbar(canvas, labels, data, key = 'added', onPick = null) {
   const o = base();
+  clickable(o, onPick);
   o.indexAxis = 'y';
   o.plugins.legend.display = false;
   o.scales.x = { beginAtZero: true, grid: { color: GRID }, ticks: { color: INK, precision: 0 }, border: { display: false } };

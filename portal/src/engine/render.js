@@ -1,8 +1,13 @@
 'use strict';
 
 /**
- * Email rendering: template + campaign content + per-recipient
- * personalisation, link tracking, open pixel, compliant footer, text part.
+ * Email rendering: layout (Settings → Email design) + campaign content +
+ * per-recipient personalisation, link tracking, open pixel, compliant footer,
+ * text part.
+ *
+ * Drafts are rendered live from their builder document and the current email
+ * design. When a campaign starts, its content and layout are frozen on the
+ * campaign (body_html, layout_html), so what was sent never changes afterwards.
  *
  * Personalisation tags (no logic, so no template injection):
  *   {{ first_name }}  {{ last_name }}  {{ full_name }}  {{ email }}  {{ company }}
@@ -14,6 +19,7 @@
  */
 const sanitizeHtml = require('sanitize-html');
 const { addUtm, utmParamsFor } = require('./utm');
+const { renderLayout } = require('./layout');
 
 const TAG_RE = /\{\{\s*([a-zA-Z_][\w.]*)\s*(?:\|\s*"([^"]*)"\s*)?\}\}/g;
 
@@ -93,7 +99,8 @@ function inlineEditorClasses(html) {
     .replace(/class="mh-button"/g, 'style="background:#1f4e8c;color:#ffffff;padding:12px 22px;border-radius:6px;text-decoration:none;display:inline-block;font-weight:bold"');
 }
 
-const DEFAULT_TEMPLATE = `<!doctype html>
+/** The built-in frame used before Email design existed (kept to freeze old campaigns faithfully). */
+const LEGACY_TEMPLATE = `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ subject }}</title>
 <style>
   body { margin:0; padding:0; background:#f4f6f9; font-family:Arial, Helvetica, sans-serif; color:#1b2430; }
@@ -128,11 +135,27 @@ function trackLinks(html, linkId, clickUrl) {
   });
 }
 
+const isStarted = (c) => Boolean(c.started_at) || ['sending', 'paused', 'sent', 'cancelled'].includes(c.status);
+
+/**
+ * The content and layout of a campaign: frozen once started, otherwise rendered
+ * from the builder document with the current email design.
+ */
+function emailParts(campaign, settings) {
+  if (isStarted(campaign) && campaign.layout_html) return { content: campaign.body_html || '', layout: campaign.layout_html };
+  const { renderDocument } = require('./blocks'); // lazy: blocks.js uses this module's sanitiser
+  const content = campaign.editor === 'builder' && campaign.body_json
+    ? sanitize(renderDocument(campaign.body_json, settings).html)
+    : (campaign.body_html || '');
+  return { content, layout: renderLayout(settings) };
+}
+
 /**
  * Builds a complete message for one recipient.
  * @returns {{subject, html, text, headers}}
  */
-function renderMessage({ campaign, templateHtml, contact, token, settings, publicUrl, links, isTest = false }) {
+function renderMessage({ campaign, contact, token, settings, publicUrl, links, isTest = false }) {
+  const parts = emailParts(campaign, settings);
   const base = publicUrl;
   const unsubscribeUrl = `${base}/u/${token}`;
   const viewUrl = `${base}/v/${token}`;
@@ -148,17 +171,17 @@ function renderMessage({ campaign, templateHtml, contact, token, settings, publi
     subject: campaign.subject, preheader: campaign.preheader || '',
   };
 
-  let content = inlineEditorClasses(campaign.body_html);
+  let content = inlineEditorClasses(parts.content);
   // UTM tags: frozen on the campaign when it starts (utm_params), live for previews and tests.
-  const started = Boolean(campaign.started_at) || ['sending', 'paused', 'sent', 'cancelled'].includes(campaign.status);
+  const started = isStarted(campaign);
   const utm = started ? (campaign.utm_params || null) : utmParamsFor(campaign, settings);
   content = addUtm(content, utm, base);
   if (campaign.track_clicks && !isTest && links) {
     content = trackLinks(content, links, (id) => `${base}/t/c/${token}/${id}`);
   }
-  const doc = (templateHtml || DEFAULT_TEMPLATE).includes('{{ content }}') || /\{\{\s*content\s*\}\}/.test(templateHtml || '')
-    ? (templateHtml || DEFAULT_TEMPLATE).replace(/\{\{\s*content\s*\}\}/, () => content)
-    : `${templateHtml || ''}${content}`;
+  const doc = /\{\{\s*content\s*\}\}/.test(parts.layout)
+    ? parts.layout.replace(/\{\{\s*content\s*\}\}/, () => content)
+    : `${parts.layout}${content}`;
   let html = substitute(doc, vars, { escape: true });
 
   // Preheader: hidden preview text shown by inbox lists.
@@ -176,9 +199,10 @@ function renderMessage({ campaign, templateHtml, contact, token, settings, publi
     html = /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${pixel}</body>`) : html + pixel;
   }
 
-  const textBody = campaign.body_text?.trim()
+  // A hand-written text part is only honoured for campaigns sent with one; otherwise it is generated.
+  const textBody = started && campaign.body_text?.trim()
     ? substitute(campaign.body_text, vars, { escape: false })
-    : htmlToText(substitute(campaign.body_html, vars, { escape: false }));
+    : htmlToText(substitute(parts.content, vars, { escape: false }));
   const text = `${textBody}\n\n--\n${settings.org_name}${settings.org_address ? `, ${settings.org_address}` : ''}\nUnsubscribe: ${unsubscribeUrl}\n`;
 
   return {
@@ -194,4 +218,4 @@ function renderMessage({ campaign, templateHtml, contact, token, settings, publi
   };
 }
 
-module.exports = { renderMessage, sanitize, substitute, htmlToText, escapeHtml, trackLinks, DEFAULT_TEMPLATE, TAG_RE };
+module.exports = { renderMessage, emailParts, isStarted, sanitize, substitute, htmlToText, escapeHtml, trackLinks, LEGACY_TEMPLATE, TAG_RE };

@@ -18,6 +18,8 @@ function suppressionRoutes({ pool }) {
       q: z.string().trim().max(200).optional(),
       reason: z.enum(REASONS).optional(),
       include_lifted: z.enum(['true', 'false']).default('false'),
+      created_from: z.coerce.date().optional(),
+      created_to: z.coerce.date().optional(),
       page: z.coerce.number().int().min(1).default(1),
       per_page: z.coerce.number().int().min(1).max(200).default(50),
     }), req.query);
@@ -25,6 +27,8 @@ function suppressionRoutes({ pool }) {
     const where = [];
     if (q.include_lifted !== 'true') where.push('p.lifted_at IS NULL');
     if (q.reason) { params.push(q.reason); where.push(`p.reason = $${params.length}`); }
+    if (q.created_from) { params.push(q.created_from); where.push(`p.created_at >= $${params.length}`); }
+    if (q.created_to) { params.push(q.created_to); where.push(`p.created_at < $${params.length}`); }
     if (q.q) { params.push(`%${q.q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`); where.push(`p.email ILIKE $${params.length}`); }
     params.push(q.per_page, (q.page - 1) * q.per_page);
     const { rows } = await pool.query(

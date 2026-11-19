@@ -11,7 +11,7 @@
  *   4xx / transient    -> retried after 5, 30, 120 minutes, then soft bounce
  *   SMTP unusable      -> message re-queued, campaigns paused, critical alert
  */
-const { renderMessage, DEFAULT_TEMPLATE, escapeHtml } = require('./render');
+const { renderMessage, emailParts, escapeHtml } = require('./render');
 const { addUtm, utmParamsFor } = require('./utm');
 const { classifySendError } = require('./mailer');
 const { processBounce } = require('./bounces');
@@ -42,7 +42,8 @@ async function startCampaign(pool, campaignId, settings = null) {
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `SELECT c.id, c.name, c.body_html, c.status, c.utm_enabled, c.utm_campaign, c.segment_id, sg.name AS seg_name, sg.rules AS seg_rules
+      `SELECT c.id, c.name, c.body_html, c.body_json, c.editor, c.status, c.started_at, c.utm_enabled, c.utm_campaign, c.segment_id,
+              sg.name AS seg_name, sg.rules AS seg_rules
          FROM portal.campaigns c LEFT JOIN portal.segments sg ON sg.id = c.segment_id WHERE c.id = $1 FOR UPDATE OF c`, [campaignId]);
     const c = rows[0];
     if (!c || !['draft', 'scheduled'].includes(c.status)) {
@@ -63,13 +64,16 @@ async function startCampaign(pool, campaignId, settings = null) {
        ON CONFLICT DO NOTHING`, params);
     if (c.segment_id) await client.query('UPDATE portal.campaigns SET segment_name = $2 WHERE id = $1', [campaignId, c.seg_name]);
     const utm = s ? utmParamsFor(c, s) : null;
-    for (const url of extractLinks(addUtm(c.body_html, utm, publicUrl))) {
+    // Freeze what is sent: the content and the email design as they are now.
+    const parts = emailParts(c, s || {});
+    for (const url of extractLinks(addUtm(parts.content, utm, publicUrl))) {
       await client.query(
         `INSERT INTO portal.links (campaign_id, url) VALUES ($1, $2) ON CONFLICT (campaign_id, url) DO NOTHING`, [campaignId, url]);
     }
     await client.query(
-      `UPDATE portal.campaigns SET status = 'sending', started_at = NOW(), pause_reason = NULL, utm_params = $2, updated_at = NOW() WHERE id = $1`,
-      [campaignId, utm]);
+      `UPDATE portal.campaigns SET status = 'sending', started_at = NOW(), pause_reason = NULL, utm_params = $2,
+              body_html = $3, layout_html = $4, updated_at = NOW() WHERE id = $1`,
+      [campaignId, utm, parts.content, parts.layout]);
     await client.query('COMMIT');
     return ins.rowCount;
   } catch (err) {
@@ -80,12 +84,12 @@ async function startCampaign(pool, campaignId, settings = null) {
   }
 }
 
-const OPTIN_TEMPLATE = (orgName, confirmUrl, lists) => `
+const OPTIN_TEMPLATE = (orgName, confirmUrl, lists, brand = '#1f4e8c') => `
 <h2>Please confirm your subscription</h2>
 <p>Hello {{ first_name | "there" }},</p>
 <p>You asked to receive emails from <strong>${escapeHtml(orgName)}</strong>${lists ? ` (${escapeHtml(lists)})` : ''}.
 Please confirm by clicking the button below. If you did not ask for this, simply ignore this email.</p>
-<p style="text-align:center;margin:28px 0"><a href="${confirmUrl}" style="background:#1f4e8c;color:#ffffff;padding:12px 22px;border-radius:6px;text-decoration:none;display:inline-block">Confirm my subscription</a></p>`;
+<p style="text-align:center;margin:28px 0"><a href="${confirmUrl}" style="background:${/^#[0-9a-fA-F]{6}$/.test(brand) ? brand : '#1f4e8c'};color:#ffffff;padding:12px 22px;border-radius:6px;text-decoration:none;display:inline-block">Confirm my subscription</a></p>`;
 
 class Sender {
   constructor({ pool, settings, transport, logger }) {
@@ -96,7 +100,6 @@ class Sender {
     this.tokens = 0;
     this.lastRefill = Date.now();
     this.campaignCache = new Map();
-    this.templateCache = new Map();
   }
 
   /** Requeues messages left "sending" by a crash; delivery state is unknown, so they are not resent. */
@@ -139,7 +142,6 @@ class Sender {
     }
     this.tokens -= batch.length;
     this.campaignCache.clear();
-    this.templateCache.clear();
     const s = await this.settings.all();
     const publicUrl = await this.settings.publicUrl();
     let stop = false;
@@ -171,16 +173,6 @@ class Sender {
     return this.campaignCache.get(id);
   }
 
-  async template(id) {
-    const key = id || 'default';
-    if (!this.templateCache.has(key)) {
-      const { rows } = await this.pool.query(
-        `SELECT html FROM portal.templates WHERE ${id ? 'id = $1' : 'is_default'} LIMIT 1`, id ? [id] : []);
-      this.templateCache.set(key, rows[0]?.html || DEFAULT_TEMPLATE);
-    }
-    return this.templateCache.get(key);
-  }
-
   async sendOne(msg, s, publicUrl) {
     try {
       let contact = null;
@@ -197,20 +189,17 @@ class Sender {
       if (!s.from_email) throw Object.assign(new Error('No sender address configured (Settings → Sending).'), { mhConfig: true });
 
       let campaign;
-      let templateHtml;
       if (msg.kind === 'optin') {
         const lists = msg.payload?.list_names || '';
-        campaign = { subject: `Please confirm your subscription to ${s.org_name}`, preheader: '', body_html: OPTIN_TEMPLATE(s.org_name, `${publicUrl}/s/confirm/${msg.uuid}`, lists),
+        campaign = { subject: `Please confirm your subscription to ${s.org_name}`, preheader: '', body_html: OPTIN_TEMPLATE(s.org_name, `${publicUrl}/s/confirm/${msg.uuid}`, lists, s.email_brand_color),
           body_text: '', track_opens: false, track_clicks: false, from_name: s.from_name, from_email: s.from_email, reply_to: s.reply_to };
-        templateHtml = await this.template(null);
       } else {
         campaign = await this.campaign(msg.campaign_id);
         if (!campaign) return this.finish(msg, 'skipped', 'Campaign deleted');
-        templateHtml = await this.template(campaign.template_id);
       }
       const recipient = contact || { email: msg.email, ...(msg.payload?.sample || {}) };
       const rendered = renderMessage({
-        campaign, templateHtml, contact: recipient, token: msg.uuid, settings: s, publicUrl,
+        campaign, contact: recipient, token: msg.uuid, settings: s, publicUrl,
         links: (url) => campaign.linkMap?.get(url), isTest: msg.kind === 'test',
       });
       const fromEmail = campaign.from_email || s.from_email;
@@ -219,7 +208,7 @@ class Sender {
         to: msg.email,
         replyTo: campaign.reply_to || s.reply_to || undefined,
         subject: rendered.subject,
-        html: rendered.html, // content and templates are sanitised when saved
+        html: rendered.html, // content is sanitised when saved or rendered; the layout is built from validated settings
         text: rendered.text,
         headers: rendered.headers,
         envelope: { from: s.bounce_address || fromEmail, to: msg.email },

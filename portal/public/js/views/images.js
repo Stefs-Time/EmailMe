@@ -4,7 +4,7 @@ import { uploadImages, imageCard, kb } from '../images.js';
 
 /** Image library: upload (auto-compressed, stored in the database), copy links, delete. */
 export async function render(el, ctx) {
-  const canWrite = ctx.can('templates:write');
+  const canWrite = ctx.can('campaigns:write');
   let q = '';
   mount(el, html`<div class="page-head"><div><h1>Images</h1>
       <p>Your logos, banners and product photos. Uploads are resized for email and compressed automatically, then stored safely in MailHarbor (and included in backups).</p></div></div>
@@ -59,7 +59,7 @@ export async function render(el, ctx) {
     const d = e.target.closest('[data-del]');
     if (d) {
       const ok = await confirmModal({ title: 'Delete image?', danger: true, confirmLabel: 'Delete',
-        message: `"${d.dataset.name}" will be removed. Images used by a campaign or template can't be deleted.` });
+        message: `"${d.dataset.name}" will be removed. Images used by a campaign or as your logo can't be deleted.` });
       if (!ok) return;
       try { await del(`/images/${d.dataset.del}`); toast('Image deleted'); load(); } catch (err) { errorToast(err); }
     }

@@ -10,8 +10,9 @@ const { parse, notFound, conflict, validation, badRequest } = require('../../lib
 const { requirePermission } = require('../../middleware/auth');
 const { withTransaction } = require('../../db/pool');
 const { audit } = require('../../lib/audit');
-const { renderMessage, sanitize, DEFAULT_TEMPLATE } = require('../../engine/render');
-const { renderDocument, documentSchema, starterDocument } = require('../../engine/blocks');
+const { renderMessage, sanitize } = require('../../engine/render');
+const { renderDocument, documentSchema, starterDocument, documentFromHtml } = require('../../engine/blocks');
+const { themeFrom } = require('../../engine/layout');
 const { listSamples, getSample, SAMPLE_IDS } = require('../../engine/samples');
 const { startCampaign } = require('../../engine/sender');
 const { countEligible } = require('../../engine/audience');
@@ -27,11 +28,9 @@ const campaignBody = z.object({
   from_name: z.string().trim().max(120).default(''),
   from_email: z.union([z.string().trim().email().max(254), z.literal('')]).default(''),
   reply_to: z.union([z.string().trim().email().max(254), z.literal('')]).default(''),
-  template_id: z.coerce.number().int().positive().nullable().optional(),
-  editor: z.enum(['builder', 'visual', 'html']).optional(), // inferred from the content sent when omitted
-  body_html: z.string().max(500000).default(''),
-  body_json: z.unknown().optional(), // validated by documentSchema when editor = builder
-  body_text: z.string().max(200000).default(''),
+  // Content is always a builder document. Raw HTML (API clients) becomes one HTML block.
+  body_json: z.unknown().optional(),
+  body_html: z.string().max(500000).optional(),
   track_opens: z.boolean().default(true),
   track_clicks: z.boolean().default(true),
   list_ids: z.array(z.coerce.number().int().positive()).max(50).default([]),
@@ -44,19 +43,14 @@ const campaignBody = z.object({
 const SAMPLE = { first_name: 'Thandi', last_name: 'Nkosi', email: 'thandi@example.co.za', company: 'Example (Pty) Ltd', attribs: { city: 'Johannesburg' } };
 
 /**
- * Resolves the stored content: builder documents are validated and rendered on
- * the server (the browser's HTML is never trusted); other editors are sanitised.
+ * Validates the builder document and renders it on the server (the browser's
+ * HTML is never trusted). body_html is kept for search and readiness checks;
+ * what is sent is rendered again with the email design until the campaign starts.
  */
-function inferEditor(body) {
-  return body.editor ?? (body.body_json === undefined && body.body_html ? 'visual' : 'builder');
-}
-
-function resolveContent(editor, bodyJson, bodyHtml) {
-  if (editor === 'builder') {
-    const { doc, html } = renderDocument(parse(documentSchema, bodyJson ?? {}));
-    return { html: sanitize(html), json: doc };
-  }
-  return { html: sanitize(bodyHtml), json: null };
+function resolveContent(bodyJson, bodyHtml, s) {
+  const input = bodyJson ?? (bodyHtml !== undefined ? documentFromHtml(bodyHtml) : starterDocument());
+  const { doc, html } = renderDocument(parse(documentSchema, input), s);
+  return { html: sanitize(html), json: doc };
 }
 
 /** A deleted segment referenced by a stale editor → a clear message instead of a database error. */
@@ -97,7 +91,7 @@ async function readinessProblems(pool, settings, c) {
   if (!c.lists.length) problems.push('Choose at least one list.');
   const stripped = c.body_html.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
   if (!stripped && !/<img\s/i.test(c.body_html)) problems.push('Write the email content.');
-  if (c.editor === 'builder' && c.body_json) {
+  if (c.body_json) {
     const all = (c.body_json.blocks || []).flatMap((b) => (b.type === 'columns' ? b.props.columns.flat() : [b]));
     if (all.some((b) => b.type === 'button' && b.props.label?.trim() && (b.props.link || 'url') === 'url' && !b.props.url)) {
       problems.push('A button has no link: select it and choose where it goes (a web address, or a MailHarbor page such as Unsubscribe).');
@@ -152,7 +146,10 @@ function campaignRoutes({ pool, settings, worker }) {
     const c = await loadCampaign(pool, parse(id, req.params.id));
     const eligible = await countEligible(pool, c.lists.map((l) => l.id), c.segment_rules);
     const problems = EDITABLE.includes(c.status) ? await readinessProblems(pool, settings, c) : [];
-    res.json({ success: true, data: { ...c, eligible, problems } });
+    const s = await settings.all();
+    // What the editor needs to show the email as it will look: brand colours and the default sender.
+    const defaults = { design: themeFrom(s), from_name: s.from_name || s.org_name, from_email: s.from_email, reply_to: s.reply_to };
+    res.json({ success: true, data: { ...c, eligible, problems, defaults } });
   });
 
   r.post('/', requirePermission('campaigns:write'), async (req, res) => {
@@ -162,28 +159,20 @@ function campaignRoutes({ pool, settings, worker }) {
     }), req.body);
     if (body.sample) {
       const sample = getSample(body.sample);
-      body.editor = 'builder';
       body.body_json = sample.doc;
       body.subject ||= sample.subject;
       body.preheader ||= sample.preheader;
-      // Use the matching ready-made template (e.g. Promotion) when it still exists.
-      if (body.template_id == null && sample.template) {
-        const { rows: match } = await pool.query('SELECT id FROM portal.templates WHERE sample_key = $1 ORDER BY id LIMIT 1', [sample.template]);
-        if (match[0]) body.template_id = match[0].id;
-      }
     }
     const s = await settings.all();
-    const { rows: tpl } = await pool.query('SELECT id FROM portal.templates WHERE is_default LIMIT 1');
-    const editor = inferEditor(body);
-    const content = resolveContent(editor, body.body_json ?? starterDocument(), body.body_html || '<p>Hello {{ first_name | "there" }},</p><p></p>');
+    const content = resolveContent(body.body_json, body.body_html, s);
+    // Sender fields stay empty unless set: empty means "use Settings → Sending" at send time.
     const created = await withTransaction(pool, async (db) => {
       const { rows } = await db.query(
-        `INSERT INTO portal.campaigns (name, subject, preheader, from_name, from_email, reply_to, template_id, editor, body_html, body_text,
+        `INSERT INTO portal.campaigns (name, subject, preheader, from_name, from_email, reply_to, editor, body_html,
                                        track_opens, track_clicks, created_by, body_json, segment_id, utm_enabled, utm_campaign)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
-        [body.name, body.subject || '', body.preheader || '', body.from_name || s.from_name, body.from_email || s.from_email,
-          body.reply_to || s.reply_to, body.template_id ?? tpl[0]?.id ?? null, editor,
-          content.html, body.body_text || '',
+         VALUES ($1,$2,$3,$4,$5,$6,'builder',$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+        [body.name, body.subject || '', body.preheader || '', body.from_name || '', body.from_email || '',
+          body.reply_to || '', content.html,
           body.track_opens ?? s.track_opens, body.track_clicks ?? s.track_clicks, req.user.id, content.json,
           body.segment_id ?? null, body.utm_enabled ?? true, body.utm_campaign || '']);
       await setLists(db, rows[0].id, body.list_ids || []);
@@ -196,18 +185,17 @@ function campaignRoutes({ pool, settings, worker }) {
   r.put('/:id', requirePermission('campaigns:write'), async (req, res) => {
     const campaignId = parse(id, req.params.id);
     const body = parse(campaignBody, req.body);
-    body.editor = inferEditor(body);
-    const content = resolveContent(body.editor, body.body_json, body.body_html);
+    const content = resolveContent(body.body_json, body.body_html, await settings.all());
     await withTransaction(pool, async (db) => {
       const { rows } = await db.query('SELECT status FROM portal.campaigns WHERE id = $1 FOR UPDATE', [campaignId]);
       if (!rows[0]) throw notFound('Campaign not found');
       if (!EDITABLE.includes(rows[0].status)) throw conflict(`A ${rows[0].status} campaign can no longer be edited. Duplicate it to send a new version.`);
       await db.query(
-        `UPDATE portal.campaigns SET name=$2, subject=$3, preheader=$4, from_name=$5, from_email=$6, reply_to=$7, template_id=$8,
-                editor=$9, body_html=$10, body_text=$11, track_opens=$12, track_clicks=$13, body_json=$14,
-                segment_id=$15, utm_enabled=$16, utm_campaign=$17, updated_at=NOW() WHERE id=$1`,
-        [campaignId, body.name, body.subject, body.preheader, body.from_name, body.from_email, body.reply_to, body.template_id ?? null,
-          body.editor, content.html, body.body_text, body.track_opens, body.track_clicks, content.json,
+        `UPDATE portal.campaigns SET name=$2, subject=$3, preheader=$4, from_name=$5, from_email=$6, reply_to=$7,
+                editor='builder', body_html=$8, body_text='', track_opens=$9, track_clicks=$10, body_json=$11,
+                segment_id=$12, utm_enabled=$13, utm_campaign=$14, updated_at=NOW() WHERE id=$1`,
+        [campaignId, body.name, body.subject, body.preheader, body.from_name, body.from_email, body.reply_to,
+          content.html, body.track_opens, body.track_clicks, content.json,
           body.segment_id ?? null, body.utm_enabled, body.utm_campaign]);
       await setLists(db, campaignId, body.list_ids);
     }).catch(missingSegment);
@@ -218,9 +206,9 @@ function campaignRoutes({ pool, settings, worker }) {
     const src = await loadCampaign(pool, parse(id, req.params.id));
     const newId = await withTransaction(pool, async (db) => {
       const { rows } = await db.query(
-        `INSERT INTO portal.campaigns (name, subject, preheader, from_name, from_email, reply_to, template_id, editor, body_html, body_text,
+        `INSERT INTO portal.campaigns (name, subject, preheader, from_name, from_email, reply_to, editor, body_html, body_text,
                                        track_opens, track_clicks, created_by, body_json, segment_id, utm_enabled, utm_campaign)
-         SELECT 'Copy of ' || name, subject, preheader, from_name, from_email, reply_to, template_id, editor, body_html, body_text,
+         SELECT 'Copy of ' || name, subject, preheader, from_name, from_email, reply_to, 'builder', body_html, '',
                 track_opens, track_clicks, $2, body_json, segment_id, utm_enabled, utm_campaign FROM portal.campaigns WHERE id = $1 RETURNING id`, [src.id, req.user.id]);
       await setLists(db, rows[0].id, src.lists.map((l) => l.id).filter(Boolean));
       await audit(db, req, 'campaign.duplicated', { targetType: 'campaign', targetId: rows[0].id, details: { from: src.id } });
@@ -241,9 +229,7 @@ function campaignRoutes({ pool, settings, worker }) {
   r.get('/:id/preview', requirePermission('contacts:read'), async (req, res) => {
     const c = await loadCampaign(pool, parse(id, req.params.id));
     const s = await settings.all();
-    const { rows } = await pool.query(
-      `SELECT html FROM portal.templates WHERE ${c.template_id ? 'id = $1' : 'is_default'} LIMIT 1`, c.template_id ? [c.template_id] : []);
-    const msg = renderMessage({ campaign: { ...c, track_opens: false, track_clicks: false }, templateHtml: rows[0]?.html || DEFAULT_TEMPLATE,
+    const msg = renderMessage({ campaign: { ...c, track_opens: false, track_clicks: false },
       contact: SAMPLE, token: '00000000-0000-0000-0000-000000000000', settings: s, publicUrl: (await settings.publicUrl()) || 'https://example.invalid', isTest: true });
     res.setHeader('Content-Security-Policy', "sandbox; default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'; font-src https: data:");
     res.setHeader('Cache-Control', 'no-store');

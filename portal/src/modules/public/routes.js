@@ -15,7 +15,7 @@ const crypto = require('node:crypto');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { withTransaction } = require('../../db/pool');
-const { escapeHtml, renderMessage, DEFAULT_TEMPLATE } = require('../../engine/render');
+const { escapeHtml, renderMessage } = require('../../engine/render');
 const { unsubscribeContact } = require('../contacts/service');
 const { processBounce } = require('../../engine/bounces');
 const { recipientEvent } = require('../../lib/audit');
@@ -95,10 +95,10 @@ function publicRoutes({ pool, settings, logger }) {
     const m = await messageByToken(req.params.token);
     if (!m || !m.campaign_id) return page(res, { title: 'Not found', org: s.org_name, status: 404, body: '<h1>This email is no longer available</h1>' });
     const { rows } = await pool.query(
-      `SELECT c.*, t.html AS template_html FROM portal.campaigns c LEFT JOIN portal.templates t ON t.id = c.template_id WHERE c.id = $1`, [m.campaign_id]);
+      'SELECT * FROM portal.campaigns WHERE id = $1', [m.campaign_id]);
     const { rows: contact } = await pool.query('SELECT * FROM portal.contacts WHERE id = $1', [m.contact_id]);
     if (!rows[0]) return page(res, { title: 'Not found', org: s.org_name, status: 404, body: '<h1>This email is no longer available</h1>' });
-    const msg = renderMessage({ campaign: { ...rows[0], track_opens: false, track_clicks: false }, templateHtml: rows[0].template_html || DEFAULT_TEMPLATE,
+    const msg = renderMessage({ campaign: { ...rows[0], track_opens: false, track_clicks: false },
       contact: contact[0] || { email: m.email }, token: m.uuid, settings: s, publicUrl: await settings.publicUrl() });
     res.setHeader('Content-Security-Policy', "sandbox allow-popups allow-popups-to-escape-sandbox; default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'; font-src https: data:");
     res.setHeader('Cache-Control', 'no-store');

@@ -13,6 +13,7 @@ sending reputation stays yours.
 | Web address | Where your team signs in, and the address in unsubscribe and tracking links | e.g. `mail.yourcompany.co.za`. Your IT team adds one DNS record (CNAME) we send them |
 | Mail server (SMTP) details | MailHarbor sends through it | Host, port, username, password. We'll give you a secure way to send the password: **don't email it**. The service must allow marketing email (e.g. Amazon SES, Mailgun, SendGrid, Brevo, SMTP2GO, your own relay). A normal Microsoft 365 or Google Workspace mailbox isn't suitable for bulk sending |
 | Sending domain | Lets inboxes trust your emails | Your IT team adds SPF, DKIM and DMARC records (see the [administrator guide §5](ADMIN_GUIDE.md#5-dns-and-deliverability)) |
+| Replies mailbox | Replies to your campaigns arrive in the Inbox, where your team reads and answers them | A dedicated mailbox with IMAP, e.g. `replies@yourcompany.co.za`. You connect it in Settings → Replies |
 | Bounce mailbox | Removes invalid addresses automatically | A dedicated mailbox with IMAP, e.g. `bounces@yourcompany.co.za`, or your provider's bounce notifications. You enter it yourself in Settings |
 
 ## 2. First sign-in
@@ -31,6 +32,7 @@ Open **System health** in the app. Every item marked critical must be green:
 - [ ] **Settings → Email design:** your logo and brand colour
 - [ ] **Settings → Sending:** From name and address (on your sending domain), then **Send test email**
 - [ ] **Settings → Bounces:** bounce mailbox, then **Test connection**
+- [ ] **Settings → Replies:** Reply-To address and replies mailbox, then **Test connection**
 - [ ] DNS: SPF and DMARC green on System health; DKIM set up at your mail provider
 - [ ] **Users:** add colleagues with the lowest role they need, and keep at least two administrators
 
@@ -42,7 +44,7 @@ Open **System health** in the app. Every item marked critical must be green:
    send a test to yourself.
 3. Start on a small, engaged list. On a new domain, keep the sending speed low (2–5 emails per second) for the first
    few weeks.
-4. Watch **Reports** for bounces and complaints.
+4. Watch **Reports** for bounces and complaints, and answer replies in the **Inbox**.
 
 ## Help
 

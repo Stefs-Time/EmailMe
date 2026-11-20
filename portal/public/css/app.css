@@ -385,3 +385,21 @@ a.kpi-link, a.kpi-link:hover { color: inherit; text-decoration: none; }
 a.kpi-link:hover .value, a.num-link:hover { text-decoration: underline; }
 a.num-link { color: inherit; font-weight: 600; text-decoration: none; }
 .mw-320 { max-width: 320px; }
+
+/* Inbox */
+.inbox-views { gap: .25rem; flex-wrap: wrap; }
+.inbox-views .nav-link { font-size: .85rem; }
+.inbox-list { max-height: calc(100vh - 290px); overflow-y: auto; }
+.inbox-item { border-left: 3px solid transparent; }
+.inbox-item.active { background: #eef3fa; color: inherit; border-left-color: #1f4e8c; }
+.inbox-item.unread .inbox-who { font-weight: 700; }
+.inbox-who { min-width: 0; }
+.dot-unread { display: inline-block; width: .5rem; height: .5rem; border-radius: 50%; background: #1f4e8c; margin-right: .4rem; vertical-align: middle; }
+.inbox-thread { max-height: calc(100vh - 420px); min-height: 220px; overflow-y: auto; background: #f7f9fb; }
+.inbox-msg { background: #fff; border: 1px solid #e3e8ef; border-radius: .6rem; padding: .75rem .9rem; margin-bottom: .75rem; max-width: 92%; }
+.inbox-msg.out { margin-left: auto; background: #eef3fa; border-color: #c9d7ea; }
+.inbox-msg.note { margin-left: auto; margin-right: auto; background: #fff8e1; border-color: #f1dca0; max-width: 100%; }
+.inbox-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: .95rem; }
+.inbox-original { width: 100%; height: 420px; border: 1px solid #e3e8ef; border-radius: .4rem; background: #fff; }
+.min-w-0 { min-width: 0; }
+@media (max-width: 991.98px) { .inbox-list, .inbox-thread { max-height: none; } }

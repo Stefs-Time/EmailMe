@@ -204,6 +204,8 @@ class Sender {
       });
       const fromEmail = campaign.from_email || s.from_email;
       const info = await this.transport.sendMail({
+        // <recipient token@sender domain>: a reply's In-Reply-To names this exact email (Inbox threading).
+        messageId: `<${msg.uuid}@${fromEmail.split('@')[1] || 'mailharbor.invalid'}>`,
         from: { name: campaign.from_name || s.from_name || s.org_name, address: fromEmail },
         to: msg.email,
         replyTo: campaign.reply_to || s.reply_to || undefined,

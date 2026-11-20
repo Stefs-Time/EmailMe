@@ -24,7 +24,8 @@ SELECT c.id, c.name, c.subject, c.status, c.created_at, c.send_at, c.started_at,
        COALESCE(t.opens, 0) AS opens, COALESCE(t.unique_opens, 0) AS unique_opens,
        COALESCE(t.clicks, 0) AS clicks, COALESCE(t.unique_clicks, 0) AS unique_clicks,
        COALESCE(u.n, 0) AS unsubscribes, COALESCE(u.stayed, 0) AS stayed, COALESCE(u.prefs, 0) AS preference_changes,
-       COALESCE(u.consented, 0) AS consented
+       COALESCE(u.consented, 0) AS consented,
+       (SELECT COUNT(*)::int FROM portal.conversations v WHERE v.campaign_id = c.id AND v.category <> 'auto_reply') AS replies
   FROM portal.campaigns c
   LEFT JOIN LATERAL (
     SELECT COUNT(*)::int AS targeted,

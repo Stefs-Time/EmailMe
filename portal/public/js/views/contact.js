@@ -12,7 +12,8 @@ const EVENT_LABELS = {
 
 export async function render(el, ctx, [id]) {
   mount(el, loading());
-  const [{ data: d }, { data: facets }] = await Promise.all([get(`/contacts/${id}`), get('/contacts/facets')]);
+  const [{ data: d }, { data: facets }, convs] = await Promise.all([get(`/contacts/${id}`), get('/contacts/facets'),
+    ctx.can('inbox:read') ? get(`/inbox?contact=${id}&per_page=10`) : Promise.resolve({ data: [] })]);
   const c = d.contact;
   const a = c;
   const canWrite = ctx.can('contacts:write');
@@ -101,6 +102,15 @@ export async function render(el, ctx, [id]) {
               <td class="small">${b.campaign_name || '–'}</td></tr>`)}
             </tbody></table></div>` : html`<div class="card-body text-muted-2">No bounces recorded.</div>`}
         </div>
+        ${ctx.can('inbox:read') ? html`<div class="card mb-3"><div class="card-header d-flex justify-content-between">Replies and conversations
+            ${convs.data.length ? html`<a class="small fw-normal" href="#/inbox?contact=${id}">Open in Inbox</a>` : ''}</div>
+          ${convs.data.length ? html`<div class="list-group list-group-flush">${convs.data.map((v) => html`<a class="list-group-item list-group-item-action" href="#/inbox?contact=${id}&c=${v.id}">
+              <div class="d-flex justify-content-between gap-2"><span class="fw-semibold small text-truncate">${v.subject}</span><span class="small text-muted-2 text-nowrap">${ago(v.last_message_at)}</span></div>
+              <div class="small text-muted-2 text-truncate">${v.snippet || ''}</div>
+              <div class="small">${v.status === 'open' ? html`<span class="badge text-bg-primary">Open</span>` : html`<span class="badge text-bg-light border">Closed</span>`}
+                ${v.category === 'unsubscribe_request' ? html`<span class="badge text-bg-danger">Unsubscribe request</span>` : ''}${v.campaign ? html` <span class="text-muted-2">· ${v.campaign}</span>` : ''}</div></a>`)}</div>`
+            : html`<div class="card-body text-muted-2">No replies from this contact yet.</div>`}
+        </div>` : ''}
         <div class="card mb-3"><div class="card-header">Emails</div>
           ${d.messages.length ? html`<div class="table-responsive"><table class="table table-sm">
             <thead><tr><th>Email</th><th>Status</th><th>Opened</th><th>Clicked</th><th>When</th></tr></thead><tbody>

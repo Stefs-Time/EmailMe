@@ -122,6 +122,21 @@ const G = {
     in <strong>Settings → Email design</strong>; headings, buttons and links follow those colours unless you pick a colour for a block.
     A campaign keeps the design it was sent with, even if the design changes later.</p>
     <div class="tip">Start a new or old list with a small batch. A high bounce rate in the first hour is a sign the list needs cleaning before you continue.</div>`)],
+  inbox: ['Inbox: replies', raw(`
+    <h2>Replies to your campaigns</h2>
+    <p>When someone presses Reply on a campaign, it arrives in the <a href="#/inbox">Inbox</a>, linked to the contact and the campaign they answered.
+    Out-of-office messages are filed under <em>Auto-replies</em> and never wait for an answer.</p>
+    <ol>
+      <li><strong>Read:</strong> the person's words come first; the quoted email is folded away. <em>Show original formatting</em> shows the email
+        as sent, safely isolated, with remote images blocked until you load them. Attachments are listed for download.</li>
+      <li><strong>Answer:</strong> write under the conversation and press <em>Send reply</em>. It goes from your sender address and threads with their
+        email in their mail client. If they answer again, it joins the same conversation.</li>
+      <li><strong>Organise:</strong> assign a conversation to a colleague, add an <em>internal note</em> (never emailed), and close it when done.</li>
+      <li><strong>Unsubscribe requests</strong> ("please remove me") are flagged in red. Press <em>Unsubscribe</em>: the opt-out is recorded on the
+        contact with the conversation as the reason. Check this view daily: POPIA requires you to honour these.</li>
+    </ol>
+    <div class="tip">Each campaign report has a <em>Replies</em> number, and each contact page lists the person's conversations.
+    If the Inbox says replies aren't being collected, an administrator connects the replies mailbox in Settings → Replies.</div>`)],
   bounces: ['Bounces explained', raw(`
     <h2>How bounces are handled</h2>
     <p>MailHarbor learns about failed deliveries in three ways:</p>

@@ -286,6 +286,8 @@ async function erase(ctx, id) {
     await db.query(`DELETE FROM portal.import_rows WHERE LOWER(email) = $1`, [normalizeEmail(email)]);
     await db.query(`UPDATE portal.recipient_events SET details = '{}'::jsonb, contact_id = NULL WHERE email_hash = $1 OR contact_id = $2`, [hash, id]);
     await db.query(`UPDATE portal.messages SET email = NULL, payload = '{}'::jsonb WHERE contact_id = $1`, [id]);
+    // Their emails to us and our answers (Inbox) are personal information too.
+    await db.query('DELETE FROM portal.conversations WHERE contact_id = $1 OR LOWER(email) = $2', [id, normalizeEmail(email)]);
     await db.query('DELETE FROM portal.contacts WHERE id = $1', [id]);
     await recipientEvent(db, { emailHash: hash, type: 'erased', actorType: 'user', actorId: ctx.user.id });
     await audit(db, ctx.req, 'contact.erased', { targetType: 'contact_hash', targetId: hash.slice(0, 16) });
@@ -295,8 +297,14 @@ async function erase(ctx, id) {
 /** POPIA access request: everything held about one contact. */
 async function exportData(ctx, id) {
   const detail = await getDetail(ctx, id);
+  const { rows: conversations } = await ctx.pool.query(
+    `SELECT v.id, v.subject, v.status, v.created_at,
+            COALESCE((SELECT JSON_AGG(JSON_BUILD_OBJECT('direction', m.direction, 'from', m.from_email, 'to', m.to_email, 'subject', m.subject,
+                                                        'text', m.text_body, 'at', m.created_at) ORDER BY m.created_at)
+                        FROM portal.inbox_messages m WHERE m.conversation_id = v.id AND m.direction <> 'note'), '[]') AS messages
+       FROM portal.conversations v WHERE v.contact_id = $1 ORDER BY v.created_at`, [id]);
   await audit(ctx.pool, ctx.req, 'contact.data_exported', { targetType: 'contact', targetId: id });
-  return { generated_at: new Date().toISOString(), ...detail };
+  return { generated_at: new Date().toISOString(), ...detail, conversations };
 }
 
 module.exports = {

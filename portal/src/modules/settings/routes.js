@@ -85,11 +85,13 @@ function settingsRoutes({ pool, settings, transport, config, worker }) {
     }
   });
 
+  // kind: 'bounce' (Settings → Bounces) or 'replies' (Settings → Replies)
   r.post('/mailbox-test', async (req, res) => {
-    const saved = await settings.mailbox();
-    const body = parse(z.object({ host: z.string().optional(), port: z.coerce.number().optional(), secure: z.boolean().optional(),
-      user: z.string().optional(), password: z.string().optional(), folder: z.string().optional() }), req.body || {});
-    const m = { ...saved, ...Object.fromEntries(Object.entries(body).filter(([, v]) => v !== undefined && v !== '')) };
+    const body = parse(z.object({ kind: z.enum(['bounce', 'replies']).default('bounce'), host: z.string().optional(), port: z.coerce.number().optional(),
+      secure: z.boolean().optional(), user: z.string().optional(), password: z.string().optional(), folder: z.string().optional() }), req.body || {});
+    const { kind, ...fields } = body;
+    const saved = await settings.mailbox(kind);
+    const m = { ...saved, ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined && v !== '')) };
     if (!m.host || !m.user || !m.password) throw badRequest('Enter the host, username and password');
     try {
       const out = await testMailbox(m);
@@ -100,8 +102,9 @@ function settingsRoutes({ pool, settings, transport, config, worker }) {
   });
 
   r.post('/mailbox-poll', async (req, res) => {
-    const out = await worker.mailboxIfDue(true);
-    await audit(pool, req, 'settings.mailbox_polled', { details: out || {} });
+    const { kind } = parse(z.object({ kind: z.enum(['bounce', 'replies']).default('bounce') }), req.body || {});
+    const out = kind === 'replies' ? await worker.repliesIfDue(true) : await worker.mailboxIfDue(true);
+    await audit(pool, req, 'settings.mailbox_polled', { details: { kind, ...(out || {}) } });
     res.json({ success: true, data: out || { skipped: true } });
   });
 

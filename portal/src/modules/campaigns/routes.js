@@ -148,7 +148,8 @@ function campaignRoutes({ pool, settings, worker }) {
     const problems = EDITABLE.includes(c.status) ? await readinessProblems(pool, settings, c) : [];
     const s = await settings.all();
     // What the editor needs to show the email as it will look: brand colours and the default sender.
-    const defaults = { design: themeFrom(s), from_name: s.from_name || s.org_name, from_email: s.from_email, reply_to: s.reply_to };
+    const defaults = { design: themeFrom(s), from_name: s.from_name || s.org_name, from_email: s.from_email, reply_to: s.reply_to,
+      replies_collected: Boolean(s.replies_mailbox.enabled) };
     res.json({ success: true, data: { ...c, eligible, problems, defaults } });
   });
 

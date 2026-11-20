@@ -16,6 +16,7 @@ Send them [Getting started](../GETTING_STARTED.md), which lists what we need:
   **Get the password through the password manager's secure share, never email or chat**
 - [ ] Sending domain, so they can set SPF / DKIM / DMARC
 - [ ] Bounce mailbox (IMAP) or provider webhook (they enter the mailbox password themselves in Settings)
+- [ ] Replies mailbox (IMAP, e.g. `replies@`), and its address as Reply-To (Settings → Replies), so replies reach the Inbox
 - [ ] Signed agreement, including the POPIA operator agreement (we process personal information on their behalf)
 
 Check the SMTP provider allows marketing/bulk email. A normal Microsoft 365 or Google Workspace mailbox is **not**

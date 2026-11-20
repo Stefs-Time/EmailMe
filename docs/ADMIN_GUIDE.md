@@ -29,6 +29,7 @@ Contact MailHarbor support to:
 
 | Item | Details |
 |---|---|
+| Replies mailbox | A **dedicated** mailbox with IMAP, e.g. `replies@yourcompany.co.za`, so replies to campaigns arrive in the Inbox |
 | Mail server (SMTP) | A sending service or relay that permits marketing email: host, port (587 or 465), username, password. MailHarbor support connects it for you |
 | Sending domain | A domain you control, to set SPF, DKIM and DMARC (§5) |
 | Bounce mailbox | A **dedicated** mailbox with IMAP over TLS (port 993), e.g. `bounces@yourcompany.co.za`, **or** your provider's bounce webhooks |
@@ -69,6 +70,17 @@ preferences and View in browser links. There are no per-campaign templates.
   - **Only for these websites:** limits tagging to your own domains. Leave it empty to tag every web link.
   - **Frozen at send:** tags are fixed when a campaign starts sending, so changing these settings never breaks the
     tracked links of a campaign in progress.
+
+### Replies
+- **Reply-To address:** where replies to campaigns go. Set it to the address of the replies mailbox. Empty means replies
+  go to the From address, outside MailHarbor.
+- **Replies mailbox:** IMAP host, port 993 with TLS, username, password (stored encrypted), folder, check interval and
+  what to do after collecting. **Test connection** reports the exact IMAP error; **Check now** collects immediately.
+- Every email in that folder is collected: replies become Inbox conversations (linked to the contact and the campaign by
+  the email's reply headers, or by the sender's address), out-of-office messages are filed as auto-replies, and delivery
+  reports are recorded as bounces. Use a mailbox dedicated to campaign replies, not someone's personal inbox.
+- Emails from people that reach the **bounce** mailbox are also put in the Inbox instead of being discarded.
+- Attachments up to 10 MB each are kept for download; larger ones are listed by name only.
 
 ### Sign-up forms on your website
 *Sign-up forms* gives each form a link and an embed code: an iframe pointing to `https://<your address>/f/<id>?embed=1`.
@@ -167,6 +179,7 @@ Dashboard and System health alerts:
 | Emails cannot be sent (critical) | Mail server connection or sign-in failed during sending; campaigns auto-paused | If your mail server's password or details changed, send the new details to MailHarbor support. Then **Resume** |
 | Bounce mailbox error (critical) | IMAP connection, login or folder error, or incomplete settings | Settings → Bounces → **Test connection** |
 | Bounce processing off (warning) | No bounce mailbox enabled | Set up a bounce mailbox (§3) |
+| Replies mailbox error (critical) / not collected (warning) | The replies mailbox can't be read, or isn't set up | Settings → Replies → **Test connection** |
 | Public URL missing (critical) | No public address, so emails cannot contain working unsubscribe links | Contact MailHarbor support |
 | Backup failed / stale | The daily backup didn't complete | MailHarbor is alerted too and will fix it; no action needed |
 
@@ -187,6 +200,7 @@ System health also shows:
 | Reactivate a suppressed contact | Suppression → find the address → *Lift* (admin; needs a reason and the new permission basis). The contact page links there |
 | POPIA access / erasure | Contact → *Data export* / *Erase* |
 | See who did what | Audit log (admin) |
+| Handle unsubscribe requests sent by email | Inbox → *Unsubscribe requests* → **Unsubscribe** (recorded on the contact) |
 | Rotate the webhook token | Settings → Bounces → *New token*; update the URL at your provider |
 | Change mail server or web address | Contact MailHarbor support |
 

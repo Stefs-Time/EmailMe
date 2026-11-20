@@ -34,8 +34,11 @@ const maskEmail = (e) => String(e || '').replace(/^(.)(.*)(@.*)$/, (m, a, b, c) 
 
 function publicRoutes({ pool, settings, logger }) {
   const r = express.Router();
-  r.use(rateLimit({ windowMs: 60000, limit: 300, standardHeaders: 'draft-7', legacyHeaders: false }));
-  r.use(express.urlencoded({ extended: false, limit: '10kb' }));
+  // Only the recipient pages and the webhook: this router is mounted at the root, so an unscoped
+  // limiter would also count every staff API request.
+  const PUBLIC_PATHS = ['/u', '/p', '/s', '/v', '/t', '/webhooks'];
+  r.use(PUBLIC_PATHS, rateLimit({ windowMs: 60000, limit: 300, standardHeaders: 'draft-7', legacyHeaders: false }));
+  r.use(PUBLIC_PATHS, express.urlencoded({ extended: false, limit: '10kb' }));
 
   async function messageByToken(token) {
     if (!UUID.test(token)) return null;

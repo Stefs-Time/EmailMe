@@ -5,6 +5,7 @@
  *   sender     every second   deliver queued emails (rate-limited)
  *   scheduler  every 15 s     start campaigns whose send time has come
  *   mailbox    every N min    read the bounce mailbox (Settings → Bounces)
+ *   replies    every N min    read the replies mailbox into the Inbox (Settings → Replies)
  *   upkeep     every minute   heartbeat, stale-send recovery, backup check,
  *                             hourly purge of old import staging rows
  * Mailbox and upkeep take a PostgreSQL advisory lock, so extra replicas are safe.
@@ -15,6 +16,7 @@ const { raiseAlert, resolveAlert } = require('../lib/audit');
 
 const LOCK_MAILBOX = 74219041;
 const LOCK_UPKEEP = 74219042;
+const LOCK_REPLIES = 74219043;
 
 async function getState(db, key, fallback) {
   const { rows } = await db.query('SELECT value FROM portal.sync_state WHERE key = $1', [key]);
@@ -51,6 +53,7 @@ class Worker {
     this.running = new Set();
     this.stopped = false;
     this.lastMailbox = 0;
+    this.lastReplies = 0;
     this.lastHousekeeping = 0;
   }
 
@@ -74,6 +77,7 @@ class Worker {
     });
     this.loop('scheduler', 15000, () => this.startDue());
     this.loop('mailbox', 30000, () => this.mailboxIfDue());
+    this.loop('replies', 30000, () => this.repliesIfDue());
     this.loop('upkeep', 60000, () => withLock(this.pool, LOCK_UPKEEP, () => this.upkeep()));
   }
 
@@ -98,6 +102,14 @@ class Worker {
     if (!force && Date.now() - this.lastMailbox < m.interval_minutes * 60000) return null;
     this.lastMailbox = Date.now();
     return withLock(this.pool, LOCK_MAILBOX, () => pollMailbox({ pool: this.pool, settings: this.settings, logger: this.log }));
+  }
+
+  async repliesIfDue(force = false) {
+    const m = await this.settings.mailbox('replies');
+    if (!m.enabled) return null;
+    if (!force && Date.now() - this.lastReplies < m.interval_minutes * 60000) return null;
+    this.lastReplies = Date.now();
+    return withLock(this.pool, LOCK_REPLIES, () => pollMailbox({ pool: this.pool, settings: this.settings, logger: this.log, kind: 'replies' }));
   }
 
   async upkeep() {
@@ -125,6 +137,10 @@ class Worker {
       await raiseAlert(this.pool, 'bounce_mailbox_off', 'warning',
         'No bounce mailbox is configured (Settings → Bounces). Rejections during sending are still recorded, but bounces that arrive later by email are not.');
     } else await resolveAlert(this.pool, 'bounce_mailbox_off');
+    if (!s.replies_mailbox.enabled) {
+      await raiseAlert(this.pool, 'replies_mailbox_off', 'warning',
+        `Replies to campaigns go to ${s.reply_to || s.from_email || 'your sender address'}, outside MailHarbor. Set up Settings → Replies to read and answer them in the Inbox.`);
+    } else await resolveAlert(this.pool, 'replies_mailbox_off');
   }
 
   /** Scope §8: backup execution status. */

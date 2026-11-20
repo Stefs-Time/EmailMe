@@ -70,6 +70,7 @@ export async function render(el, ctx, [id]) {
                 <div class="col-12 form-text">Leave empty to use the sender from Settings → Sending.</div>
               </div>
             </details>
+            <div class="small text-muted-2 mt-1" id="reply-summary"></div>
           </div>
           <div class="col-12">
             <details class="mh-details" ${advancedNonDefault ? raw('open') : ''}>
@@ -115,6 +116,11 @@ export async function render(el, ctx, [id]) {
     const name = form.from_name.value.trim() || d.from_name || '';
     const email = form.from_email.value.trim() || d.from_email || '(no sender set)';
     $('#sender-summary', el).textContent = `${name} <${email}>`;
+    const replyTo = form.reply_to.value.trim() || d.reply_to || form.from_email.value.trim() || d.from_email || '';
+    const collected = d.replies_collected && (!form.reply_to.value.trim() || form.reply_to.value.trim().toLowerCase() === String(d.reply_to || '').toLowerCase());
+    mount($('#reply-summary', el), collected
+      ? html`<i class="bi bi-inbox me-1"></i>Replies go to ${replyTo} and arrive in the <a href="#/inbox">Inbox</a>.`
+      : html`<i class="bi bi-exclamation-circle me-1"></i>Replies go to ${replyTo || 'the From address'}${d.replies_collected ? ', not the replies mailbox, so they won\'t reach the Inbox.' : ', outside MailHarbor (Settings → Replies).'}`);
     const t = [form.track_opens.checked && 'opens', form.track_clicks.checked && 'clicks', form.utm_enabled.checked && 'Google Analytics tags'].filter(Boolean);
     $('#tracking-summary', el).textContent = t.length ? `· ${t.join(', ')}` : '· off';
     $('#utm-wrap', el).classList.toggle('d-none', !form.utm_enabled.checked);

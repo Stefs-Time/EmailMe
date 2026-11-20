@@ -296,6 +296,36 @@ Tell your administrator.
 The preview updates as you change things; press **Save settings** to apply. Drafts and future campaigns use the new
 design. Campaigns already sent keep the design they were sent with.
 
+## Inbox: replies to your campaigns
+
+When someone presses **Reply** on a campaign, their email arrives in the **Inbox** (menu → Email), linked to the
+contact and to the campaign they answered. The menu badge shows how many are unread.
+
+**Views:** *Needs reply* (open conversations), *Mine*, *Unassigned*, *Unsubscribe requests*, *Auto-replies*
+(out-of-office messages, filed separately and never counted as needing a reply), *Closed* and *All*. Search finds names,
+addresses, subjects and text.
+
+**Reading.** The reply shows what the person wrote; the quoted original email is folded away (*Show quoted text*).
+*Show original formatting* displays the email as it was sent, safely isolated; remote images (often tracking pixels)
+stay blocked until you press *Load images*. Attachments are listed for download.
+
+**Answering** (managers and administrators):
+- Write in the box under the conversation. It starts with a greeting and your signature. **Send reply** emails the person
+  from your sender address, threaded with their message in their mail client; **Send and close** also closes the
+  conversation. If they answer again, it joins the same conversation and reopens it.
+- **Internal note**: notes for your team, never emailed.
+- **Assign** a conversation to a colleague, **Close** it when done, or mark it unread again.
+- **Unsubscribe requests**: replies like "please remove me" are flagged in red. Press **Unsubscribe** to opt the person
+  out; it is recorded on the contact with the conversation as the reason, and the conversation closes. POPIA requires
+  you to honour these, so check this view daily.
+- A suppressed person can still be answered (for example a question), but don't use the reply to market to them.
+
+Each campaign report has a **Replies** number that opens that campaign's conversations, and each contact page lists the
+person's conversations. Replies are part of POPIA access requests (data export) and are deleted when a contact is erased.
+
+If the Inbox says replies aren't being collected, an administrator needs to connect the replies mailbox
+(Settings → Replies).
+
 ## Exports
 **Exports** offers:
 - contacts (for any filter);
@@ -326,8 +356,8 @@ Files are CSV and open in Excel. Each export is recorded in the audit log.
 
 | Role | Can |
 |---|---|
-| Viewer | View dashboards, contacts, lists, campaigns and reports (read-only, no exports) |
-| Manager | Everything a viewer can, plus: add and edit contacts and lists, import, export, write and send campaigns, manage images, unsubscribe, suppress, resolve reviews, view System health |
+| Viewer | View dashboards, contacts, lists, campaigns, reports and the Inbox (read-only, no exports or replies) |
+| Manager | Everything a viewer can, plus: add and edit contacts and lists, import, export, write and send campaigns, answer replies in the Inbox, manage images, unsubscribe, suppress, resolve reviews, view System health |
 | Administrator | Everything a manager can, plus: Settings, users, reactivate suppressed contacts, erase contacts, delete lists, audit log |
 
 ## FAQ

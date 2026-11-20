@@ -2,7 +2,7 @@ import { get, put, post } from '../api.js';
 import { html, raw, mount, $, $$, loading, toast, errorToast, num, ago } from '../ui.js';
 import { pickImage } from '../images.js';
 
-const TABS = [['general', 'General'], ['design', 'Email design'], ['sending', 'Sending'], ['bounces', 'Bounces'], ['compliance', 'Compliance & backups']];
+const TABS = [['general', 'General'], ['design', 'Email design'], ['sending', 'Sending'], ['replies', 'Replies'], ['bounces', 'Bounces'], ['compliance', 'Compliance & backups']];
 const FONTS = [['arial', 'Arial'], ['helvetica', 'Helvetica'], ['verdana', 'Verdana'], ['trebuchet', 'Trebuchet MS'], ['georgia', 'Georgia (serif)']];
 const DESIGN_KEYS = ['email_logo_url', 'email_logo_width', 'email_header_align', 'email_brand_color', 'email_heading_color', 'email_background', 'email_font', 'email_footer_text', 'email_show_preferences'];
 
@@ -11,6 +11,23 @@ export async function render(el, ctx, [tabArg]) {
   mount(el, loading());
   const { data: s } = await get('/settings');
   const m = s.bounce_mailbox;
+  const rm = s.replies_mailbox;
+  /** IMAP fields for a mailbox; prefix 'mb' (bounces) or 'rm' (replies). */
+  const imapFields = (px, box, purpose) => html`
+      <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" role="switch" id="${px}-on" name="${px}_enabled" ${check(box.enabled)}><label class="form-check-label" for="${px}-on">${purpose}</label></div>
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label" for="${px}-host">IMAP server</label><input class="form-control" id="${px}-host" name="${px}_host" value="${box.host}" placeholder="imap.yourprovider.com"></div>
+        <div class="col-md-3"><label class="form-label" for="${px}-port">Port</label><input class="form-control" id="${px}-port" name="${px}_port" type="number" value="${box.port}"></div>
+        <div class="col-md-3 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" id="${px}-tls" name="${px}_secure" ${check(box.secure)}><label class="form-check-label" for="${px}-tls">TLS (port 993)</label></div></div>
+        <div class="col-md-6"><label class="form-label" for="${px}-user">Username</label><input class="form-control" id="${px}-user" name="${px}_user" value="${box.user}" autocomplete="off"></div>
+        <div class="col-md-6"><label class="form-label" for="${px}-pw">Password</label><input class="form-control" id="${px}-pw" name="${px}_password" type="password" autocomplete="new-password" placeholder="${box.password_set ? '•••••••• (saved, leave empty to keep)' : ''}">
+          <div class="form-text">Stored encrypted.</div></div>
+        <div class="col-md-4"><label class="form-label" for="${px}-folder">Folder</label><input class="form-control" id="${px}-folder" name="${px}_folder" value="${box.folder}"></div>
+        <div class="col-md-4"><label class="form-label" for="${px}-int">Check every (minutes)</label><input class="form-control" id="${px}-int" name="${px}_interval" type="number" min="1" max="1440" value="${box.interval_minutes}"></div>
+        <div class="col-md-4"><label class="form-label" for="${px}-after">After processing</label><select class="form-select" id="${px}-after" name="${px}_after">
+          <option value="move" ${box.after === 'move' ? raw('selected') : ''}>Move to "MailHarbor-Processed"</option><option value="delete" ${box.after === 'delete' ? raw('selected') : ''}>Delete</option></select></div>
+      </div>
+      <button type="button" class="btn btn-outline-primary mt-3" id="${px}-test" data-kind="${px === 'rm' ? 'replies' : 'bounce'}">Test connection</button><span id="${px}-result" class="ms-2 small"></span>`;
   const check = (v) => (v ? raw('checked') : '');
   const webhookUrl = `${s.effective_public_url || location.origin}/webhooks/bounce?token=${s.webhook_token}`;
 
@@ -53,7 +70,8 @@ export async function render(el, ctx, [tabArg]) {
       <div class="col-md-6"><label class="form-label">From name</label><input class="form-control" name="from_name" value="${s.from_name}" maxlength="120"></div>
       <div class="col-md-6"><label class="form-label">From address</label><input class="form-control" name="from_email" type="email" value="${s.from_email}">
         <div class="form-text">Your SMTP account must be allowed to send as this address, and its domain needs SPF, DKIM and DMARC.</div></div>
-      <div class="col-md-6"><label class="form-label">Reply-to (optional)</label><input class="form-control" name="reply_to" type="email" value="${s.reply_to}"></div>
+      <div class="col-md-6"><label class="form-label">Reply-to</label><div class="form-control-plaintext">${s.reply_to || html`<span class="text-muted-2">the From address</span>`}
+        <a class="small ms-1" href="#/settings/replies">Change under Replies</a></div></div>
     </div></div></div>
     <div class="card mb-3"><div class="card-header">Speed &amp; tracking</div><div class="card-body"><div class="row g-3">
       <div class="col-md-4"><label class="form-label">Emails per second</label><input class="form-control" name="send_rate_per_second" type="number" min="0.1" max="100" step="0.1" value="${s.send_rate_per_second}">
@@ -79,6 +97,18 @@ export async function render(el, ctx, [tabArg]) {
       <div id="smtp-result" class="mt-2 small"></div>
       <div class="form-text">MailHarbor sends through your own mail server. To connect a different server, or if its password changed, send the new details to MailHarbor support. Passwords are never shown or stored in Settings.</div>
     </div></div>`,
+    replies: html`<div class="card mb-3"><div class="card-header">Where replies go</div><div class="card-body"><div class="row g-3">
+      <div class="col-md-6"><label class="form-label" for="r-to">Reply-To address</label><input class="form-control" id="r-to" name="reply_to" type="email" value="${s.reply_to}" placeholder="replies@yourdomain.co.za">
+        <div class="form-text">When someone presses Reply on a campaign, their email goes here. Use the address of the mailbox below so replies arrive in the
+          <a href="#/inbox">Inbox</a>. Empty: replies go to the From address (${s.from_email || 'not set'}), outside MailHarbor.</div></div>
+    </div></div></div>
+    <div class="card mb-3"><div class="card-header d-flex align-items-center">Replies mailbox (IMAP)
+      ${rm.enabled ? html`<button type="button" class="btn btn-sm btn-light ms-auto" id="rm-poll"><i class="bi bi-arrow-repeat me-1"></i>Check now</button>` : ''}</div><div class="card-body">
+      ${imapFields('rm', rm, 'Collect replies from this mailbox into the Inbox')}
+      <div class="alert alert-info small mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>Every email in this folder is collected: replies appear in the Inbox, linked to the contact and the campaign
+        they answer; out-of-office messages are filed separately; delivery reports are recorded as bounces. Use a mailbox dedicated to campaign replies
+        (for example <span class="mono">replies@</span>), not someone's personal inbox.</div>
+    </div></div>`,
     bounces: html`<div class="card mb-3"><div class="card-header">Where bounces go</div><div class="card-body"><div class="row g-3">
       <div class="col-md-6"><label class="form-label">Bounce address (Return-Path)</label><input class="form-control" name="bounce_address" type="email" value="${s.bounce_address}" placeholder="bounces@yourdomain.co.za">
         <div class="form-text">Delivery failures are returned here. Use a dedicated mailbox and connect it below. Leave empty to use the From address.</div></div>
@@ -87,21 +117,8 @@ export async function render(el, ctx, [tabArg]) {
     </div></div></div>
     <div class="card mb-3"><div class="card-header d-flex align-items-center">Bounce mailbox (IMAP)
       ${m.enabled ? html`<button type="button" class="btn btn-sm btn-light ms-auto" id="mb-poll"><i class="bi bi-arrow-repeat me-1"></i>Check now</button>` : ''}</div><div class="card-body">
-      <div class="form-check form-switch mb-3"><input class="form-check-input" type="checkbox" role="switch" id="mb-on" name="mb_enabled" ${check(m.enabled)}><label class="form-check-label" for="mb-on">Read bounce notifications from this mailbox</label></div>
-      <div class="row g-3">
-        <div class="col-md-6"><label class="form-label">IMAP server</label><input class="form-control" name="mb_host" value="${m.host}" placeholder="imap.yourprovider.com"></div>
-        <div class="col-md-3"><label class="form-label">Port</label><input class="form-control" name="mb_port" type="number" value="${m.port}"></div>
-        <div class="col-md-3 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" id="mb-tls" name="mb_secure" ${check(m.secure)}><label class="form-check-label" for="mb-tls">TLS (port 993)</label></div></div>
-        <div class="col-md-6"><label class="form-label">Username</label><input class="form-control" name="mb_user" value="${m.user}" autocomplete="off"></div>
-        <div class="col-md-6"><label class="form-label">Password</label><input class="form-control" name="mb_password" type="password" autocomplete="new-password" placeholder="${m.password_set ? '•••••••• (saved, leave empty to keep)' : ''}">
-          <div class="form-text">Stored encrypted.</div></div>
-        <div class="col-md-4"><label class="form-label">Folder</label><input class="form-control" name="mb_folder" value="${m.folder}"></div>
-        <div class="col-md-4"><label class="form-label">Check every (minutes)</label><input class="form-control" name="mb_interval" type="number" min="1" max="1440" value="${m.interval_minutes}"></div>
-        <div class="col-md-4"><label class="form-label">After processing</label><select class="form-select" name="mb_after">
-          <option value="move" ${m.after === 'move' ? raw('selected') : ''}>Move to "MailHarbor-Processed"</option><option value="delete" ${m.after === 'delete' ? raw('selected') : ''}>Delete</option></select></div>
-      </div>
-      <button type="button" class="btn btn-outline-primary mt-3" id="mb-test">Test connection</button><span id="mb-result" class="ms-2 small"></span>
-      <div class="alert alert-warning small mt-3 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>Every message in this folder is processed. Never connect a personal or shared inbox.</div>
+      ${imapFields('mb', m, 'Read bounce notifications from this mailbox')}
+      <div class="alert alert-warning small mt-3 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>Every message in this folder is processed: delivery reports become bounces, and emails from people go to the <a href="#/inbox">Inbox</a>. Never connect a personal inbox.</div>
     </div></div>
     <div class="card"><div class="card-header">Provider webhook (optional)</div><div class="card-body small">
       <p>If your email provider can post bounce or complaint events, point it at this address (POST, JSON: <code>{"email","type":"hard|soft|complaint","reason","message_id"}</code>):</p>
@@ -118,7 +135,7 @@ export async function render(el, ctx, [tabArg]) {
     </div></div>`,
   };
 
-  mount(el, html`<div class="page-head"><div><h1>Settings</h1><p>Organisation, email design, sending, bounce handling and compliance. Your database and mail server connection are managed by MailHarbor.</p></div></div>
+  mount(el, html`<div class="page-head"><div><h1>Settings</h1><p>Organisation, email design, sending, replies, bounce handling and compliance. Your database and mail server connection are managed by MailHarbor.</p></div></div>
     <ul class="nav nav-tabs mb-3">${TABS.map(([k, l]) => html`<li class="nav-item"><a class="nav-link ${k === tab ? 'active' : ''}" href="#/settings/${k}" ${k === tab ? raw('aria-current="page"') : ''}>${l}</a></li>`)}</ul>
     <form id="sf" novalidate>${sections[tab]}
       <div class="mt-3 d-flex gap-2 align-items-center"><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save settings</button><span class="small text-muted-2" id="saved"></span></div></form>`);
@@ -132,16 +149,17 @@ export async function render(el, ctx, [tabArg]) {
     for (const k of ['send_rate_per_second', 'send_max_per_hour', 'soft_bounce_limit', 'backup_stale_hours', 'email_logo_width']) if (v(k)) body[k] = Number(v(k).value);
     for (const k of ['track_opens', 'track_clicks', 'global_unsubscribe', 'utm_enabled', 'email_show_preferences']) if (v(k)) body[k] = v(k).checked;
     for (const k of ['email_logo_url', 'email_header_align', 'email_brand_color', 'email_heading_color', 'email_background', 'email_font', 'email_footer_text']) if (v(k)) body[k] = v(k).value.trim();
-    if (v('mb_host')) {
-      body.bounce_mailbox = { enabled: v('mb_enabled').checked, host: v('mb_host').value.trim(), port: Number(v('mb_port').value), secure: v('mb_secure').checked,
-        user: v('mb_user').value.trim(), folder: v('mb_folder').value.trim() || 'INBOX', after: v('mb_after').value, interval_minutes: Number(v('mb_interval').value) };
-      if (v('mb_password').value) body.bounce_mailbox.password = v('mb_password').value;
+    for (const [px, key] of [['mb', 'bounce_mailbox'], ['rm', 'replies_mailbox']]) {
+      if (!v(`${px}_host`)) continue;
+      body[key] = { enabled: v(`${px}_enabled`).checked, host: v(`${px}_host`).value.trim(), port: Number(v(`${px}_port`).value), secure: v(`${px}_secure`).checked,
+        user: v(`${px}_user`).value.trim(), folder: v(`${px}_folder`).value.trim() || 'INBOX', after: v(`${px}_after`).value, interval_minutes: Number(v(`${px}_interval`).value) };
+      if (v(`${px}_password`).value) body[key].password = v(`${px}_password`).value;
     }
     try {
       await put('/settings', body);
       toast('Settings saved');
       $('#saved', el).textContent = `Saved ${new Date().toLocaleTimeString('en-ZA')}`;
-      if (v('mb_password')) v('mb_password').value = '';
+      for (const px of ['mb', 'rm']) if (v(`${px}_password`)) v(`${px}_password`).value = '';
     } catch (err) { errorToast(err); }
   });
 
@@ -175,23 +193,29 @@ export async function render(el, ctx, [tabArg]) {
         : html`<span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${r.data.error}</span>`);
     } catch (err) { errorToast(err); out.textContent = ''; } finally { e.target.disabled = false; }
   });
-  $('#mb-test', el)?.addEventListener('click', async (e) => {
-    e.target.disabled = true;
-    const out = $('#mb-result', el);
-    out.textContent = 'Connecting…';
-    try {
-      const r = await post('/settings/mailbox-test', { host: f.mb_host.value, port: Number(f.mb_port.value), secure: f.mb_secure.checked,
-        user: f.mb_user.value, password: f.mb_password.value || undefined, folder: f.mb_folder.value });
-      mount(out, r.data.ok ? html`<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Connected. ${num(r.data.messages)} message(s) waiting.</span>`
-        : html`<span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${r.data.error}</span>`);
-    } catch (err) { errorToast(err); out.textContent = ''; } finally { e.target.disabled = false; }
-  });
-  $('#mb-poll', el)?.addEventListener('click', async () => {
-    try {
-      const r = await post('/settings/mailbox-poll');
-      toast(r.data.error ? `Mailbox error: ${r.data.error}` : `Checked ${num(r.data.checked || 0)} message(s): ${num(r.data.bounces || 0)} bounce(s) recorded`, r.data.error ? 'danger' : 'success');
-    } catch (err) { errorToast(err); }
-  });
+  for (const px of ['mb', 'rm']) {
+    const kind = px === 'rm' ? 'replies' : 'bounce';
+    $(`#${px}-test`, el)?.addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      const out = $(`#${px}-result`, el);
+      out.textContent = 'Connecting…';
+      try {
+        const r = await post('/settings/mailbox-test', { kind, host: f[`${px}_host`].value, port: Number(f[`${px}_port`].value), secure: f[`${px}_secure`].checked,
+          user: f[`${px}_user`].value, password: f[`${px}_password`].value || undefined, folder: f[`${px}_folder`].value });
+        mount(out, r.data.ok ? html`<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Connected. ${num(r.data.messages)} message(s) waiting.</span>`
+          : html`<span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${r.data.error}</span>`);
+      } catch (err) { errorToast(err); out.textContent = ''; } finally { e.target.disabled = false; }
+    });
+    $(`#${px}-poll`, el)?.addEventListener('click', async () => {
+      try {
+        const r = await post('/settings/mailbox-poll', { kind });
+        toast(r.data.error ? `Mailbox error: ${r.data.error}`
+          : `Checked ${num(r.data.checked || 0)} message(s): ${num(r.data.replies || 0)} repl${r.data.replies === 1 ? 'y' : 'ies'}, ${num(r.data.bounces || 0)} bounce(s)`,
+        r.data.error ? 'danger' : 'success');
+        ctx.refreshBadges?.();
+      } catch (err) { errorToast(err); }
+    });
+  }
   $('#wh-copy', el)?.addEventListener('click', async () => { await navigator.clipboard?.writeText(webhookUrl).catch(() => {}); toast('Webhook URL copied'); });
   $('#wh-rotate', el)?.addEventListener('click', async () => {
     try { await post('/settings/webhook-token'); toast('New webhook token created. Update your provider.'); ctx.navigate('#/settings/bounces'); } catch (err) { errorToast(err); }

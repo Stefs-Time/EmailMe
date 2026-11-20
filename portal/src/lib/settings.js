@@ -39,6 +39,8 @@ const SCHEMA = z.object({
   track_opens: z.boolean().default(true),
   track_clicks: z.boolean().default(true),
   bounce_mailbox: mailbox.default({}),
+  // Replies to campaigns (the Reply-To address's mailbox), read into the Inbox.
+  replies_mailbox: mailbox.default({}),
   webhook_token: z.string().default(''),
   backup_stale_hours: z.coerce.number().min(0).max(744).default(0),
   // Google Analytics campaign tags added to links (campaigns can switch them off).
@@ -59,7 +61,7 @@ const SCHEMA = z.object({
 });
 
 // zod 4 returns .default({}) objects as-is, so build nested defaults explicitly.
-const DEFAULTS = { ...SCHEMA.parse({}), bounce_mailbox: mailbox.parse({}) };
+const DEFAULTS = { ...SCHEMA.parse({}), bounce_mailbox: mailbox.parse({}), replies_mailbox: mailbox.parse({}) };
 const CACHE_MS = 5000;
 
 class Settings {
@@ -75,7 +77,8 @@ class Settings {
     if (this.cache && Date.now() - this.cachedAt < CACHE_MS) return this.cache;
     const { rows } = await this.pool.query('SELECT key, value FROM portal.settings');
     const stored = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-    const merged = { ...DEFAULTS, ...stored, bounce_mailbox: { ...DEFAULTS.bounce_mailbox, ...(stored.bounce_mailbox || {}) } };
+    const merged = { ...DEFAULTS, ...stored, bounce_mailbox: { ...DEFAULTS.bounce_mailbox, ...(stored.bounce_mailbox || {}) },
+      replies_mailbox: { ...DEFAULTS.replies_mailbox, ...(stored.replies_mailbox || {}) } };
     if (!merged.from_email && this.config?.SMTP_FROM) {
       const m = /^(?:"?([^"<]*)"?\s*)?<([^>]+)>$/.exec(this.config.SMTP_FROM.trim());
       merged.from_email = m ? m[2] : this.config.SMTP_FROM.trim();
@@ -104,10 +107,10 @@ class Settings {
     return (s.public_url || '').replace(/\/+$/, '') || this.config?.platformPublicUrl || '';
   }
 
-  /** Bounce mailbox settings with the password decrypted (server use only). */
-  async mailbox() {
+  /** Mailbox settings with the password decrypted (server use only). kind: 'bounce' | 'replies'. */
+  async mailbox(kind = 'bounce') {
     const s = await this.all();
-    const m = { ...s.bounce_mailbox };
+    const m = { ...s[kind === 'replies' ? 'replies_mailbox' : 'bounce_mailbox'] };
     m.password = m.password_enc ? decrypt(this.encKey, m.password_enc) : '';
     delete m.password_enc;
     return m;
@@ -117,7 +120,9 @@ class Settings {
   async forUi() {
     const s = await this.all();
     const { password_enc: enc, ...mb } = s.bounce_mailbox; // eslint-disable-line no-unused-vars
-    return { ...s, bounce_mailbox: { ...mb, password_set: Boolean(enc) }, public_url_locked: Boolean(this.config?.envPublicUrl),
+    const { password_enc: encR, ...rb } = s.replies_mailbox; // eslint-disable-line no-unused-vars
+    return { ...s, bounce_mailbox: { ...mb, password_set: Boolean(enc) }, replies_mailbox: { ...rb, password_set: Boolean(encR) },
+      public_url_locked: Boolean(this.config?.envPublicUrl),
       effective_public_url: await this.publicUrl() };
   }
 
@@ -129,9 +134,9 @@ class Settings {
     // zod fills defaults even for omitted keys: only write what was sent.
     for (const [key, value] of Object.entries(partial).filter(([k]) => Object.hasOwn(patch, k))) {
       let v = value;
-      if (key === 'bounce_mailbox') {
+      if (key === 'bounce_mailbox' || key === 'replies_mailbox') {
         const { password, ...rest } = value;
-        v = { ...current.bounce_mailbox, ...rest };
+        v = { ...current[key], ...rest };
         if (password !== undefined && password !== '') v.password_enc = encrypt(this.encKey, password);
       }
       await this.pool.query(

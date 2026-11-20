@@ -52,6 +52,7 @@ export async function render(el, ctx) {
       </div></div>
     </div>
 
+    <div id="inbox-card"></div>
     <div class="row g-3 mb-3">
       <div class="col-6 col-md-3"><a class="card kpi kpi-link" href="#/campaigns"><div class="label"><i class="bi bi-envelope-paper"></i>Campaigns</div><div class="value">${num(d.totals.campaigns)}</div><div class="sub">${num(d.totals.active_campaigns)} running or scheduled</div></a></div>
       <div class="col-6 col-md-3"><a class="card kpi kpi-link" href="#/details?kind=messages&message_kind=campaign&state=sent"><div class="label"><i class="bi bi-send-check"></i>Emails sent</div><div class="value">${num(d.totals.emails_sent)}</div><div class="sub">All campaigns</div></a></div>
@@ -82,6 +83,18 @@ export async function render(el, ctx) {
         </tbody></table></div>` : html`<div class="empty"><i class="bi bi-envelope"></i>No campaigns yet. <a href="#/guides/campaigns">How to send your first campaign</a></div>`}
     </div>`);
 
+  if (ctx.can('inbox:read')) {
+    get('/inbox/counts').then(({ data: ib }) => {
+      if (!ib.open && ib.collecting) return;
+      mount($('#inbox-card', el), html`<a class="card kpi kpi-link mb-3 d-flex flex-row align-items-center gap-3 flex-wrap" href="#/inbox">
+        <i class="bi bi-inbox fs-3 text-primary" aria-hidden="true"></i>
+        <div class="flex-grow-1"><div class="label">Inbox</div>
+          ${ib.open ? html`<div><strong>${num(ib.open)}</strong> conversation${ib.open === 1 ? '' : 's'} need${ib.open === 1 ? 's' : ''} a reply${ib.unread ? html` · <strong>${num(ib.unread)}</strong> unread` : ''}</div>` : ''}
+          ${!ib.collecting ? html`<div class="small text-muted-2">Replies to campaigns are not collected yet: they go to ${ib.reply_to || 'your sender address'}.</div>` : ''}</div>
+        ${ib.unsubscribe ? html`<span class="badge text-bg-danger fs-6"><i class="bi bi-envelope-x me-1"></i>${num(ib.unsubscribe)} unsubscribe request${ib.unsubscribe === 1 ? '' : 's'}</span>` : ''}
+      </a>`);
+    }).catch(() => {});
+  }
   const chart = lineChart($('#growth', el), d.growth.map((g) => shortDay(g.day)), [
     { key: 'added', label: 'Added', data: d.growth.map((g) => g.added) },
     { key: 'suppressed', label: 'Suppressed', data: d.growth.map((g) => g.suppressed) },

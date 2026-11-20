@@ -63,6 +63,22 @@ On every save the server:
   visual/HTML drafts into builder documents with one HTML block. `portal.templates` and `campaigns.template_id` are left
   in place but unused, so the change can be rolled back; a later migration can drop them.
 
+**Inbox** (migration 008; `engine/inbox.js`, `modules/inbox/routes.js`):
+- `engine/mailbox.js` reads the bounce and the replies mailbox the same way: DSN/ARF → `processBounce`; any other email
+  → `ingestReply`. A message that fails to store stays in the folder and is retried.
+- Campaign emails are sent with `Message-ID: <message uuid@sender domain>`. A reply's In-Reply-To/References find the
+  `portal.messages` row (or, for older sends, `smtp_message_id`), hence contact and campaign; an earlier conversation
+  message (including our own answers, `<reply.uuid@domain>`) finds the conversation. Fallback: the sender's address and
+  their latest campaign email (30 days), recorded as `matched_by = 'sender'`.
+- Classification: RFC 3834 `Auto-Submitted` and vendor headers/subjects → `auto_reply` (stored closed); "unsubscribe /
+  remove me…" in the new (unquoted) text → `unsubscribe_request`. Duplicates are prevented by a unique index on the
+  inbound Message-ID.
+- HTML is sanitised on storage and served only from `/api/inbox/messages/:id/html` with a sandbox CSP; remote `img`
+  sources are stripped unless `?images=1`. Attachments ≤ 10 MB are stored (`bytea`) and served as downloads.
+- Answers go out directly through the SMTP transport with In-Reply-To/References and are stored as `direction = 'out'`
+  with their send status; notes are `direction = 'note'`. Erasure deletes a contact's conversations; data exports
+  include them.
+
 **Report details** (`modules/reports/details.js`, `GET /api/reports/details`) back every clickable number: `kind`
 `recipients` (per campaign, by outcome or clicked link), `bounces`, `events` (recipient actions) and `messages`. Filters
 are whitelisted and bound; `format=csv` needs `exports:read`.

@@ -1003,3 +1003,125 @@ t('exports and campaign report download as CSV', async () => {
   const camp = await (await http('admin', 'GET', '/api/reports/campaigns.csv', undefined, { raw: true })).text();
   assert.ok(camp.includes('November news'));
 });
+
+t('inbox: replies are classified, threaded to the campaign and contact, read safely, answered and acted on', async () => {
+  const MailComposer = require('nodemailer/lib/mail-composer');
+  const { handleMessage } = require('../../src/engine/mailbox');
+  const raw = (opts) => new MailComposer({ date: new Date(), ...opts }).compile().build();
+  const handle = (buf) => handleMessage({ pool, settings, logger: { warn() {}, error() {} } }, buf, { kind: 'replies', ref: 'test' });
+
+  const l = await http('admin', 'POST', '/api/lists', { name: 'Inbox list', optin: 'single' });
+  for (const [email, name] of [['ib-amy@ok.example', 'Amy'], ['ib-bob@ok.example', 'Bob']]) {
+    await http('admin', 'POST', '/api/contacts', { email, firstName: name, listIds: [l.data.id], consent: { method: 'web_form' } });
+  }
+  const campId = await newCampaign('Inbox campaign', [l.data.id]);
+  sink.messages.length = 0;
+  assert.equal((await http('admin', 'POST', `/api/campaigns/${campId}/send`)).status, 200);
+  await drain();
+  const sentToAmy = sinkTo('ib-amy@ok.example')[0];
+  const amyMsg = (await pool.query(`SELECT uuid FROM portal.messages WHERE campaign_id = $1 AND email = 'ib-amy@ok.example'`, [campId])).rows[0];
+  assert.equal(sentToAmy.parsed.messageId, `<${amyMsg.uuid}@acme.example>`, 'campaign emails carry our own Message-ID');
+
+  // 1. A reply, threaded by In-Reply-To; the HTML is sanitised; the attachment is kept.
+  const amyReply = await raw({
+    from: 'Amy Adams <ib-amy@ok.example>', to: 'news@acme.example', subject: 'Re: Inbox campaign', inReplyTo: sentToAmy.parsed.messageId,
+    references: sentToAmy.parsed.messageId,
+    text: 'Thanks! What are your prices for 50 units?\n\nOn Tue, Acme wrote:\n> Hello Amy, unsubscribe here',
+    html: '<p>Thanks! What are your prices?</p><script>alert(1)</script><img src="https://tracker.example/p.gif">',
+    attachments: [{ filename: 'order.pdf', content: Buffer.from('%PDF-1.4 test') }],
+  });
+  assert.equal(await handle(amyReply), 'reply');
+  assert.equal(await handle(amyReply), 'reply', 'the same email again is recognised');
+  const { rows: amyConvs } = await pool.query(`SELECT * FROM portal.conversations WHERE email = 'ib-amy@ok.example'`);
+  assert.equal(amyConvs.length, 1);
+  const amyConv = amyConvs[0];
+  assert.equal(amyConv.campaign_id, campId);
+  assert.ok(amyConv.contact_id);
+  assert.equal(amyConv.category, 'reply', 'quoted "unsubscribe" text does not count');
+  assert.equal(amyConv.status, 'open');
+  assert.equal(amyConv.message_count, 1, 'stored once');
+  const stored = (await pool.query(`SELECT * FROM portal.inbox_messages WHERE conversation_id = $1`, [amyConv.id])).rows[0];
+  assert.equal(stored.matched_by, 'header');
+  assert.doesNotMatch(stored.html_body, /<script/);
+
+  // 2. Out-of-office: kept, closed, never counted as needing a reply.
+  await handle(await raw({ from: 'ib-bob@ok.example', to: 'news@acme.example', subject: 'Out of office: Inbox campaign',
+    headers: { 'Auto-Submitted': 'auto-replied' }, text: 'I am away until Monday.' }));
+  let bob = (await pool.query(`SELECT * FROM portal.conversations WHERE email = 'ib-bob@ok.example'`)).rows[0];
+  assert.equal(bob.category, 'auto_reply');
+  assert.equal(bob.status, 'closed');
+  // 3. Then a real "remove me" without any headers: matched by sender, joins Bob's conversation and stands out.
+  await handle(await raw({ from: 'ib-bob@ok.example', to: 'news@acme.example', subject: 'Re: Inbox campaign', text: 'Please remove me from your list.' }));
+  bob = (await pool.query(`SELECT * FROM portal.conversations WHERE email = 'ib-bob@ok.example'`)).rows[0];
+  assert.equal(bob.category, 'unsubscribe_request');
+  assert.equal(bob.status, 'open');
+  assert.equal(bob.campaign_id, campId, 'linked to the campaign Bob was sent');
+  // 4. A stranger; 5. a delivery report (still a bounce, not a conversation).
+  await handle(await raw({ from: 'stranger@else.example', to: 'news@acme.example', subject: 'Partnership', text: 'Hi, can we talk?' }));
+  assert.equal((await pool.query(`SELECT contact_id FROM portal.conversations WHERE email = 'stranger@else.example'`)).rows[0].contact_id, null);
+  const dsn = Buffer.from(`From: MAILER-DAEMON@mx.example\r\nTo: bounces@acme.example\r\nSubject: Undelivered\r\nContent-Type: multipart/report; report-type=delivery-status; boundary=b\r\n\r\n--b\r\nContent-Type: text/plain\r\n\r\nFailed\r\n--b\r\nContent-Type: message/delivery-status\r\n\r\nFinal-Recipient: rfc822; nobody-ib@ok.example\r\nAction: failed\r\nStatus: 5.1.1\r\n--b--\r\n`);
+  assert.equal(await handle(dsn), 'bounce');
+
+  // Reading: list, counts, the thread, the sandboxed original, the attachment.
+  const list = await http('viewer', 'GET', '/api/inbox?view=open');
+  assert.equal(list.status, 200);
+  assert.deepEqual(list.data.map((c) => c.email).filter((e) => e.startsWith('ib-') || e.startsWith('stranger')).sort(),
+    ['ib-amy@ok.example', 'ib-bob@ok.example', 'stranger@else.example']);
+  assert.match(list.data.find((c) => c.email === 'ib-amy@ok.example').snippet, /What are your prices/);
+  const counts = (await http('viewer', 'GET', '/api/inbox/counts')).data;
+  assert.ok(counts.unsubscribe >= 1 && counts.open >= 3);
+  assert.equal((await http('viewer', 'GET', '/api/inbox?view=auto')).data.some((c) => c.email === 'ib-bob@ok.example'), false, 'Bob is no longer just an auto-reply');
+  const thread = await http('viewer', 'GET', `/api/inbox/${amyConv.id}`);
+  assert.equal(thread.data.campaign, 'Inbox campaign');
+  assert.equal(thread.data.messages[0].attachments[0].filename, 'order.pdf');
+  assert.equal((await pool.query('SELECT unread FROM portal.conversations WHERE id = $1', [amyConv.id])).rows[0].unread, false, 'opened = read');
+  const h = await http('viewer', 'GET', `/api/inbox/messages/${thread.data.messages[0].id}/html`, undefined, { raw: true });
+  assert.match(h.headers.get('content-security-policy'), /sandbox.*img-src data:/, 'remote images blocked by default');
+  assert.doesNotMatch(await h.text(), /<script/);
+  const att = await http('viewer', 'GET', `/api/inbox/attachments/${thread.data.messages[0].attachments[0].id}`, undefined, { raw: true });
+  assert.match(att.headers.get('content-disposition'), /^attachment; filename="order.pdf"/);
+  assert.equal(att.headers.get('content-type'), 'application/octet-stream');
+
+  // Answering: viewers cannot; a manager/admin reply is threaded, and the next answer joins the conversation.
+  assert.equal((await http('viewer', 'POST', `/api/inbox/${amyConv.id}/reply`, { body: 'x' })).status, 403);
+  assert.equal((await http('admin', 'POST', `/api/inbox/${amyConv.id}/reply`, { body: '' })).status, 422);
+  sink.messages.length = 0;
+  const rep = await http('admin', 'POST', `/api/inbox/${amyConv.id}/reply`, { body: 'Hi Amy, 50 units are R4 500.\n\nKind regards\nThandi' });
+  assert.equal(rep.status, 201, JSON.stringify(rep));
+  const out = sinkTo('ib-amy@ok.example')[0];
+  assert.ok(out, 'reply delivered');
+  assert.equal(out.parsed.subject, 'Re: Inbox campaign');
+  assert.equal(out.parsed.inReplyTo, stored.rfc_message_id);
+  assert.match(out.parsed.text, /R4 500[\s\S]*> Thanks! What are your prices/);
+  assert.match(out.parsed.messageId, /^<reply\.[0-9a-f-]{36}@acme\.example>$/);
+  await handle(await raw({ from: 'ib-amy@ok.example', to: 'news@acme.example', subject: 'Re: Inbox campaign', inReplyTo: out.parsed.messageId, text: 'Great, please send an invoice.' }));
+  const amyAfter = (await http('admin', 'GET', `/api/inbox/${amyConv.id}`)).data;
+  assert.deepEqual(amyAfter.messages.map((m) => m.direction), ['in', 'out', 'in'], 'one conversation');
+
+  // Notes, assignment, closing
+  assert.equal((await http('admin', 'POST', `/api/inbox/${amyConv.id}/notes`, { body: 'Quote sent; follow up Friday.' })).status, 201);
+  const me = (await http('admin', 'GET', '/api/auth/session')).data.user;
+  const asg = await http('admin', 'PATCH', `/api/inbox/${amyConv.id}`, { assigned_to: me.id });
+  assert.equal(asg.status, 200, JSON.stringify(asg));
+  assert.ok((await http('admin', 'GET', '/api/inbox?view=mine')).data.some((c) => c.id === amyConv.id));
+  const cls = await http('admin', 'PATCH', `/api/inbox/${amyConv.id}`, { status: 'closed' });
+  assert.equal(cls.status, 200, JSON.stringify(cls));
+  assert.equal((await http('admin', 'GET', '/api/inbox?view=open')).data.some((c) => c.id === amyConv.id), false);
+  assert.equal((await http('admin', 'PATCH', `/api/inbox/${amyConv.id}`, { assigned_to: '00000000-0000-0000-0000-000000000000' })).status, 409);
+
+  // "Remove me" → one click unsubscribes the contact, notes it and closes the conversation.
+  const unsub = await http('admin', 'POST', `/api/inbox/${bob.id}/unsubscribe`);
+  assert.equal(unsub.status, 200, JSON.stringify(unsub));
+  assert.equal(unsub.data.status, 'closed');
+  assert.equal((await contact('ib-bob@ok.example')).status, 'unsubscribed');
+  assert.ok((await http('admin', 'GET', `/api/inbox/${bob.id}`)).data.messages.some((m) => m.direction === 'note' && /Unsubscribed/.test(m.text_body)));
+
+  // Reports and POPIA
+  assert.equal((await http('admin', 'GET', `/api/reports/campaigns/${campId}`)).data.campaign.replies, 2);
+  const amyId = amyConv.contact_id;
+  const exported = await http('admin', 'GET', `/api/contacts/${amyId}/export`, undefined, { raw: true });
+  assert.match(await exported.text(), /please send an invoice/);
+  const er = await http('admin', 'POST', `/api/contacts/${amyId}/erase`, { confirm: 'ERASE' });
+  assert.equal(er.status, 200, JSON.stringify(er));
+  assert.equal((await pool.query(`SELECT COUNT(*)::int AS n FROM portal.conversations WHERE email = 'ib-amy@ok.example'`)).rows[0].n, 0, 'erasure removes the conversation');
+});

@@ -18,6 +18,7 @@ const ROUTES = [
   { path: /^\/campaigns\/(\d+)$/, view: 'campaign', title: 'Campaign' },
   { path: /^\/campaigns\/(\d+)\/edit$/, view: 'campaign-edit', title: 'Edit campaign', perm: 'campaigns:write' },
   { path: /^\/images\/?$/, view: 'images', title: 'Images' },
+  { path: /^\/inbox\/?$/, view: 'inbox', title: 'Inbox' },
   { path: /^\/settings\/?([a-z]*)$/, view: 'settings', title: 'Settings', perm: 'settings:manage' },
   { path: /^\/reports\/?$/, view: 'reports', title: 'Audience & deliverability' },
   { path: /^\/usage\/?$/, view: 'usage', title: 'Mail usage' },
@@ -47,6 +48,7 @@ const NAV = [
   { href: '#/review', icon: 'hourglass-split', label: 'Review queue', match: 'review', badge: 'review' },
   { href: '#/suppression', icon: 'slash-circle', label: 'Suppression list', match: 'suppression' },
   { section: 'Email' },
+  { href: '#/inbox', icon: 'inbox', label: 'Inbox', match: 'inbox', badge: 'inbox', perm: 'inbox:read' },
   { href: '#/campaigns', icon: 'send', label: 'Campaigns', match: 'campaign' },
   { href: '#/images', icon: 'images', label: 'Images', match: 'images' },
   { section: 'Insights' },
@@ -152,6 +154,13 @@ async function refreshBadges() {
     const b = $('[data-badge="review"]');
     if (b) { b.textContent = r.data.length; b.classList.toggle('d-none', !r.data.length); }
   } catch { /* non-critical */ }
+  try {
+    if (!ctx.can('inbox:read')) return;
+    const r = await api('GET', '/inbox/counts');
+    const b = $('[data-badge="inbox"]');
+    // Unread conversations that still need a reply.
+    if (b) { b.textContent = r.data.unread; b.classList.toggle('d-none', !r.data.unread); b.setAttribute('aria-label', `${r.data.unread} unread`); }
+  } catch { /* non-critical */ }
 }
 
 const viewCache = {};
@@ -242,6 +251,9 @@ async function boot() {
   await route();
   refreshBadges();
 }
+
+// New replies arrive in the background: keep the menu badges current.
+setInterval(() => { if (state.session?.user && !document.hidden) refreshBadges(); }, 60000);
 
 export { raw };
 start();

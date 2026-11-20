@@ -24,6 +24,7 @@ export async function render(el, ctx, [id]) {
       ['Unsubscribes', c.unsubscribes, 'envelope-x', c.rates.unsubscribe, 'unsubscribed'],
       ['Unique opens', c.unique_opens, 'envelope-open', c.rates.open, 'opened'],
       ['Unique clicks', c.unique_clicks, 'cursor', c.rates.click, 'clicked'],
+      ['Replies', c.replies, 'chat-left-text', null, `#/inbox?campaign=${id}`],
       // Only shown when they happened, or the campaign used the page
       ...(c.failed + c.skipped ? [['Not sent', c.failed + c.skipped, 'slash-circle', null, c.failed ? 'failed' : 'skipped']] : []),
       ...(c.consented ? [['Gave permission', c.consented, 'person-check', null, 'consented']] : []),
@@ -50,8 +51,8 @@ export async function render(el, ctx, [id]) {
       ${['sending', 'paused'].includes(c.status) ? html`<div class="card mb-3"><div class="card-body"><div class="d-flex justify-content-between small mb-1">
         <span>${c.status === 'sending' ? 'Sending… this page updates automatically' : 'Paused'}</span><span>${num(done)} of ${num(c.targeted)} processed · ${num(c.pending)} waiting</span></div>
         <div class="hbar" role="progressbar" aria-valuenow="${Math.round(progress)}" aria-valuemin="0" aria-valuemax="100"><span data-w="${progress}"></span></div></div></div>` : ''}
-      <div class="row g-3 mb-3">${tiles.map(([l, v, icon, rate, outcome]) => html`<div class="col-6 col-md-4 col-xl"><a class="card kpi kpi-link" href="${detail(outcome)}" aria-label="${l}: ${num(v)}. Show the recipients">
-        <div class="label"><i class="bi bi-${icon}"></i>${l}</div><div class="value">${num(v)}</div><div class="sub">${rate !== null && rate !== undefined ? `${pct(rate)} of sent` : 'Show recipients'}</div></a></div>`)}</div>
+      <div class="row g-3 mb-3">${tiles.map(([l, v, icon, rate, outcome]) => html`<div class="col-6 col-md-4 col-xl"><a class="card kpi kpi-link" href="${outcome.startsWith('#') ? outcome : detail(outcome)}" aria-label="${l}: ${num(v)}. ${outcome.startsWith('#') ? 'Open them in the Inbox' : 'Show the recipients'}">
+        <div class="label"><i class="bi bi-${icon}"></i>${l}</div><div class="value">${num(v)}</div><div class="sub">${rate !== null && rate !== undefined ? `${pct(rate)} of sent` : outcome.startsWith('#') ? 'Read and answer' : 'Show recipients'}</div></a></div>`)}</div>
       <div class="row g-3">
         <div class="col-xl-7"><div class="card h-100"><div class="card-header">Activity by hour</div><div class="card-body">
           ${data.timeline.length ? html`<div class="chart-box"><canvas id="tl" role="img" aria-label="Emails sent, opens, clicks and bounces by hour"></canvas></div>` : html`<div class="text-muted-2">No activity yet.</div>`}</div></div></div>

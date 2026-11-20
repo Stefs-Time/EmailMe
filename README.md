@@ -31,6 +31,12 @@ instances, not from tenant IDs in a shared database.
   add/remove from lists, unsubscribe, suppress; a contact page with every email sent, opens, clicks, bounces, consent
   evidence and status history.
 - **Lists:** single or double opt-in (confirmation email with a one-click confirm page).
+- **Inbox (replies):** replies to campaigns are collected from a replies mailbox (IMAP), classified (reply,
+  auto-reply, unsubscribe request; delivery reports still become bounces) and threaded to the contact and campaign by
+  our own Message-ID in their In-Reply-To/References, or by sender. Read safely (sanitised HTML in a sandbox, remote
+  images blocked, attachments download-only), answer by email with proper threading, add internal notes, assign, close,
+  and turn an unsubscribe request into a recorded unsubscribe in one click. Replies count on campaign reports and
+  contact pages.
 - **Sign-up forms:**
   - **Pages:** each form has its own hosted page and embed code for your website, with your heading, fields, consent
     statement, button colour and thank-you message or page.

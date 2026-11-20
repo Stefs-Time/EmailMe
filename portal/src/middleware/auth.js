@@ -13,6 +13,9 @@ const { unauthorized, forbidden, AppError } = require('../lib/errors');
 const PERMISSIONS = {
   'contacts:read': ['viewer', 'manager', 'admin'],
   'reports:read': ['viewer', 'manager', 'admin'],
+  // Inbox: everyone can read replies; managers and administrators answer and manage them.
+  'inbox:read': ['viewer', 'manager', 'admin'],
+  'inbox:reply': ['manager', 'admin'],
   'contacts:write': ['manager', 'admin'],
   'lists:write': ['manager', 'admin'],
   'lists:delete': ['admin'],

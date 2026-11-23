@@ -1,0 +1,299 @@
+<!doctype html>
+<!--
+  MailHarbor suggested pricing (source of mailharbor-pricing.pdf in this folder).
+  Internal sales material: prices and the cost model behind them are in PRICING_NOTES.md.
+  Rebuild the PDF after editing:  cd portal && npm run brochure -- pricing
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MailHarbor · Pricing</title>
+<link rel="stylesheet" href="../../../portal/node_modules/bootstrap-icons/font/bootstrap-icons.css">
+<style>
+  @page { size: A4; margin: 0; }
+  :root {
+    --navy: #16365f; --navy2: #1f4e8c; --teal: #0f8f82; --teal-l: #2bb3a3; --teal-soft: #e6f5f3;
+    --ink: #1b2430; --muted: #5f6b7a; --line: #e2e7ee; --bg: #f4f6f9;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Inter, "Segoe UI", Arial, sans-serif; color: var(--ink); -webkit-print-color-adjust: exact; print-color-adjust: exact; font-size: 10.5pt; line-height: 1.5; }
+  .page { width: 210mm; height: 297mm; position: relative; overflow: hidden; page-break-after: always; padding: 20mm 18mm 22mm; background: #fff; }
+  .page:last-child { page-break-after: auto; }
+  h1, h2, h3 { margin: 0; color: var(--navy); line-height: 1.15; letter-spacing: -.01em; }
+  h2 { font-size: 25pt; font-weight: 800; }
+  h3 { font-size: 12.5pt; font-weight: 700; margin-bottom: 4px; }
+  p { margin: 0 0 8px; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: 8.5pt; font-weight: 700; color: var(--teal); margin-bottom: 8px; }
+  .lead { font-size: 12.5pt; color: #33404f; max-width: 150mm; margin: 10px 0 18px; }
+  .muted { color: var(--muted); }
+  .foot { position: absolute; left: 18mm; right: 18mm; bottom: 10mm; display: flex; justify-content: space-between; font-size: 8pt; color: var(--muted); border-top: 1px solid var(--line); padding-top: 6px; }
+  .foot b { color: var(--navy); }
+  .wave { position: absolute; left: 0; right: 0; bottom: 0; height: 26mm; }
+
+  /* Cover */
+  .cover { background: radial-gradient(120% 80% at 85% 0%, #24548f 0%, #16365f 55%, #0f2846 100%); color: #fff; padding: 24mm 20mm; }
+  .cover .brand { display: flex; align-items: center; gap: 12px; font-size: 17pt; font-weight: 800; letter-spacing: -.01em; }
+  .cover .brand span { color: var(--teal-l); }
+  .cover h1 { color: #fff; font-size: 44pt; font-weight: 800; margin-top: 52mm; line-height: 1.04; letter-spacing: -.02em; }
+  .cover h1 em { font-style: normal; color: var(--teal-l); }
+  .cover .sub { font-size: 14pt; color: #d6e2f1; max-width: 140mm; margin-top: 14px; line-height: 1.45; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+  .chip { border: 1px solid rgba(255,255,255,.35); border-radius: 999px; padding: 5px 12px; font-size: 9.5pt; font-weight: 600; color: #fff; background: rgba(255,255,255,.08); }
+  .chip i { color: var(--teal-l); margin-right: 5px; }
+  .cover .tag { position: absolute; left: 20mm; bottom: 34mm; font-size: 10pt; color: #b9cbe2; }
+  .cover .tag b { color: #fff; }
+
+  /* Cards and grids */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 14px 15px; background: #fff; }
+  .card.soft { background: var(--bg); border-color: transparent; }
+  .icon { width: 34px; height: 34px; border-radius: 9px; background: var(--teal-soft); color: var(--teal); display: inline-flex; align-items: center; justify-content: center; font-size: 15pt; margin-bottom: 8px; }
+  .icon.navy { background: #e8eef7; color: var(--navy2); }
+  .card p { font-size: 9.6pt; color: #3a4757; margin: 0; }
+  ul.ticks { list-style: none; padding: 0; margin: 6px 0 0; }
+  ul.ticks li { position: relative; padding-left: 18px; margin: 3px 0; font-size: 9.6pt; color: #3a4757; }
+  ul.ticks li::before { content: "\F26E"; font-family: bootstrap-icons; position: absolute; left: 0; top: 0; color: var(--teal); font-size: 10pt; }
+
+  .hero-band { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; align-items: stretch; margin-bottom: 14px; }
+  .feature-hero { background: linear-gradient(135deg, var(--navy) 0%, var(--navy2) 100%); color: #fff; border-radius: 14px; padding: 18px 20px; }
+  .feature-hero h3 { color: #fff; font-size: 15pt; }
+  .feature-hero p { color: #d6e2f1; font-size: 10pt; }
+  .feature-hero ul.ticks li { color: #eaf1fa; }
+  .feature-hero ul.ticks li::before { color: var(--teal-l); }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0 18px; }
+  .stat { background: var(--bg); border-radius: 12px; padding: 12px 14px; }
+  .stat b { display: block; font-size: 22pt; color: var(--navy); font-weight: 800; line-height: 1.1; }
+  .stat span { font-size: 9pt; color: var(--muted); }
+
+  /* Mock UI illustrations */
+  .mock { border: 1px solid var(--line); border-radius: 12px; background: var(--bg); padding: 10px; font-size: 8.5pt; }
+  .mock .bar { display: flex; gap: 5px; margin-bottom: 8px; }
+  .mock .bar i { width: 7px; height: 7px; border-radius: 50%; background: #c9d4e2; display: inline-block; }
+  .mock .row { display: flex; gap: 8px; }
+  .mock .pal { width: 28%; display: flex; flex-direction: column; gap: 4px; }
+  .mock .pal div { background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; color: var(--navy2); font-weight: 600; }
+  .mock .canvas { flex: 1; background: #fff; border-radius: 8px; padding: 10px; }
+  .mock .h { font-weight: 800; color: var(--navy); font-size: 11pt; margin-bottom: 4px; }
+  .mock .t { height: 6px; background: #e5eaf1; border-radius: 3px; margin: 4px 0; }
+  .mock .btn { display: inline-block; background: var(--navy2); color: #fff; border-radius: 5px; padding: 4px 10px; font-weight: 700; margin-top: 6px; }
+  .mock .img { height: 46px; border-radius: 6px; background: linear-gradient(135deg, #cfe0f3, #e6f5f3); margin-bottom: 6px; }
+  .mock .drop { height: 3px; background: var(--teal); border-radius: 2px; margin: 5px 0; box-shadow: 0 0 0 2px rgba(15,143,130,.2); }
+  .chipline { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .chipline span { background: var(--teal-soft); color: #0b5d55; border: 1px solid #b9d9d4; border-radius: 999px; padding: 1px 7px; font-weight: 600; font-size: 7.8pt; }
+
+  table.rules { width: 100%; border-collapse: collapse; font-size: 9.4pt; margin-top: 6px; }
+  table.rules th, table.rules td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); }
+  table.rules th { font-size: 8pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .pill { display: inline-block; border-radius: 999px; padding: 1px 8px; font-size: 8pt; font-weight: 700; }
+  .pill.red { background: #fde8e7; color: #a32520; } .pill.amber { background: #fdf3dc; color: #7d5a00; }
+  .pill.blue { background: #e8eef7; color: var(--navy2); } .pill.purple { background: #f3e7f2; color: #7a2f76; }
+
+  /* Roadmap */
+  .road { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+  .lane { border-radius: 14px; padding: 14px; background: var(--bg); }
+  .lane h3 { display: flex; align-items: center; gap: 8px; font-size: 13pt; }
+  .lane .when { font-size: 8.5pt; color: var(--muted); margin-bottom: 8px; }
+  .lane.next { background: linear-gradient(180deg, #e6f5f3 0%, #f4faf9 100%); }
+  .lane.soon { background: linear-gradient(180deg, #e8eef7 0%, #f5f8fc 100%); }
+  .lane.later { background: linear-gradient(180deg, #f1edf7 0%, #f8f6fb 100%); }
+  .item { background: #fff; border-radius: 10px; padding: 9px 10px; margin-top: 8px; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+  .item b { display: block; color: var(--navy); font-size: 9.8pt; }
+  .item span { font-size: 8.6pt; color: #4a5767; }
+  .shipped { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+  .shipped div { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font-size: 8.6pt; font-weight: 600; color: var(--navy); }
+  .shipped div i { color: var(--teal); margin-right: 4px; }
+
+  /* Back cover */
+  .back { background: linear-gradient(160deg, #0f2846 0%, #16365f 60%, #1f4e8c 100%); color: #fff; }
+  .back h2 { color: #fff; font-size: 32pt; }
+  .steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 18px; }
+  .step { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16); border-radius: 14px; padding: 14px 16px; }
+  .step .n { display: inline-flex; width: 26px; height: 26px; border-radius: 50%; background: var(--teal-l); color: #0f2846; font-weight: 800; align-items: center; justify-content: center; margin-bottom: 6px; }
+  .step h3 { color: #fff; }
+  .step p { color: #cbd8ea; font-size: 9.8pt; }
+  .back .foot { border-top-color: rgba(255,255,255,.2); color: #b9cbe2; }
+  .back .foot b { color: #fff; }
+</style>
+<style>
+  /* Pricing additions */
+  .tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+  .tier { border: 1px solid var(--line); border-radius: 14px; padding: 14px 15px; background: #fff; position: relative; }
+  .tier.featured { border: 2px solid var(--teal); box-shadow: 0 6px 18px rgba(15,143,130,.12); }
+  .tier .badge-top { position: absolute; top: -10px; left: 14px; background: var(--teal); color: #fff; font-size: 7.8pt; font-weight: 700; border-radius: 999px; padding: 2px 9px; letter-spacing: .04em; }
+  .tier h3 { font-size: 13pt; }
+  .tier .for { font-size: 8.8pt; color: var(--muted); min-height: 26px; }
+  .price { font-size: 21pt; font-weight: 800; color: var(--navy); margin: 6px 0 0; line-height: 1.1; }
+  .price small { font-size: 9pt; font-weight: 600; color: var(--muted); }
+  .tier .limits { font-size: 9pt; color: #33404f; margin: 6px 0 2px; padding: 6px 8px; background: var(--bg); border-radius: 8px; }
+  .tier ul.ticks li { font-size: 9pt; }
+  .three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 4px; }
+  .part { border-radius: 14px; padding: 15px; background: var(--bg); }
+  .part .num { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: var(--navy); color: #fff; font-weight: 800; font-size: 9.5pt; align-items: center; justify-content: center; margin-bottom: 6px; }
+  .part h3 { font-size: 12pt; }
+  .part .from { font-size: 15pt; font-weight: 800; color: var(--teal); margin: 4px 0; }
+  .part p { font-size: 9.2pt; color: #3a4757; }
+  table.price-table { width: 100%; border-collapse: collapse; font-size: 9.3pt; margin-top: 6px; }
+  table.price-table th, table.price-table td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.price-table th { font-size: 7.8pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  table.price-table td.r, table.price-table th.r { text-align: right; white-space: nowrap; }
+  table.price-table tr.total td { font-weight: 800; color: var(--navy); border-bottom: 2px solid var(--navy); }
+  .note { font-size: 8.6pt; color: var(--muted); }
+  .callout { border-left: 3px solid var(--teal); background: var(--teal-soft); border-radius: 0 10px 10px 0; padding: 9px 12px; font-size: 9.2pt; color: #0b4f48; margin-top: 10px; }
+  .terms { columns: 2; column-gap: 16px; font-size: 8.7pt; color: #3a4757; margin-top: 6px; }
+  .terms p { break-inside: avoid; margin: 0 0 6px; }
+  .terms b { color: var(--navy); }
+  .sla td:first-child { font-weight: 700; color: var(--navy); }
+</style>
+</head>
+<body>
+
+<!-- 1. Cover -->
+<section class="page cover">
+  <div class="brand">
+    <svg width="44" height="44" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#ffffff"/><path d="M14 22.5c0-2 1.6-3.5 3.5-3.5h29c1.9 0 3.5 1.5 3.5 3.5v15c0 2-1.6 3.5-3.5 3.5h-29c-1.9 0-3.5-1.5-3.5-3.5z" fill="none" stroke="#16365f" stroke-width="3.2"/><path d="M15.5 21.5 32 33l16.5-11.5" fill="none" stroke="#16365f" stroke-width="3.2" stroke-linejoin="round"/><path d="M12 48c4 0 4-2.6 8-2.6s4 2.6 8 2.6 4-2.6 8-2.6 4 2.6 8 2.6 4-2.6 8-2.6" fill="none" stroke="#0f8f82" stroke-width="3.2" stroke-linecap="round"/></svg>
+    <div>Mail<span>Harbor</span></div>
+  </div>
+  <h1>Simple, <em>honest</em><br>pricing.</h1>
+  <p class="sub">Your own private email marketing platform: set up once for your organisation, then one predictable monthly fee
+    for hosting, support and a platform that keeps getting better.</p>
+  <div class="chips">
+    <span class="chip"><i class="bi bi-box-seam"></i>Once-off installation</span>
+    <span class="chip"><i class="bi bi-cloud-check"></i>Fully managed hosting</span>
+    <span class="chip"><i class="bi bi-life-preserver"></i>Development &amp; support</span>
+    <span class="chip"><i class="bi bi-people"></i>Unlimited users</span>
+    <span class="chip"><i class="bi bi-envelope-paper"></i>No per-email fees</span>
+  </div>
+  <div class="tag">Suggested pricing · <b>November 2026</b> · South African rand, excluding VAT</div>
+  <svg class="wave" viewBox="0 0 800 100" preserveAspectRatio="none" aria-hidden="true"><path d="M0 60 C 100 30, 200 90, 300 60 S 500 30, 600 60 S 750 90, 800 60 L 800 100 L 0 100 Z" fill="#2bb3a3" opacity=".25"/><path d="M0 75 C 120 50, 220 100, 340 75 S 560 50, 680 75 S 760 95, 800 80 L 800 100 L 0 100 Z" fill="#2bb3a3" opacity=".45"/></svg>
+</section>
+
+<!-- 2. How it works -->
+<section class="page">
+  <div class="eyebrow">How pricing works</div>
+  <h2>Three parts. No surprises.</h2>
+  <p class="lead">You pay once to have MailHarbor set up for your organisation, then a monthly fee for hosting and a monthly
+    plan for support and new features. MailHarbor never charges per email or per user.</p>
+  <div class="three">
+    <div class="part"><div class="num">1</div><h3>Installation</h3><div class="from">from R34,500 <small class="muted" style="font-size:9pt">once-off</small></div>
+      <p>Once-off. Your private MailHarbor is set up, branded and connected for your organisation, your contacts are brought in,
+        and your team is trained. Part of this fee funds the platform you are joining.</p></div>
+    <div class="part"><div class="num">2</div><h3>Hosting</h3><div class="from">from R1,350 <small class="muted" style="font-size:9pt">/month</small></div>
+      <p>Your own instance and private database, run and watched by us: computing resources, 24/7 monitoring, daily off-site
+        backups, security updates and new versions. Sized to your contacts and sending volume.</p></div>
+    <div class="part"><div class="num">3</div><h3>Development &amp; Support</h3><div class="from">from R2,450 <small class="muted" style="font-size:9pt">/month</small></div>
+      <p>A monitored helpdesk for your team, fixes, and the continued development of MailHarbor: every new feature and
+        enhancement we release, plus time for improvements you ask for.</p></div>
+  </div>
+
+  <h3 style="margin-top:18px">What a year looks like</h3>
+  <table class="price-table">
+    <thead><tr><th>Example</th><th>Plans</th><th class="r">Per month</th><th class="r">First year</th><th class="r">After that, per year</th></tr></thead>
+    <tbody>
+      <tr><td><b>Small organisation</b><div class="note">up to 10,000 contacts</div></td><td>Standard installation · Starter hosting · Essential support</td>
+        <td class="r">R3,800</td><td class="r">R80,100</td><td class="r">R45,600</td></tr>
+      <tr><td><b>Growing marketing team</b><div class="note">up to 50,000 contacts, moving from another platform</div></td><td>Migration installation · Growth hosting · Professional support</td>
+        <td class="r">R7,900</td><td class="r">R149,300</td><td class="r">R94,800</td></tr>
+      <tr><td><b>Large organisation</b><div class="note">up to 250,000 contacts</div></td><td>Migration installation · Scale hosting · Partner support</td>
+        <td class="r">R15,600</td><td class="r">R241,700</td><td class="r">R187,200</td></tr>
+    </tbody>
+  </table>
+  <p class="note" style="margin-top:6px">First year = installation + 12 months of hosting and support. Excluding VAT.</p>
+
+  <div class="grid2" style="margin-top:14px">
+    <div class="card soft"><h3><i class="bi bi-check2-circle" style="color:#0f8f82"></i> Always included</h3>
+      <ul class="ticks"><li>Your own instance and private database, never shared</li><li>Unlimited users and campaigns</li>
+        <li>Every feature: builder, Inbox, reports, sign-up forms, segments, POPIA tools</li><li>Your data exported for you if you ever leave</li></ul></div>
+    <div class="card soft"><h3><i class="bi bi-receipt" style="color:#1f4e8c"></i> Paid to others, not to us</h3>
+      <ul class="ticks"><li><b>Your mail server (SMTP) provider</b>: you send through your own account, at your provider's rates</li>
+        <li><b>Your domain</b>: you keep your own web and email domain</li><li>VAT at 15% on our invoices</li></ul></div>
+  </div>
+  <div class="foot"><span><b>MailHarbor</b> · Pricing</span><span>2</span></div>
+</section>
+
+<!-- 3. Installation + hosting -->
+<section class="page">
+  <div class="eyebrow">1 · Installation (once-off)</div>
+  <h2 style="font-size:21pt">Set up for your organisation</h2>
+  <div class="grid2" style="margin-top:10px">
+    <div class="tier"><h3>Standard installation</h3><div class="for">New to email marketing, or starting fresh</div>
+      <div class="price">R34,500 <small>once-off</small></div>
+      <ul class="ticks"><li>Your private MailHarbor and database, at your own web address with SSL</li>
+        <li>Mail server, bounce and replies mailboxes connected; DNS guidance (SPF, DKIM, DMARC)</li>
+        <li>Email design with your logo, colours and footer</li><li>Your contacts imported with their consent records (up to 3 files)</li>
+        <li>Users and roles set up; 2 online training sessions (2 hours each)</li><li>Go-live check and your first campaign sent together</li></ul></div>
+    <div class="tier featured"><span class="badge-top">MOVING PLATFORMS</span><h3>Migration installation</h3><div class="for">Coming from Mailchimp, Everlytic or another tool</div>
+      <div class="price">R54,500 <small>once-off</small></div>
+      <ul class="ticks"><li><b>Everything in Standard</b></li>
+        <li>Lists, contacts and custom fields migrated</li><li>Unsubscribes, bounces and complaints carried over, so nobody is emailed by mistake</li>
+        <li>Up to 3 sign-up forms placed on your website</li><li>4 training sessions; your first 3 campaigns built with you</li></ul></div>
+  </div>
+  <div class="callout"><b>Founding customers:</b> the first three organisations on MailHarbor 0.9 receive <b>40% off installation</b> in return for
+    regular feedback during the early-access period. Installation is invoiced 50% on order and 50% at go-live.</div>
+
+  <div class="eyebrow" style="margin-top:20px">2 · Hosting (monthly)</div>
+  <h2 style="font-size:21pt">Sized to how much you send</h2>
+  <div class="tiers">
+    <div class="tier"><h3>Starter</h3><div class="for">Small teams and newsletters</div><div class="price">R1,350 <small>/month</small></div>
+      <div class="limits">Up to <b>10,000</b> contacts<br><b>50,000</b> emails a month</div></div>
+    <div class="tier featured"><span class="badge-top">MOST CHOSEN</span><h3>Growth</h3><div class="for">Regular campaigns to a growing audience</div><div class="price">R2,450 <small>/month</small></div>
+      <div class="limits">Up to <b>50,000</b> contacts<br><b>250,000</b> emails a month</div></div>
+    <div class="tier"><h3>Scale</h3><div class="for">Large audiences and frequent sending</div><div class="price">R4,650 <small>/month</small></div>
+      <div class="limits">Up to <b>250,000</b> contacts<br><b>1,000,000</b> emails a month</div></div>
+  </div>
+  <div class="card soft" style="margin-top:10px"><h3>Every hosting plan includes</h3>
+    <ul class="ticks" style="columns:2; column-gap:18px"><li>Dedicated computing resources and private database</li><li>24/7 uptime monitoring and alerting</li>
+      <li>Daily encrypted off-site backups, kept for 30 days</li><li>Restore on request</li><li>Security updates and every new version</li>
+      <li>SSL certificate for your web address</li></ul></div>
+  <p class="note" style="margin-top:8px">Hosting reflects the computing and storage you actually use. If your usage stays above your plan for two months in a row,
+    we move you to the next plan (and back down when it drops). Above Scale, we quote on your volumes.</p>
+  <div class="foot"><span><b>MailHarbor</b> · Pricing</span><span>3</span></div>
+</section>
+
+<!-- 4. Development & support + terms -->
+<section class="page">
+  <div class="eyebrow">3 · Development &amp; Support (monthly)</div>
+  <h2 style="font-size:21pt">A platform that keeps improving</h2>
+  <p class="lead" style="margin-bottom:10px">Every plan includes our monitored helpdesk, fixes and every new feature as it is released.</p>
+  <div class="tiers">
+    <div class="tier"><h3>Essential</h3><div class="for">Helpdesk and all new releases</div><div class="price">R2,450 <small>/month</small></div>
+      <ul class="ticks"><li>Helpdesk by email and portal, business hours</li><li>Bug fixes and every new feature</li><li><b>2 hours</b> a month of help with campaigns, reports or settings</li></ul></div>
+    <div class="tier featured"><span class="badge-top">RECOMMENDED</span><h3>Professional</h3><div class="for">For active marketing teams</div><div class="price">R5,450 <small>/month</small></div>
+      <ul class="ticks"><li><b>Everything in Essential</b>, plus phone and WhatsApp</li><li><b>8 hours</b> a month of enhancements or custom work for you</li>
+        <li>Quarterly deliverability and list-health review</li><li>Priority on the roadmap for your requests</li></ul></div>
+    <div class="tier"><h3>Partner</h3><div class="for">MailHarbor as a core business system</div><div class="price">R10,950 <small>/month</small></div>
+      <ul class="ticks"><li><b>Everything in Professional</b></li><li><b>20 hours</b> a month of development</li><li>Extended hours for critical issues</li>
+        <li>Named account manager; monthly review</li></ul></div>
+  </div>
+  <table class="price-table sla" style="margin-top:10px">
+    <thead><tr><th>Response times</th><th>Essential</th><th>Professional</th><th>Partner</th></tr></thead>
+    <tbody>
+      <tr><td>Critical <span class="note">(sending stopped, data at risk)</span></td><td>4 business hours</td><td>2 business hours</td><td>1 hour, 07:00–19:00 every day</td></tr>
+      <tr><td>High <span class="note">(a feature not working)</span></td><td>Next business day</td><td>4 business hours</td><td>2 business hours</td></tr>
+      <tr><td>Normal <span class="note">(questions, requests)</span></td><td>2 business days</td><td>1 business day</td><td>Next business day</td></tr>
+    </tbody>
+  </table>
+  <p class="note" style="margin-top:4px">Business hours: Monday to Friday, 08:00–17:00 SAST, excluding public holidays. Response = a person working on your request.
+    Additional development: R850 an hour, always quoted and approved before work starts. Unused plan hours carry over for one month.</p>
+
+  <h3 style="margin-top:12px">Terms in brief</h3>
+  <div class="terms">
+    <p><b>Your platform.</b> Installation sets up MailHarbor for your organisation and gives you the right to use it, with your own data,
+      for as long as your hosting continues. Improvements we build, including those you request, become part of MailHarbor for every customer,
+      which keeps development costs shared and low.</p>
+    <p><b>Your data.</b> Your contacts and campaigns are yours. When you leave, we export them with your consent and unsubscribe
+      history, then delete your service and backups. We act as your POPIA operator; the hosting region is set out in your agreement.</p>
+    <p><b>Term.</b> 12 months, then month to month. One Development &amp; Support plan is required with hosting: the helpdesk is how
+      issues reach us.</p>
+    <p><b>Prices.</b> In South African rand, excluding 15% VAT, valid for 30 days. Monthly fees are adjusted once a year by CPI. Hosting
+      depends partly on US-dollar infrastructure costs; if the rand moves more than 10% against the dollar, we may review hosting fees
+      with 30 days' notice.</p>
+  </div>
+  <div class="callout" style="margin-top:8px"><b>Next step:</b> tell us your number of contacts, how often you send, and whether you are moving from another
+    platform. We will send a formal quote and a go-live plan.</div>
+  <div class="foot"><span><b>MailHarbor</b> · Pricing · Suggested pricing, subject to a formal quote</span><span>4</span></div>
+</section>
+</body>
+</html>

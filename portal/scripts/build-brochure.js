@@ -15,9 +15,14 @@
 const path = require('node:path');
 const fs = require('node:fs');
 
-const SRC = path.resolve(__dirname, '../../docs/brochure/mailharbor-overview.html');
-const OUT = path.resolve(__dirname, '../public/downloads/mailharbor-overview.pdf');
-const PREVIEWS = path.resolve(__dirname, '../public/downloads/overview');
+// `npm run brochure` builds the product overview (shown in the app); `npm run brochure -- pricing` builds the
+// internal sales pricing PDF next to its source (never served by the app).
+const PRICING = process.argv[2] === 'pricing';
+const SRC = PRICING ? path.resolve(__dirname, '../../docs/internal/sales/mailharbor-pricing.html')
+  : path.resolve(__dirname, '../../docs/brochure/mailharbor-overview.html');
+const OUT = PRICING ? path.resolve(__dirname, '../../docs/internal/sales/mailharbor-pricing.pdf')
+  : path.resolve(__dirname, '../public/downloads/mailharbor-overview.pdf');
+const PREVIEWS = PRICING ? null : path.resolve(__dirname, '../public/downloads/overview');
 
 (async () => {
   let chromium;
@@ -38,6 +43,7 @@ const PREVIEWS = path.resolve(__dirname, '../public/downloads/overview');
 
     // Page previews for the in-app viewer (images work on every device; inline PDFs don't).
     // Files are overwritten each run; pages.json tells the viewer how many pages exist.
+    if (!PREVIEWS) return;
     fs.mkdirSync(PREVIEWS, { recursive: true });
     const shots = await browser.newPage({ viewport: { width: 794, height: 1123 }, deviceScaleFactor: 1.5 });
     await shots.goto(`file://${SRC}`, { waitUntil: 'networkidle' });

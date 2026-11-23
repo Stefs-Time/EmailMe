@@ -377,6 +377,7 @@ them, and route anything platform-related to "contact MailHarbor support".
 | [OPERATIONS](docs/internal/OPERATIONS.md) | Backups, upgrades, monitoring, support account, troubleshooting |
 | [DEPLOY_RAILWAY](docs/internal/DEPLOY_RAILWAY.md) | Railway steps per customer project |
 | [SALES_INTRO_EMAIL](docs/internal/SALES_INTRO_EMAIL.md) | Our own MailHarbor introduction & permission email copy |
+| [Pricing](docs/internal/sales/mailharbor-pricing.pdf) / [notes](docs/internal/sales/PRICING_NOTES.md) | Suggested pricing PDF for prospects, and the cost model behind it |
 | [ARCHITECTURE](docs/internal/ARCHITECTURE.md) | Developers: design, data model, engine |
 | [ACCEPTANCE_TESTS](docs/internal/ACCEPTANCE_TESTS.md) | UAT checklist mapped to the scope |
 | [UAT_AUDIT](docs/internal/UAT_AUDIT.md) | UI/UX/UAT audit findings and fixes |

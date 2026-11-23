@@ -19,8 +19,9 @@ export async function render(el, ctx) {
       <button class="btn btn-outline-primary" id="recheck"><i class="bi bi-arrow-repeat me-1"></i>Re-check SMTP</button></div></div>
     <div class="row g-3 mb-3">
       <div class="col-md-6 col-xl-3"><div class="card kpi"><div class="label">Database</div><div class="value fs-5 mt-2">${icon(h.database.ok)} ${h.database.ok ? 'Connected' : 'Unavailable'}</div></div></div>
-      <div class="col-md-6 col-xl-3"><div class="card kpi"><div class="label">SMTP server</div><div class="value fs-5 mt-2">${icon(h.smtp.ok)} ${h.smtp.ok ? 'Connected' : 'Not working'}</div>
-        <div class="sub mono">${h.smtp.host}:${h.smtp.port} · ${h.smtp.security}</div>${h.smtp.error ? html`<div class="sub text-danger">${h.smtp.error}</div>` : ''}</div></div>
+      <div class="col-md-6 col-xl-3"><div class="card kpi"><div class="label">Mail server</div><div class="value fs-5 mt-2">${icon(h.smtp.ok)} ${h.smtp.ok ? 'Connected' : h.smtp.configured ? 'Not working' : 'Not set up'}</div>
+        <div class="sub">${h.smtp.configured ? html`<span class="mono">${h.smtp.host}:${h.smtp.port}</span> · ${h.smtp.security}${h.smtp.source === 'hosting' ? ' · default server' : ''}`
+          : html`<a href="#/settings/sending">Settings → Sending</a>`}</div>${h.smtp.error ? html`<div class="sub text-danger">${h.smtp.error}</div>` : ''}</div></div>
       <div class="col-md-6 col-xl-3"><div class="card kpi"><div class="label">Background worker</div><div class="value fs-5 mt-2">${icon(!h.workerStale)} ${h.worker ? `Active ${ago(h.worker.at)}` : 'Not running'}</div>
         <div class="sub">${num(h.queue.queued)} queued · ${num(h.queue.sent_last_hour)} sent in the last hour</div></div></div>
       <div class="col-md-6 col-xl-3"><div class="card kpi"><div class="label">Bounce mailbox</div><div class="value fs-5 mt-2">${h.mailbox ? html`${icon(h.mailbox.ok)} ${h.mailbox.ok ? `Read ${ago(h.mailbox.at)}` : 'Error'}` : html`${icon(false, 'warning')} Not set up`}</div>

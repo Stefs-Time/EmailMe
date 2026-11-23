@@ -89,13 +89,31 @@ export async function render(el, ctx, [tabArg]) {
       <div class="col-md-4"><label class="form-label">Only for these websites <span class="text-muted-2 small">(optional)</span></label><input class="form-control" name="utm_domains" maxlength="500" value="${s.utm_domains}" placeholder="acme.co.za, shop.acme.co.za">
         <div class="form-text">Leave empty to tag every web link.</div></div>
     </div></div></div>
-    <div class="card"><div class="card-header">Your mail server (SMTP) <span class="small fw-normal text-muted-2">· connected by MailHarbor</span></div><div class="card-body">
-      <dl class="dl-grid mb-3"><dt>Server</dt><dd class="mono">${s.smtp.host}:${s.smtp.port}</dd><dt>Security</dt><dd>${s.smtp.security}</dd>
-        <dt>Login</dt><dd>${s.smtp.authenticated ? s.smtp.user : 'none (relay)'}</dd><dt>Connections</dt><dd>${s.smtp.poolSize}</dd></dl>
+    <div class="card"><div class="card-header">Your mail server (SMTP)</div><div class="card-body">
+      <p class="small mb-3" id="smtp-status">${s.mail_server.configured
+        ? html`<i class="bi bi-envelope-check me-1 text-success"></i>Sending through <strong class="mono">${s.mail_server.host}:${s.mail_server.port}</strong>
+          (${s.mail_server.security}${s.mail_server.authenticated ? html`, signed in as ${s.mail_server.user}` : ', no login'})${s.mail_server.source === 'hosting' ? html` · the default server set up for you. Enter your own below to replace it.` : '.'}`
+        : html`<i class="bi bi-exclamation-triangle me-1 text-warning"></i><strong>No mail server yet.</strong> Enter your provider's SMTP details below: nothing can be sent until you do.`}</p>
+      <div class="row g-3">
+        <div class="col-md-6"><label class="form-label" for="smtp-host">Server</label><input class="form-control" id="smtp-host" name="smtp_host" value="${s.smtp.host}" placeholder="smtp.yourprovider.com" autocomplete="off">
+          <div class="form-text">${s.mail_server.source === 'hosting' || !s.smtp.host ? 'Leave empty to use the default server, if one was set up for you.' : 'Clear it to go back to the default server, if one was set up for you.'}</div></div>
+        <div class="col-md-2"><label class="form-label" for="smtp-port">Port</label><input class="form-control" id="smtp-port" name="smtp_port" type="number" min="1" max="65535" value="${s.smtp.port}"></div>
+        <div class="col-md-4"><label class="form-label" for="smtp-sec">Security</label><select class="form-select" id="smtp-sec" name="smtp_security">
+          ${[['auto', 'Automatic (TLS on 465, otherwise STARTTLS)'], ['tls', 'TLS'], ['starttls', 'STARTTLS'], ['none', 'None (local test servers only)']]
+            .map(([k, l]) => html`<option value="${k}" ${s.smtp.security === k ? raw('selected') : ''}>${l}</option>`)}</select></div>
+        <div class="col-md-6"><label class="form-label" for="smtp-user">Username</label><input class="form-control" id="smtp-user" name="smtp_user" value="${s.smtp.user}" autocomplete="off"></div>
+        <div class="col-md-6"><label class="form-label" for="smtp-pw">Password</label><input class="form-control" id="smtp-pw" name="smtp_password" type="password" autocomplete="new-password"
+          placeholder="${s.smtp.password_set ? '•••••••• (saved, leave empty to keep)' : ''}">
+          <div class="form-text">Stored encrypted and never shown again. Changing the server name clears the saved password.</div></div>
+      </div>
+      <div class="mt-3 d-flex gap-2 align-items-center flex-wrap"><button class="btn btn-outline-primary" type="button" id="smtp-verify">Check connection</button>
+        <span id="smtp-verify-result" class="small"></span></div>
+      <div class="form-text">Checks the details above without saving them. Use a provider that allows marketing email; press <em>Save settings</em> to switch.</div>
+      <hr>
       <div class="input-group mw-520"><input class="form-control" id="smtp-to" type="email" placeholder="Send a test email to…" value="${ctx.user.email}" aria-label="Test email address">
         <button class="btn btn-outline-primary" type="button" id="smtp-test">Send test email</button></div>
       <div id="smtp-result" class="mt-2 small"></div>
-      <div class="form-text">MailHarbor sends through your own mail server. To connect a different server, or if its password changed, send the new details to MailHarbor support. Passwords are never shown or stored in Settings.</div>
+      <div class="form-text">Sends one real email through the saved server.</div>
     </div></div>`,
     replies: html`<div class="card mb-3"><div class="card-header">Where replies go</div><div class="card-body"><div class="row g-3">
       <div class="col-md-6"><label class="form-label" for="r-to">Reply-To address</label><input class="form-control" id="r-to" name="reply_to" type="email" value="${s.reply_to}" placeholder="replies@yourdomain.co.za">
@@ -135,7 +153,7 @@ export async function render(el, ctx, [tabArg]) {
     </div></div>`,
   };
 
-  mount(el, html`<div class="page-head"><div><h1>Settings</h1><p>Organisation, email design, sending, replies, bounce handling and compliance. Your database and mail server connection are managed by MailHarbor.</p></div></div>
+  mount(el, html`<div class="page-head"><div><h1>Settings</h1><p>Organisation, email design, your mail server, replies, bounce handling and compliance. Hosting, the database and backups are managed by MailHarbor.</p></div></div>
     <ul class="nav nav-tabs mb-3">${TABS.map(([k, l]) => html`<li class="nav-item"><a class="nav-link ${k === tab ? 'active' : ''}" href="#/settings/${k}" ${k === tab ? raw('aria-current="page"') : ''}>${l}</a></li>`)}</ul>
     <form id="sf" novalidate>${sections[tab]}
       <div class="mt-3 d-flex gap-2 align-items-center"><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1"></i>Save settings</button><span class="small text-muted-2" id="saved"></span></div></form>`);
@@ -149,6 +167,10 @@ export async function render(el, ctx, [tabArg]) {
     for (const k of ['send_rate_per_second', 'send_max_per_hour', 'soft_bounce_limit', 'backup_stale_hours', 'email_logo_width']) if (v(k)) body[k] = Number(v(k).value);
     for (const k of ['track_opens', 'track_clicks', 'global_unsubscribe', 'utm_enabled', 'email_show_preferences']) if (v(k)) body[k] = v(k).checked;
     for (const k of ['email_logo_url', 'email_header_align', 'email_brand_color', 'email_heading_color', 'email_background', 'email_font', 'email_footer_text']) if (v(k)) body[k] = v(k).value.trim();
+    if (v('smtp_host')) {
+      body.smtp = { host: v('smtp_host').value.trim(), port: Number(v('smtp_port').value), security: v('smtp_security').value, user: v('smtp_user').value.trim() };
+      if (v('smtp_password').value) body.smtp.password = v('smtp_password').value;
+    }
     for (const [px, key] of [['mb', 'bounce_mailbox'], ['rm', 'replies_mailbox']]) {
       if (!v(`${px}_host`)) continue;
       body[key] = { enabled: v(`${px}_enabled`).checked, host: v(`${px}_host`).value.trim(), port: Number(v(`${px}_port`).value), secure: v(`${px}_secure`).checked,
@@ -159,7 +181,8 @@ export async function render(el, ctx, [tabArg]) {
       await put('/settings', body);
       toast('Settings saved');
       $('#saved', el).textContent = `Saved ${new Date().toLocaleTimeString('en-ZA')}`;
-      for (const px of ['mb', 'rm']) if (v(`${px}_password`)) v(`${px}_password`).value = '';
+      for (const n of ['mb_password', 'rm_password', 'smtp_password']) if (v(n)) v(n).value = '';
+      if (body.smtp) ctx.navigate('#/settings/sending'); // refresh "Sending through …"
     } catch (err) { errorToast(err); }
   });
 
@@ -183,6 +206,17 @@ export async function render(el, ctx, [tabArg]) {
     refresh();
   }
 
+  $('#smtp-verify', el)?.addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    const out = $('#smtp-verify-result', el);
+    out.textContent = 'Connecting…';
+    try {
+      const r = await post('/settings/smtp-verify', { host: f.smtp_host.value.trim(), port: Number(f.smtp_port.value), security: f.smtp_security.value,
+        user: f.smtp_user.value.trim(), password: f.smtp_password.value || undefined });
+      mount(out, r.data.ok ? html`<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Connected and signed in. Press Save settings to use it.</span>`
+        : html`<span class="text-danger"><i class="bi bi-x-circle-fill me-1"></i>${r.data.error}</span>`);
+    } catch (err) { errorToast(err); out.textContent = ''; } finally { e.target.disabled = false; }
+  });
   $('#smtp-test', el)?.addEventListener('click', async (e) => {
     e.target.disabled = true;
     const out = $('#smtp-result', el);

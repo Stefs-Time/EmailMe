@@ -6,7 +6,6 @@ const { z } = require('zod');
 const { parse, notFound } = require('../../lib/errors');
 const { requirePermission } = require('../../middleware/auth');
 const { audit } = require('../../lib/audit');
-const { describeSmtp } = require('../../engine/mailer');
 const { getState } = require('../../engine/worker');
 const { emailDomain } = require('../../lib/email');
 const { version: VERSION } = require('../../../package.json');
@@ -14,12 +13,14 @@ const { version: VERSION } = require('../../../package.json');
 let smtpCache = { at: 0, ok: null, error: null };
 
 async function smtpStatus(transport) {
-  if (Date.now() - smtpCache.at < 5 * 60000) return smtpCache;
+  const d = await transport.describe();
+  const key = `${d.host}:${d.port}:${d.user}:${d.source}`;
+  if (smtpCache.key === key && Date.now() - smtpCache.at < 5 * 60000) return smtpCache;
   try {
     await transport.verify();
-    smtpCache = { at: Date.now(), ok: true, error: null };
+    smtpCache = { key, at: Date.now(), ok: true, error: null };
   } catch (err) {
-    smtpCache = { at: Date.now(), ok: false, error: String(err.response || err.message).slice(0, 200) };
+    smtpCache = { key, at: Date.now(), ok: false, error: String(err.response || err.message).slice(0, 200) };
   }
   return smtpCache;
 }
@@ -56,12 +57,14 @@ async function dnsChecks(fromEmail, bounceAddress) {
 function smtpHelp(error) {
   const e = String(error || 'Not checked yet');
   if (/timeout|ETIMEDOUT|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH/i.test(e)) {
-    return `${e}. MailHarbor could not reach your mail server. Check that the server is up and accepts connections from MailHarbor, `
-      + 'or ask MailHarbor support to check the connection details.';
+    return `${e}. MailHarbor could not reach your mail server. Check the server name and port under Settings → Sending → Your mail server, `
+      + 'and that your provider accepts connections from MailHarbor.';
   }
-  if (/auth|535|534|credentials|login/i.test(e)) return `${e}. The mail server rejected the username or password. If it changed, send the new details to MailHarbor support (some providers need an SMTP-specific password).`;
+  if (/No mail server is set up/i.test(e)) return 'Add your mail server under Settings → Sending → Your mail server.';
+  if (/private or internal address/i.test(e)) return `${e}`;
+  if (/auth|535|534|credentials|login/i.test(e)) return `${e}. The mail server rejected the username or password. Update them under Settings → Sending → Your mail server (some providers need an SMTP-specific password).`;
   if (/greeting|wrong version number|ssl|tls/i.test(e)) return `${e}. Port and TLS mode may not match: 465 uses TLS from the start, 587 uses STARTTLS.`;
-  return `${e}. Ask MailHarbor support to check the mail server connection details.`;
+  return `${e}. Check the details under Settings → Sending → Your mail server.`;
 }
 
 function configChecks(s, publicUrl, mailboxState, repliesState) {
@@ -84,7 +87,7 @@ function configChecks(s, publicUrl, mailboxState, repliesState) {
   return checks;
 }
 
-function systemRoutes({ pool, settings, transport, config, worker }) {
+function systemRoutes({ pool, settings, transport, worker }) {
   const r = express.Router();
 
   r.get('/health', requirePermission('system:read'), async (_req, res) => {
@@ -97,7 +100,7 @@ function systemRoutes({ pool, settings, transport, config, worker }) {
     }
     const s = await settings.all();
     const publicUrl = await settings.publicUrl();
-    out.smtp = { ...describeSmtp(config), ...(await smtpStatus(transport)) };
+    out.smtp = { ...(await transport.describe()), ...(await smtpStatus(transport)) };
     out.worker = await getState(pool, 'heartbeat', null);
     out.workerStale = !out.worker || Date.now() - new Date(out.worker.at).getTime() > 5 * 60000;
     out.mailbox = s.bounce_mailbox.enabled ? await getState(pool, 'mailbox', null) : null;
@@ -114,7 +117,7 @@ function systemRoutes({ pool, settings, transport, config, worker }) {
     out.queue = q[0];
     out.sending = { ratePerSecond: s.send_rate_per_second, maxPerHour: s.send_max_per_hour };
     out.checks = [
-      { id: 'smtp', ok: out.smtp.ok, severity: 'critical', title: `SMTP server ${config.SMTP_HOST}:${config.SMTP_PORT} reachable and accepts login`,
+      { id: 'smtp', ok: out.smtp.ok, severity: 'critical', title: out.smtp.configured ? `Mail server ${out.smtp.host}:${out.smtp.port} reachable and accepts login` : 'Mail server set up',
         help: out.smtp.ok ? '' : smtpHelp(out.smtp.error) },
       ...configChecks(s, publicUrl, out.mailbox, out.repliesMailbox),
       ...(s.from_email ? await dnsChecks(s.from_email, s.bounce_address) : []),

@@ -44,8 +44,9 @@ async function withLock(pool, id, fn) {
 }
 
 class Worker {
-  constructor({ pool, settings, transport, logger }) {
+  constructor({ pool, settings, transport, logger, config = {} }) {
     this.pool = pool;
+    this.allowPrivate = Boolean(config.mailAllowPrivateHosts);
     this.settings = settings;
     this.log = logger.child({ component: 'worker' });
     this.sender = new Sender({ pool, settings, transport, logger });
@@ -101,7 +102,7 @@ class Worker {
     if (!m.enabled) return null;
     if (!force && Date.now() - this.lastMailbox < m.interval_minutes * 60000) return null;
     this.lastMailbox = Date.now();
-    return withLock(this.pool, LOCK_MAILBOX, () => pollMailbox({ pool: this.pool, settings: this.settings, logger: this.log }));
+    return withLock(this.pool, LOCK_MAILBOX, () => pollMailbox({ pool: this.pool, settings: this.settings, logger: this.log, allowPrivate: this.allowPrivate }));
   }
 
   async repliesIfDue(force = false) {
@@ -109,7 +110,7 @@ class Worker {
     if (!m.enabled) return null;
     if (!force && Date.now() - this.lastReplies < m.interval_minutes * 60000) return null;
     this.lastReplies = Date.now();
-    return withLock(this.pool, LOCK_REPLIES, () => pollMailbox({ pool: this.pool, settings: this.settings, logger: this.log, kind: 'replies' }));
+    return withLock(this.pool, LOCK_REPLIES, () => pollMailbox({ pool: this.pool, settings: this.settings, logger: this.log, kind: 'replies', allowPrivate: this.allowPrivate }));
   }
 
   async upkeep() {

@@ -9,7 +9,7 @@ MailHarbor is sold as a **hosted, single-tenant service**. Every customer compan
 - its own PostgreSQL database;
 - its own web address;
 - its own backups;
-- its own SMTP connection (their mail server).
+- its own mail server (SMTP), which the customer manages in Settings → Sending.
 
 No database, process or secret is shared between customers. To set up a new customer, follow
 [PROVISIONING.md](PROVISIONING.md). Platform-specific steps for Railway, the current hosting platform, are in
@@ -24,13 +24,18 @@ No database, process or secret is shared between customers. To set up a new cust
 
 ### Environment variables (per instance)
 
-Required: `DATABASE_URL`, `SMTP_HOST`. Usual: `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`.
+Required: `DATABASE_URL`. Optional: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, a **default** mail
+server used until the customer saves their own in Settings → Sending (useful when we provide the relay).
+
+**Split of responsibilities:** we host and operate (instance, database, backups, updates, monitoring, domain and
+certificates); the customer manages the whole application from its screens, including their mail server, mailboxes,
+users, design and compliance settings.
 
 Recommended for the hosted service:
 
 | Variable | Why |
 |---|---|
-| `SUPPORT_EMAIL` | Shown to the customer wherever they need us (setup code, mail server changes) |
+| `SUPPORT_EMAIL` | Shown to the customer wherever they need us (setup code, access, web address) |
 | `PUBLIC_URL` | Locks the customer's web address (e.g. `https://mail.customer.co.za`), so the customer can't change it by mistake |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | The **MailHarbor support and recovery account** (see §3) |
 
@@ -147,7 +152,7 @@ Also keep these current:
 
 | Request | How |
 |---|---|
-| New mail server or SMTP password | Update `SMTP_*` on that instance and restart. Then check *System health → SMTP* and ask the customer to send a test |
+| New mail server or SMTP password | The customer does it in Settings → Sending (*Check connection*, save). If they ask for help, sign in with the support account (§3) at their request |
 | Change of web address | Add the new domain (CNAME), set `PUBLIC_URL`, restart. Keep the old address working for a few months (links in sent emails) |
 | Lost setup code | Restart the instance (it is printed again while no administrator exists), or provide it from the deploy log |
 | Locked out | Sign in with the support account (§3), unlock or reset the customer's administrator |
@@ -159,7 +164,8 @@ Also keep these current:
 |---|---|
 | App restarts in a loop | Logs: usually a missing or invalid variable, which is named in the error |
 | SMTP check: timeout | Outbound SMTP blocked (Railway plan below Pro, or a VM provider's block) or wrong host/port |
-| SMTP check: authentication failed | Customer's SMTP username/password; some providers need an SMTP-specific credential |
+| SMTP check: authentication failed | Customer's SMTP username/password (Settings → Sending); some providers need an SMTP-specific credential |
+| "private or internal address" on a mail server | The customer entered an internal host; mail servers must be public (SSRF protection). `MAIL_ALLOW_PRIVATE_HOSTS=true` is for local development only |
 | Certificates not issued | DNS not pointing at the instance yet, or port 80 blocked (Compose) |
 | No bounces recorded | Bounce address and mailbox in the customer's Settings; providers that rewrite the Return-Path need their webhook |
 | Backup job fails: `pg_dump … server version mismatch` | Build with a matching `PG_CLIENT_VERSION` in `Dockerfile` |

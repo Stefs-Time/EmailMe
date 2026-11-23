@@ -12,8 +12,9 @@ Send them [Getting started](../GETTING_STARTED.md), which lists what we need:
 
 - [ ] Organisation name, postal address, first administrator's name and email
 - [ ] Web address they want, e.g. `mail.customer.co.za`, and who manages their DNS
-- [ ] Mail server (SMTP): host, port, username, password, permitted From addresses, sending limits.
-  **Get the password through the password manager's secure share, never email or chat**
+- [ ] Which mail server (SMTP) provider they use. **They enter the server and password themselves** in
+  Settings → Sending after first sign-in; we don't need their password. (Only if we provide a relay for them do we set
+  the `SMTP_*` default variables.)
 - [ ] Sending domain, so they can set SPF / DKIM / DMARC
 - [ ] Bounce mailbox (IMAP) or provider webhook (they enter the mailbox password themselves in Settings)
 - [ ] Replies mailbox (IMAP, e.g. `replies@`), and its address as Reply-To (Settings → Replies), so replies reach the Inbox
@@ -34,8 +35,7 @@ On Railway (Pro workspace; SMTP is blocked on lower plans):
   | Variable | Value |
   |---|---|
   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
-  | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | the customer's mail server |
-  | `SMTP_FROM` | optional default sender |
+  | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | **optional**: only a default server we provide; the customer normally enters their own in Settings → Sending |
   | `SUPPORT_EMAIL` | our support address |
 
   **Don't set `ADMIN_EMAIL`/`ADMIN_PASSWORD` yet.** While an administrator exists the setup screen doesn't appear,
@@ -67,8 +67,8 @@ On Railway (Pro workspace; SMTP is blocked on lower plans):
 
 ## 5. Verify with the customer
 
-- [ ] Settings → General: postal address. Settings → Sending: From address on their domain, speed set to their
-  provider's limit (2–5/s on a new domain)
+- [ ] Settings → General: postal address. Settings → Sending: **their mail server** (*Check connection*, save), From
+  address on their domain, speed set to their provider's limit (2–5/s on a new domain)
 - [ ] **Send test email** arrives; check the headers for SPF/DKIM pass
 - [ ] Settings → Bounces: mailbox **Test connection** green, or webhook URL configured at the provider
 - [ ] Settings → Compliance & backups → backup alert = `26` hours

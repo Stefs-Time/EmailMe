@@ -90,8 +90,12 @@ test('dates and consent methods are normalised', () => {
   assert.equal(normalizeConsentMethod('carrier pigeon'), 'other');
 });
 
-test('configuration: only the database and SMTP are required', () => {
-  assert.throws(() => loadConfig({}), /DATABASE_URL[\s\S]*SMTP_HOST/);
+test('configuration: only the database is required; SMTP variables are an optional default', () => {
+  assert.throws(() => loadConfig({}), /DATABASE_URL/);
+  const bare = loadConfig({ DATABASE_URL: 'postgres://x', NODE_ENV: 'production' });
+  assert.equal(bare.SMTP_HOST, undefined, 'the customer can set the mail server in Settings');
+  assert.equal(bare.mailAllowPrivateHosts, false, 'internal mail hosts are refused in production');
+  assert.equal(loadConfig({ DATABASE_URL: 'x', NODE_ENV: 'development' }).mailAllowPrivateHosts, true);
   const c = loadConfig({ DATABASE_URL: 'postgres://x', SMTP_HOST: 'smtp.example.com', SMTP_USER: 'u', SMTP_PASSWORD: 'p', ADMIN_EMAIL: '' });
   assert.equal(c.SMTP_PORT, 587);
   assert.equal(c.SMTP_SECURE, false);
@@ -183,4 +187,18 @@ test('SMTP error classification', () => {
   assert.equal(classifySendError({ code: 'EENVELOPE', responseCode: 550 }), 'permanent');
   assert.equal(classifySendError({ code: 'EENVELOPE', responseCode: 452 }), 'temporary');
   assert.equal(classifySendError({ responseCode: 421 }), 'connection');
+});
+
+test('mail hosts typed in Settings: private and internal addresses are refused (SSRF)', async () => {
+  const { resolveMailHost, isPrivateAddress } = require('../../src/lib/hosts');
+  for (const ip of ['127.0.0.1', '10.1.2.3', '172.20.0.5', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '::1', 'fd12:3456::1', 'fe80::1', '::ffff:10.0.0.1']) {
+    assert.equal(isPrivateAddress(ip), true, ip);
+  }
+  for (const ip of ['8.8.8.8', '41.0.0.1', '2c0f:fb50::1']) assert.equal(isPrivateAddress(ip), false, ip);
+  await assert.rejects(resolveMailHost('127.0.0.1'), { code: 'EHOSTBLOCKED' });
+  await assert.rejects(resolveMailHost('169.254.169.254'), { code: 'EHOSTBLOCKED' }, 'cloud metadata address');
+  await assert.rejects(resolveMailHost('localhost'), { code: 'EHOSTBLOCKED' });
+  await assert.rejects(resolveMailHost('postgres.railway.internal'), (e) => ['EHOSTBLOCKED', 'EDNS'].includes(e.code));
+  assert.deepEqual(await resolveMailHost('8.8.8.8'), { address: '8.8.8.8', servername: undefined }, 'public IPs are allowed');
+  assert.equal((await resolveMailHost('127.0.0.1', { allowPrivate: true })).address, '127.0.0.1', 'allowed for local test servers');
 });

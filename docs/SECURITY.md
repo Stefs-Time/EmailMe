@@ -28,7 +28,8 @@ meet POPIA.
 | Webhook | Secret token in the URL or the `X-Webhook-Token` header, constant-time comparison; can be rotated in Settings |
 | Output | Auto-escaping HTML in the SPA; strict CSP (`script-src 'self'`, no inline script or style); `frame-ancestors 'none'` |
 | Exports | CSV formula-injection protection; `Cache-Control: no-store`; every export audited; viewers cannot export |
-| Secrets | Your mail server password is held in MailHarbor's secured hosting configuration, never in the database, the app or logs. The session secret and encryption key are generated separately for each customer's service. The bounce-mailbox password is encrypted at rest with **AES-256-GCM** and never returned by the API |
+| Secrets | Your mail server, bounce-mailbox and replies-mailbox passwords are encrypted at rest with **AES-256-GCM**, write-only (never returned by the API or shown again) and never logged; changing a server name clears its saved password. The session secret and encryption key are generated separately for each customer's service |
+| Mail server addresses | Servers entered in Settings (SMTP and IMAP) must be public: private, internal, loopback and link-local addresses are refused, and the checked address is the one connected to (protection against server-side request forgery). TLS 1.2 minimum; unencrypted connections are refused in production |
 | Errors | Generic messages to users; details only in MailHarbor's internal logs, which exclude passwords, cookies and tokens |
 | Network | Only HTTPS is public; the database is reachable only from your MailHarbor instance |
 | Support access | MailHarbor's support and recovery account (marked *Managed by MailHarbor*) is used only to restore access or at your request; every action appears in your audit log |
@@ -41,7 +42,7 @@ meet POPIA.
 - Remove accounts when people leave (Users → Edit → disable).
 - Use a **dedicated** bounce mailbox with an app-specific password, not a person's mailbox.
 - Rotate the webhook token if it may have leaked (Settings → Bounces).
-- Keep your mail server credentials private, and tell MailHarbor support if they change or may have leaked.
+- Keep your mail server credentials private. If they may have leaked, change the password at your provider and in Settings → Sending.
 - Treat exports as personal information: store them securely and delete them when no longer needed.
 
 ## POPIA support (scope §5)

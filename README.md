@@ -272,19 +272,22 @@ The SMTP sink simulates failures by address prefix:
 
 ## Environment variables
 
-Only the first two are required. Everything else, including organisation details, sender, reply-to, bounce mailbox,
-sending speed, tracking and soft-bounce limit, is set in **Settings** and stored in the database.
+Only `DATABASE_URL` is required. Everything else, including **the customer's mail server**, organisation details,
+sender, reply-to, mailboxes, sending speed, tracking and soft-bounce limit, is set in **Settings** and stored in the
+database (passwords encrypted). The `SMTP_*` variables are an optional default mail server, used until the customer
+saves their own in Settings → Sending.
 
 | Variable | Required | Default | Notes |
 |---|---|---|---|
 | `DATABASE_URL` | **yes** | | PostgreSQL connection URL |
-| `SMTP_HOST` | **yes** | | SMTP server host |
+| `SMTP_HOST` | | | Default mail server (optional; Settings → Sending takes precedence) |
 | `SMTP_PORT` | | `587` | `465` turns on implicit TLS automatically |
 | `SMTP_USER`, `SMTP_PASSWORD` | | | Both or neither |
 | `SMTP_FROM` | | | Default sender, e.g. `"Name <news@example.co.za>"` (overridden by Settings) |
 | `SMTP_SECURE` | | auto | Force implicit TLS on/off |
 | `SMTP_REQUIRE_TLS` | | `true` | Refuse to send credentials without STARTTLS. Set `false` only for a local test server |
 | `SMTP_POOL_MAX` | | `3` | Concurrent SMTP connections |
+| `MAIL_ALLOW_PRIVATE_HOSTS` | | `false` in production | Allow private/internal addresses for mail servers entered in Settings (SSRF protection). For local development and tests only |
 | `PORT` | | `3000` | Railway sets this |
 | `PUBLIC_URL` | | | Base URL for links in emails. On Railway the public domain is detected; otherwise set it here or in Settings |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME` | | | MailHarbor support and recovery account, created or repaired on every start (password min. 12 chars); shown to the customer as *Managed by MailHarbor*. Set it **after** first-run setup |
@@ -305,15 +308,16 @@ Back up the database, and you back up both.
 
 Verified in the build environment for 0.9.0 (23 Nov 2026):
 - **Lint:** ESLint clean. **Dependencies:** `npm audit` reports 0 vulnerabilities (production and development).
-- **Unit tests (25):** configuration rules, secret encryption, rendering and personalisation, the email layout and
+- **Unit tests (26):** configuration rules, mail-server address checks (SSRF), secret encryption, rendering and personalisation, the email layout and
   brand theme, DSN/ARF parsing, bounce rules and SMTP error classification, the builder renderer, UTM tagging, segment
   rule compilation, image compression.
-- **Integration tests (32)** against PostgreSQL 16 and a local SMTP server, through the real HTTP API and send path:
+- **Integration tests (33)** against PostgreSQL 16 and a local SMTP server, through the real HTTP API and send path:
   setup, security and roles, import, personalised sending, hard/soft/policy bounces, tracking, unsubscribe, complaints,
   suppression across re-imports, double opt-in, reactivation, POPIA erasure, SMTP outage → pause → resume, the builder,
   samples, platform pages, the permission request, image library, UTM tags, segments, sign-up forms, email design
   (including freezing at send), the upgrade from templates, report drill-downs, and the Inbox end to end (real RFC 822
-  replies, auto-replies, unsubscribe requests, threading of answers, permissions, erasure).
+  replies, auto-replies, unsubscribe requests, threading of answers, permissions, erasure), and the customer-managed mail
+  server (encrypted password, check before saving, switching servers).
 - **Browser checks (Playwright, Chromium):**
   - a role crawl of 36 screens as viewer, manager and admin (refused screens refused, no page or API errors, no axe
     WCAG 2 A/AA violations);
@@ -328,7 +332,7 @@ Verified in the build environment for 0.9.0 (23 Nov 2026):
 - a live Railway deployment.
 
 The Docker image was built and smoke-tested for this release (non-root user, migrations 001–008 applied, `/healthz`
-200).
+200, starts without any `SMTP_*` variables).
 
 ## Known limitations
 

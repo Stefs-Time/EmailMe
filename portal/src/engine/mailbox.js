@@ -17,6 +17,7 @@ const { ImapFlow } = require('imapflow');
 const { parseBounceEmail, processBounce } = require('./bounces');
 const { ingestReply } = require('./inbox');
 const { raiseAlert, resolveAlert } = require('../lib/audit');
+const { resolveMailHost } = require('../lib/hosts');
 
 const PROCESSED_FOLDER = 'MailHarbor-Processed';
 const MAX_PER_RUN = 200;
@@ -27,11 +28,15 @@ const KINDS = {
     impact: 'Replies to campaigns are not reaching the Inbox.' },
 };
 
-async function testMailbox(m) {
-  const client = new ImapFlow({
-    host: m.host, port: m.port, secure: m.secure, auth: { user: m.user, pass: m.password },
-    logger: false, socketTimeout: 30000, connectionTimeout: 15000,
-  });
+/** Connection options for a customer-entered IMAP server: public addresses only, pinned to the checked IP. */
+async function imapOptions(m, { allowPrivate }) {
+  const { address, servername } = await resolveMailHost(m.host, { allowPrivate });
+  return { host: address, servername, port: m.port, secure: m.secure, auth: { user: m.user, pass: m.password }, logger: false,
+    tls: { minVersion: 'TLSv1.2', ...(servername ? { servername } : {}) } };
+}
+
+async function testMailbox(m, { allowPrivate = false } = {}) {
+  const client = new ImapFlow({ ...(await imapOptions(m, { allowPrivate })), socketTimeout: 30000, connectionTimeout: 15000 });
   await client.connect();
   try {
     const status = await client.status(m.folder, { messages: true });
@@ -62,7 +67,7 @@ async function handleMessage({ pool, settings, logger }, raw, { kind, ref }) {
   return res.status === 'stored' || res.status === 'duplicate' ? 'reply' : 'ignored';
 }
 
-async function pollMailbox({ pool, settings, logger, kind = 'bounce' }) {
+async function pollMailbox({ pool, settings, logger, kind = 'bounce', allowPrivate = false }) {
   const k = KINDS[kind];
   const m = await settings.mailbox(kind);
   if (!m.enabled) return { skipped: true };
@@ -70,10 +75,13 @@ async function pollMailbox({ pool, settings, logger, kind = 'bounce' }) {
     await raiseAlert(pool, k.alert, 'critical', `The ${k.label} is enabled but not fully configured (${k.where}).`);
     return { error: 'incomplete' };
   }
-  const client = new ImapFlow({
-    host: m.host, port: m.port, secure: m.secure, auth: { user: m.user, pass: m.password },
-    logger: false, socketTimeout: 60000, connectionTimeout: 20000,
-  });
+  let client;
+  try {
+    client = new ImapFlow({ ...(await imapOptions(m, { allowPrivate })), socketTimeout: 60000, connectionTimeout: 20000 });
+  } catch (err) {
+    await raiseAlert(pool, k.alert, 'critical', `Cannot read the ${k.label} (${err.message}). ${k.impact}`, { host: m.host });
+    return { error: err.message };
+  }
   const stats = { checked: 0, bounces: 0, replies: 0, ignored: 0, retry: 0 };
   try {
     await client.connect();

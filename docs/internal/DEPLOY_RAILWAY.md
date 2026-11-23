@@ -60,11 +60,8 @@ Railway → **New Project** → **Deploy PostgreSQL**. Keep the service name `Po
    | Variable | Value |
    |---|---|
    | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
-   | `SMTP_HOST` | e.g. `email-smtp.af-south-1.amazonaws.com` |
-   | `SMTP_PORT` | `587` (STARTTLS) or `465` (TLS) |
-   | `SMTP_USER` | SMTP username |
-   | `SMTP_PASSWORD` | SMTP password |
-   | `SMTP_FROM` | optional, e.g. `"Example News <news@example.co.za>"` |
+   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | **optional** default mail server, e.g. `email-smtp.af-south-1.amazonaws.com`, `587`. Normally the customer enters their own in Settings → Sending, which then takes precedence |
+   | `SMTP_FROM` | optional default sender, e.g. `"Example News <news@example.co.za>"` |
    | `SUPPORT_EMAIL` | our support address, shown to the customer on the setup screen and in help texts |
    | `PUBLIC_URL` | once the custom domain works (§5), e.g. `https://mail.customer.co.za`; locks the field for the customer |
 
@@ -197,7 +194,7 @@ Keep **replicas at 1** (set in `railway.json`).
 |---|---|
 | Deploy log: `Invalid configuration` | The message names each missing or invalid variable |
 | System health: SMTP *connection timeout* | Workspace is not on Pro (SMTP blocked), or wrong host/port. Redeploy after upgrading |
-| SMTP *authentication failed* | Check `SMTP_USER`/`SMTP_PASSWORD`. Some providers need an app-specific or SMTP-specific password |
+| SMTP *authentication failed* | Settings → Sending → Your mail server (or `SMTP_USER`/`SMTP_PASSWORD` for the default server). Some providers need an app-specific or SMTP-specific password |
 | *Greeting never received* on port 465/587 | Port and TLS mode mismatch: 465 is implicit TLS, 587 is STARTTLS (set automatically from the port; override with `SMTP_SECURE`) |
 | Campaign **paused** with "SMTP connection failed" | MailHarbor paused it during an SMTP outage. Fix the cause (System health → SMTP *Re-check*), then **Resume** |
 | Lost the setup code | Redeploy or restart. It is printed on every start until the first administrator exists |

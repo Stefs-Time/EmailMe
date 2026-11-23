@@ -5,6 +5,8 @@ organisations first so that we can find what still needs work before the general
 
 ## What's in this version
 
+- **You manage everything in the app:** your mail server, mailboxes, users, design and compliance settings are all in
+  Settings. We host, update, monitor and back up your service.
 - **Contacts and lists:** import spreadsheets (with a preview before anything is saved), saved segments, sign-up forms
   for your website, consent records for POPIA, and a suppression list that nothing can bypass.
 - **Campaigns** in three steps: choose the audience, write the email in the drag-and-drop builder (or start from one of

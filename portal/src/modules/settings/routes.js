@@ -9,7 +9,6 @@ const { parse, badRequest, forbidden, conflict } = require('../../lib/errors');
 const { requirePermission, ensureCsrfToken } = require('../../middleware/auth');
 const { audit } = require('../../lib/audit');
 const { isValidEmail } = require('../../lib/email');
-const { describeSmtp } = require('../../engine/mailer');
 const { testMailbox } = require('../../engine/mailbox');
 const { passwordSchema, permissionsFor } = require('../auth/routes');
 const { SETTINGS_SCHEMA } = require('../../lib/settings');
@@ -30,13 +29,15 @@ function settingsRoutes({ pool, settings, transport, config, worker }) {
   r.use(requirePermission('settings:manage'));
 
   r.get('/', async (_req, res) => {
-    res.json({ success: true, data: { ...(await settings.forUi()), smtp: describeSmtp(config) } });
+    res.json({ success: true, data: { ...(await settings.forUi()), mail_server: await transport.describe() } });
   });
 
   r.put('/', async (req, res) => {
+    // Plain (unencrypted) mail server connections are only for local test servers.
+    if (config.isProd && req.body?.smtp?.security === 'none') throw badRequest('Your mail server must use TLS or STARTTLS.');
     const changed = await settings.update(req.body || {}, req.user.id);
     await audit(pool, req, 'settings.updated', { details: { changed } });
-    res.json({ success: true, data: { ...(await settings.forUi()), smtp: describeSmtp(config) } });
+    res.json({ success: true, data: { ...(await settings.forUi()), mail_server: await transport.describe() } });
   });
 
   /**
@@ -63,6 +64,28 @@ function settingsRoutes({ pool, settings, transport, config, worker }) {
     res.type('html').send(msg.html);
   });
 
+  /** Connects to the mail server in the form (unsaved values; blank password = the saved one) and signs in. */
+  r.post('/smtp-verify', async (req, res) => {
+    const body = parse(z.object({
+      host: z.string().trim().min(1, 'Enter the server name').max(255),
+      port: z.coerce.number().int().min(1).max(65535),
+      security: z.enum(['auto', 'tls', 'starttls', 'none']),
+      user: z.string().trim().max(255).default(''),
+      password: z.string().max(500).optional(),
+    }), req.body || {});
+    if (config.isProd && body.security === 'none') throw badRequest('Your mail server must use TLS or STARTTLS.');
+    try {
+      await transport.test(body);
+      await audit(pool, req, 'settings.smtp_verified', { details: { ok: true, host: body.host } });
+      res.json({ success: true, data: { ok: true } });
+    } catch (err) {
+      await audit(pool, req, 'settings.smtp_verified', { details: { ok: false, host: body.host } });
+      const msg = err.code === 'EAUTH' ? 'The server rejected the username or password (some providers need an SMTP-specific password).'
+        : String(err.response || err.message).slice(0, 300);
+      res.json({ success: true, data: { ok: false, error: msg } });
+    }
+  });
+
   /** Sends one real email straight through SMTP and reports the server's answer (TC01). */
   r.post('/smtp-test', async (req, res) => {
     const body = parse(z.object({ to: z.string().trim().max(254) }), req.body);
@@ -74,7 +97,7 @@ function settingsRoutes({ pool, settings, transport, config, worker }) {
       const info = await transport.sendMail({
         from: { name: s.from_name || s.org_name, address: s.from_email }, to: body.to,
         subject: `${s.org_name}: SMTP test from MailHarbor`,
-        text: `This is a test email from MailHarbor.\n\nIf you received it, outgoing email is working.\nServer: ${config.SMTP_HOST}:${config.SMTP_PORT}`,
+        text: `This is a test email from MailHarbor.\n\nIf you received it, outgoing email is working.\nServer: ${(await transport.describe()).host || '(none)'}`,
         envelope: { from: s.bounce_address || s.from_email, to: body.to },
       });
       await audit(pool, req, 'settings.smtp_tested', { details: { ok: true } });
@@ -94,7 +117,7 @@ function settingsRoutes({ pool, settings, transport, config, worker }) {
     const m = { ...saved, ...Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined && v !== '')) };
     if (!m.host || !m.user || !m.password) throw badRequest('Enter the host, username and password');
     try {
-      const out = await testMailbox(m);
+      const out = await testMailbox(m, { allowPrivate: config.mailAllowPrivateHosts });
       res.json({ success: true, data: { ok: true, messages: out.messages } });
     } catch (err) {
       res.json({ success: true, data: { ok: false, error: err.authenticationFailed ? 'Login failed: check the username and password' : String(err.responseText || err.message).slice(0, 300) } });

@@ -47,6 +47,7 @@ Added for 0.9.0 (beyond the original scope):
 | TC22 | Auto-reply and unsubscribe request | Out-of-office filed closed; "remove me" flagged; one click unsubscribes with the conversation as the reason | **Automated ✔** | Categories and states as described; contact unsubscribed; note added; conversation closed |
 | TC23 | Answer a reply | The answer arrives threaded in the recipient's mail client; their next reply rejoins the conversation | **Automated ✔** (test server) / **Manual** (real mail client) | Subject "Re: …", In-Reply-To and References set, original quoted; viewers cannot answer (403) |
 | TC24 | Roles across every screen | Each role sees only its screens; no errors | **Automated ✔** (role crawl, see UAT_AUDIT round 3) | Viewer, manager and admin over 36 screens: refused routes refused, no page or API errors, no axe violations |
+| TC25 | Customer manages the mail server | The administrator sets their SMTP server in Settings → Sending; sending switches over; the password is never shown | **Automated ✔** (second test server) / **Manual** (your provider) | *Check connection* with wrong and right passwords; saved password encrypted and never returned; test email and a campaign go through the new server; clearing it returns to the default; internal addresses refused (SSRF unit test) |
 
 Additional automated checks:
 - first-run setup needs the log code;
@@ -103,9 +104,9 @@ Additional automated checks:
   - an unsubscribed address gets the same reply and stays unsubscribed;
   - outcome totals are correct, and closed forms return 404.
 
-**Integration tests** (`npm run test:integration`): 32 tests. **Lint** (`npm run lint`): clean.
+**Integration tests** (`npm run test:integration`): 33 tests. **Lint** (`npm run lint`): clean.
 
-**Unit tests** (`npm run test:unit`, 25 tests): configuration rules, secret encryption, rendering and personalisation,
+**Unit tests** (`npm run test:unit`, 26 tests): configuration rules, mail-server address checks (SSRF), secret encryption, rendering and personalisation,
 DSN/ARF/auto-reply parsing, bounce classification, SMTP error classification, and the builder renderer (defaults,
 rejection of unsafe URLs, colours and block types, escaping, tag links, column stacking, image widths, click tracking) the email layout (logo, colours, font, escaped footer line, preferences link, invalid values never reach the HTML,
 brand colours for headings, buttons and links, template-only blocks rejected), UTM tagging rules, segment rule validation and
@@ -123,7 +124,8 @@ Both are covered by the sign-off script below.
 
 1. **System health:** all critical checks are green; the replies mailbox and Reply-To checks are green.
    **TC17:** Settings → Email design: add the logo and brand colour; the preview shows them.
-2. **TC01:** Settings → Sending → *Send test email* arrives in your inbox. Check that it is not in spam and that SPF, DKIM
+2. **TC01 / TC25:** Settings → Sending → *Your mail server*: enter the provider's details, *Check connection*, save.
+   *Send test email* arrives in your inbox. Check that it is not in spam and that SPF, DKIM
    and DMARC show *pass* in the message headers.
 3. Create the list "UAT". Import a CSV of 3 staff addresses plus 1 `nonexistent-<random>@<your-domain>`.
 4. **TC04:** send a personalised campaign to "UAT". Each recipient gets one personalised email, and the unsubscribe link

@@ -180,7 +180,7 @@ async function getMessages(client, contactId) {
 }
 
 function strip(r) {
-   
+
   const { total_count, ...rest } = r;
   return rest;
 }

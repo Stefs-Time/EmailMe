@@ -63,7 +63,7 @@ function flatten(meta) {
     }
   }
   if (typeof obj !== 'object' || obj === null) return String(obj).replace(IPV4_RE, ' ');
-  const { received, classify_reason: reason, ...rest } = obj;  
+  const { received, classify_reason: reason, ...rest } = obj;
   let text;
   try {
     text = JSON.stringify(rest);

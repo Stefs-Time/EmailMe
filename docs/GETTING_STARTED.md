@@ -11,7 +11,7 @@ sending reputation stays yours.
 | Organisation name and postal address | Shown in every email footer, as POPIA and anti-spam rules require | |
 | First administrator's name and email | They create the first sign-in | They can add colleagues afterwards |
 | Web address | Where your team signs in, and the address in unsubscribe and tracking links | e.g. `mail.yourcompany.co.za`. Your IT team adds one DNS record (CNAME) we send them |
-| Mail server (SMTP) details | MailHarbor sends through it | Host, port, username, password. We'll give you a secure way to send the password: **don't email it**. The service must allow marketing email (e.g. Amazon SES, Mailgun, SendGrid, Brevo, SMTP2GO, your own relay). A normal Microsoft 365 or Google Workspace mailbox isn't suitable for bulk sending |
+| Mail server (SMTP) details | MailHarbor sends through it | Server, port, username, password. You enter them yourself in Settings → Sending (never email a password to anyone). The service must allow marketing email (e.g. Amazon SES, Mailgun, SendGrid, Brevo, SMTP2GO, your own relay). A normal Microsoft 365 or Google Workspace mailbox isn't suitable for bulk sending |
 | Sending domain | Lets inboxes trust your emails | Your IT team adds SPF, DKIM and DMARC records (see the [administrator guide §5](ADMIN_GUIDE.md#5-dns-and-deliverability)) |
 | Replies mailbox | Replies to your campaigns arrive in the Inbox, where your team reads and answers them | A dedicated mailbox with IMAP, e.g. `replies@yourcompany.co.za`. You connect it in Settings → Replies |
 | Bounce mailbox | Removes invalid addresses automatically | A dedicated mailbox with IMAP, e.g. `bounces@yourcompany.co.za`, or your provider's bounce notifications. You enter it yourself in Settings |
@@ -30,7 +30,7 @@ Open **System health** in the app. Every item marked critical must be green:
 
 - [ ] **Settings → General:** postal address
 - [ ] **Settings → Email design:** your logo and brand colour
-- [ ] **Settings → Sending:** From name and address (on your sending domain), then **Send test email**
+- [ ] **Settings → Sending:** your mail server (**Check connection**, then save), From name and address (on your sending domain), then **Send test email**
 - [ ] **Settings → Bounces:** bounce mailbox, then **Test connection**
 - [ ] **Settings → Replies:** Reply-To address and replies mailbox, then **Test connection**
 - [ ] DNS: SPF and DMARC green on System health; DKIM set up at your mail provider
@@ -52,4 +52,4 @@ Open **System health** in the app. Every item marked critical must be green:
 - [User guide](USER_GUIDE.md): contacts, lists, campaigns, email design, reports.
 - [Administrator guide](ADMIN_GUIDE.md): settings, users, DNS, bounces, monitoring.
 - [Security & POPIA](SECURITY.md): how your data is protected.
-- Anything else, including mail server changes or lost access: contact MailHarbor support.
+- Anything about hosting, your web address or lost access: contact MailHarbor support.

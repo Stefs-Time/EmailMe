@@ -166,7 +166,7 @@ export async function render(el, ctx) {
     state.page = 1; load();
   });
   $('#export', el)?.addEventListener('click', () => {
-    const { page, per_page, sort, dir, ...f } = state;  
+    const { page, per_page, sort, dir, ...f } = state;
     download(`/exports/contacts.csv${qs(f)}`);
     toast('Your export is downloading');
   });
@@ -185,7 +185,7 @@ export async function render(el, ctx) {
     const cb = e.target.closest('[data-sel]');
     if (cb) { selected[cb.checked ? 'add' : 'delete'](Number(cb.dataset.sel)); renderBulk(); return; }
     if (e.target.id === 'select-matching') {
-      const { page, per_page, sort, dir, ...f } = state;  
+      const { page, per_page, sort, dir, ...f } = state;
       get(`/contacts/ids${qs(f)}`).then((x) => {
         x.data.ids.forEach((id) => selected.add(id));
         renderBulk(); load();

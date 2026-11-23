@@ -216,11 +216,16 @@ const G = {
     <h2>For administrators</h2>
     <h3>Your service</h3>
     <p>MailHarbor is a hosted service: your organisation has its own private MailHarbor and its own database, which MailHarbor runs, updates,
-    monitors and backs up. Emails go out through <strong>your own mail server</strong> (SMTP), which MailHarbor connects for you.</p>
-    <ul><li><strong>Managed by MailHarbor</strong>: hosting, database, backups, updates, your web address and the mail server connection.
-      To connect a different mail server or change its password, contact MailHarbor support.</li>
-      <li><strong>Managed by you</strong> in <a href="#/settings">Settings</a>: organisation, postal address, email design (logo, colours, footer), sender, sending speed, bounce mailbox,
-      webhook, Google Analytics tags and compliance options. Under <a href="#/users">Users</a>: who has access.</li></ul>
+    monitors and backs up. You manage everything in the application from these screens. Emails go out through <strong>your own mail server</strong> (SMTP).</p>
+    <ul><li><strong>Managed by MailHarbor</strong>: hosting, the database, daily backups, updates, monitoring and your web address.</li>
+      <li><strong>Managed by you</strong> in <a href="#/settings">Settings</a>: organisation and postal address, email design (logo, colours, footer),
+      <strong>your mail server</strong> (Settings → Sending), sender and sending speed, replies and bounce mailboxes, webhook, Google Analytics tags and
+      compliance options. Under <a href="#/users">Users</a>: who has access. <a href="#/system">System health</a> shows whether everything works.</li></ul>
+    <h3>Your mail server</h3>
+    <p>Enter your provider's SMTP server, port, username and password under <a href="#/settings/sending">Settings → Sending</a>. <em>Check connection</em>
+    tests the details before you save; <em>Send test email</em> sends a real email once saved. The password is stored encrypted and never shown again.
+    Use a provider that allows marketing email (a normal Microsoft 365 or Google Workspace mailbox isn't suitable). If a default server was set up for you,
+    it is used until you save your own.</p>
     <h3>Users and recovery</h3>
     <p>Create a personal account for everyone who needs access under <a href="#/users">Users</a>, with the lowest role they need. Keep at least two
     administrators. If every administrator is locked out, contact MailHarbor support: the account marked <em>Managed by MailHarbor</em> is used to restore access.</p>

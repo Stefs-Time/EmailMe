@@ -18,7 +18,7 @@ const DB = process.env.TEST_DATABASE_URL;
 const enabled = Boolean(DB) && /test/i.test(new URL(DB || 'postgres://x/x').pathname);
 const t = (name, fn) => test(name, { skip: !enabled && 'set TEST_DATABASE_URL to a database whose name contains "test"' }, fn);
 
-let sink; let server; let base; let pool; let worker; let settings;
+let sink; let server; let base; let pool; let worker; let settings; let transport;
 const jar = {};
 const csrf = {};
 let listId; let doubleListId; let campaignId;
@@ -121,7 +121,7 @@ before(async () => {
   const { migrate } = require('../../src/db/migrate');
   const { getOrCreate } = require('../../src/lib/secrets');
   const { Settings } = require('../../src/lib/settings');
-  const { createTransport } = require('../../src/engine/mailer');
+  const { MailTransport } = require('../../src/engine/mailer');
   const { Worker } = require('../../src/engine/worker');
   const { upgradeToEmailDesign } = require('../../src/lib/emailDesign');
   const { announceSetupCode } = require('../../src/modules/settings/routes');
@@ -135,8 +135,8 @@ before(async () => {
   settings = new Settings(pool, await getOrCreate(pool, 'enc_key'), config);
   await upgradeToEmailDesign(pool, settings, logger);
   await announceSetupCode(pool, logger);
-  const transport = createTransport(config);
-  worker = new Worker({ pool, settings, transport, logger });
+  transport = new MailTransport(config, settings);
+  worker = new Worker({ pool, settings, transport, logger, config });
   const app = createApp({ pool, config, logger, settings, transport, worker, track: () => {}, sessionSecret: 'x'.repeat(40) });
   server = app.listen(0);
   base = `http://127.0.0.1:${server.address().port}`;
@@ -1124,4 +1124,55 @@ t('inbox: replies are classified, threaded to the campaign and contact, read saf
   const er = await http('admin', 'POST', `/api/contacts/${amyId}/erase`, { confirm: 'ERASE' });
   assert.equal(er.status, 200, JSON.stringify(er));
   assert.equal((await pool.query(`SELECT COUNT(*)::int AS n FROM portal.conversations WHERE email = 'ib-amy@ok.example'`)).rows[0].n, 0, 'erasure removes the conversation');
+});
+
+t('mail server in Settings: the customer manages it; password encrypted and never returned; sending switches over', async () => {
+  const own = await startSink({ user: 'cust', pass: 'cust-pass-2026' });
+  try {
+    let st = (await http('admin', 'GET', '/api/settings')).data;
+    assert.equal(st.mail_server.source, 'hosting', 'starts on the operator default (SMTP_* variables)');
+    assert.equal((await http('viewer', 'PUT', '/api/settings', { smtp: { host: 'x' } })).status, 403);
+
+    // Check before saving: wrong password, then right one.
+    let v = await http('admin', 'POST', '/api/settings/smtp-verify', { host: '127.0.0.1', port: own.port, security: 'none', user: 'cust', password: 'wrong' });
+    assert.equal(v.data.ok, false);
+    assert.match(v.data.error, /username or password/);
+    v = await http('admin', 'POST', '/api/settings/smtp-verify', { host: '127.0.0.1', port: own.port, security: 'none', user: 'cust', password: 'cust-pass-2026' });
+    assert.equal(v.data.ok, true, JSON.stringify(v));
+    assert.equal((await http('admin', 'PUT', '/api/settings', { smtp: { host: 'bad host!' } })).status, 422);
+
+    const saved = await http('admin', 'PUT', '/api/settings', { smtp: { host: '127.0.0.1', port: own.port, security: 'none', user: 'cust', password: 'cust-pass-2026' } });
+    assert.equal(saved.status, 200, JSON.stringify(saved));
+    assert.equal(saved.data.mail_server.source, 'settings');
+    assert.equal(saved.data.smtp.password_set, true);
+    assert.doesNotMatch(JSON.stringify(saved), /cust-pass-2026/, 'the password is never returned');
+    const raw = (await pool.query(`SELECT value::text AS v FROM portal.settings WHERE key = 'smtp'`)).rows[0].v;
+    assert.doesNotMatch(raw, /cust-pass-2026/, 'encrypted at rest');
+
+    // Test email and campaigns now go through the customer's server.
+    own.messages.length = 0;
+    sink.messages.length = 0;
+    const tst = await http('admin', 'POST', '/api/settings/smtp-test', { to: 'smtp-check@ok.example' });
+    assert.equal(tst.data.ok, true, JSON.stringify(tst));
+    assert.equal(own.messages.length, 1, 'delivered by the customer server');
+    assert.equal(sink.messages.length, 0);
+    await addContact('own-smtp@ok.example');
+    const camp = await newCampaign('Own server');
+    assert.equal((await http('admin', 'POST', `/api/campaigns/${camp}/send`)).status, 200);
+    await drain();
+    assert.ok(own.messages.some((m) => m.envelope.rcptTo.some((r) => r.address === 'own-smtp@ok.example')), 'campaign sent through the customer server');
+    const health = (await http('admin', 'GET', '/api/system/health')).data;
+    assert.equal(health.smtp.source, 'settings');
+    assert.equal(health.smtp.ok, true);
+
+    // A different server without a new password: the old password is not sent there.
+    st = (await http('admin', 'PUT', '/api/settings', { smtp: { host: '127.0.0.2', port: own.port, security: 'none', user: 'cust' } })).data;
+    assert.equal(st.smtp.password_set, false);
+    // Clearing the server returns to the operator default.
+    st = (await http('admin', 'PUT', '/api/settings', { smtp: { host: '' } })).data;
+    assert.equal(st.mail_server.source, 'hosting');
+  } finally {
+    await http('admin', 'PUT', '/api/settings', { smtp: { host: '' } });
+    await own.close();
+  }
 });

@@ -7,7 +7,7 @@ const { migrate } = require('./db/migrate');
 const { getOrCreate } = require('./lib/secrets');
 const { Settings } = require('./lib/settings');
 const { ensureEnvAdmin } = require('./lib/envAdmin');
-const { createTransport } = require('./engine/mailer');
+const { MailTransport } = require('./engine/mailer');
 const { Worker } = require('./engine/worker');
 const { upgradeToEmailDesign } = require('./lib/emailDesign');
 const { announceSetupCode } = require('./modules/settings/routes');
@@ -39,8 +39,8 @@ async function main() {
   await recoverInterrupted(pool);
   await announceSetupCode(pool, logger);
 
-  const transport = createTransport(config);
-  const worker = new Worker({ pool, settings, transport, logger });
+  const transport = new MailTransport(config, settings, logger);
+  const worker = new Worker({ pool, settings, transport, logger, config });
 
   const background = new Set();
   const track = (p) => {
@@ -58,9 +58,10 @@ async function main() {
 
   if (config.WORKERS) {
     await worker.start();
-    transport.verify()
-      .then(() => logger.info({ host: config.SMTP_HOST }, 'SMTP connection verified'))
-      .catch((err) => logger.error({ host: config.SMTP_HOST, err: err.message }, 'SMTP verification failed: check the SMTP_* variables'));
+    transport.describe().then((d) => (d.configured ? transport.verify()
+      .then(() => logger.info({ host: d.host, source: d.source }, 'SMTP connection verified'))
+      .catch((err) => logger.error({ err: err.message, host: d.host }, 'SMTP verification failed: check Settings → Sending → Your mail server'))
+      : logger.warn('No mail server set up yet: the customer adds it in Settings → Sending')));
   }
 
   let shuttingDown = false;

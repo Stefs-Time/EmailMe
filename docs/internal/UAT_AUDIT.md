@@ -17,7 +17,7 @@ There have been three rounds:
 | Browser walkthrough | Fresh database → first-run setup with the log code → settings (address, SMTP test, bounce tab) → list + contact → campaign editor (subject, preheader, personalisation tag, button, autosave, readiness) → test send → send now → report → templates → system health |
 | Role crawl | Signed in as **viewer** and **manager**, opened all 21 routes (including deep links to admin-only and edit screens), recorded the menu, every visible action, failed API calls and page errors |
 | Accessibility | axe-core (WCAG 2 A/AA) on every screen in the walkthrough and the role crawl |
-| Functional regression | 25 unit tests + 32 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)); ESLint clean |
+| Functional regression | 26 unit tests + 33 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)); ESLint clean |
 | Round 3 role crawl | Viewer, manager and admin each opened **36 screens** (every menu item, every Settings tab, report details, a conversation, a draft editor, segment and form editors); refused routes checked; page errors, API errors and axe recorded |
 | Round 3 walkthroughs | Email design (live preview, brand colour in builder and email), simplified campaign editor, campaign report tiles each matching their detail list, mail usage and audience drill-downs, Inbox (read, original formatting, attachment, reply, note, assign, close, unsubscribe request) on desktop and iPhone 13 |
 
@@ -251,8 +251,9 @@ Role crawl, 36 screens per role:
 | Admin | – | 0 | 0 | 0 |
 
 Walkthroughs: Email design and simplified editor 25/25 checks; Inbox 25/25 checks (desktop and iPhone 13, no
-horizontal scroll); report drill-downs (10 campaign tiles each equal to their detail lists). Unit 25/25, integration
-32/32, `npm audit` 0 vulnerabilities, ESLint clean.
+horizontal scroll); report drill-downs (10 campaign tiles each equal to their detail lists). Unit 26/26, integration
+33/33, `npm audit` 0 vulnerabilities, ESLint clean. Settings → Sending (customer mail server) 9/9 checks; role crawl
+re-run after it: unchanged (no refusal, page, API or axe failures).
 
 ### 17 Nov 2026 (round 2)
 

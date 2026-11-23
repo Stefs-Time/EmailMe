@@ -7,19 +7,19 @@ with [Getting started](GETTING_STARTED.md).
 ## 1. Your service
 
 MailHarbor is a **hosted service**. Your organisation has its own private MailHarbor, with its own database and web
-address, that no other customer shares. Emails go out through **your own mail server** (SMTP), so your sending
-reputation and provider agreements stay yours.
+address, that no other customer shares. MailHarbor runs the service; **you manage the whole application from its
+screens**. Emails go out through **your own mail server** (SMTP), so your sending reputation and provider agreements stay
+yours.
 
-| Managed by MailHarbor | Managed by you (in the app) |
+| Managed by MailHarbor (hosting) | Managed by you (in the app) |
 |---|---|
-| Hosting, security updates and new versions | Organisation details, sender, sending speed |
+| Hosting, security updates and new versions | **Your mail server** (Settings → Sending), sender, sending speed |
 | Your database and daily backups | Users and roles |
-| Monitoring and uptime | Bounce mailbox and webhook |
+| Monitoring and uptime | Replies and bounce mailboxes, webhook |
 | Your web address (e.g. `https://mail.yourcompany.co.za`) | Email design (logo, colours, footer), sign-up forms, images, Google Analytics tags |
-| The connection to your mail server (SMTP) | Compliance options, contacts, lists and campaigns |
+| | Compliance options, contacts, lists, campaigns and the Inbox |
 
 Contact MailHarbor support to:
-- connect a different mail server, or update its password;
 - change your web address;
 - restore access if every administrator is locked out;
 - get your setup code again before your first sign-in;
@@ -30,7 +30,7 @@ Contact MailHarbor support to:
 | Item | Details |
 |---|---|
 | Replies mailbox | A **dedicated** mailbox with IMAP, e.g. `replies@yourcompany.co.za`, so replies to campaigns arrive in the Inbox |
-| Mail server (SMTP) | A sending service or relay that permits marketing email: host, port (587 or 465), username, password. MailHarbor support connects it for you |
+| Mail server (SMTP) | A sending service or relay that permits marketing email: host, port (587 or 465), username, password. You enter it in Settings → Sending |
 | Sending domain | A domain you control, to set SPF, DKIM and DMARC (§5) |
 | Bounce mailbox | A **dedicated** mailbox with IMAP over TLS (port 993), e.g. `bounces@yourcompany.co.za`, **or** your provider's bounce webhooks |
 | Users | Who needs access, and in which role (viewer / manager / administrator) |
@@ -57,13 +57,22 @@ preferences and View in browser links. There are no per-campaign templates.
 - Campaigns already sent keep the design they were sent with, including on their *View in browser* page.
 
 ### Sending
+- **Your mail server (SMTP):** server name, port, security (automatic: TLS on port 465, STARTTLS otherwise), username
+  and password.
+  - **Check connection** connects and signs in with the details on screen, before you save them.
+  - **Save settings** switches sending to that server straight away, including for campaigns in progress.
+  - The password is stored encrypted and never shown again; changing the server name clears it, so it is never sent
+    to a different server.
+  - Only public server names are accepted (not internal or private network addresses).
+  - If MailHarbor set up a default server for you, it is used until you save your own; clear the server name to go
+    back to it.
 - **From name / From address:** use an address on your authenticated sending domain. New campaigns use it unless
   someone sets a different sender in the campaign.
 - **Reply-to:** optional; where replies go.
 - **Emails per second / Maximum per hour:** stay within your provider's limits. On a new domain start at 2–5 per second
   and increase gradually over a few weeks (warm-up).
 - **Tracking defaults:** opens and clicks; each campaign can switch them off.
-- **Send test email** checks your mail server connection end to end.
+- **Send test email** sends one real email through the saved mail server.
 - **Google Analytics (UTM) tags:** on by default.
   - **Values:** `utm_source` (default `mailharbor`), `utm_medium` (default `email`); `utm_campaign` is the campaign's
     name, or the name set on the campaign.
@@ -176,7 +185,7 @@ Dashboard and System health alerts:
 
 | Alert | Trigger | What to do |
 |---|---|---|
-| Emails cannot be sent (critical) | Mail server connection or sign-in failed during sending; campaigns auto-paused | If your mail server's password or details changed, send the new details to MailHarbor support. Then **Resume** |
+| Emails cannot be sent (critical) | Mail server connection or sign-in failed during sending, or no mail server set up; campaigns auto-paused | Settings → Sending → Your mail server: correct the details, **Check connection**, save. Then **Resume** |
 | Bounce mailbox error (critical) | IMAP connection, login or folder error, or incomplete settings | Settings → Bounces → **Test connection** |
 | Bounce processing off (warning) | No bounce mailbox enabled | Set up a bounce mailbox (§3) |
 | Replies mailbox error (critical) / not collected (warning) | The replies mailbox can't be read, or isn't set up | Settings → Replies → **Test connection** |
@@ -202,13 +211,14 @@ System health also shows:
 | See who did what | Audit log (admin) |
 | Handle unsubscribe requests sent by email | Inbox → *Unsubscribe requests* → **Unsubscribe** (recorded on the contact) |
 | Rotate the webhook token | Settings → Bounces → *New token*; update the URL at your provider |
-| Change mail server or web address | Contact MailHarbor support |
+| Change your mail server or its password | Settings → Sending → Your mail server |
+| Change your web address | Contact MailHarbor support |
 
 ## 9. Troubleshooting
 
 | Symptom | Check |
 |---|---|
-| Mail server check: timeout or authentication failed | Has your mail server's password or address changed? Send the new details to MailHarbor support. Some providers need an SMTP-specific password |
+| Mail server check: timeout or authentication failed | Settings → Sending → Your mail server: check the server name, port and security, and the username and password (some providers need an SMTP-specific password). Your provider must accept connections from MailHarbor |
 | No bounces recorded | Bounce address set? Bounce mailbox green? Some providers rewrite the Return-Path, so use their webhook |
 | Many contacts in the review queue at one domain | Your domain or IP is being blocked there: check SPF/DKIM/DMARC, complaint rate and the provider's postmaster tools before releasing them |
 | Contacts imported but not on a list | Row report: suppressed, previously unsubscribed, or no consent basis |

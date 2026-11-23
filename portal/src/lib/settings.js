@@ -22,6 +22,15 @@ const mailbox = z.object({
   interval_minutes: z.coerce.number().int().min(1).max(1440).default(5),
 });
 
+// The customer's outgoing mail server (Settings → Sending). Empty host = the operator's SMTP_* default.
+const smtp = z.object({
+  host: z.string().trim().max(255).regex(/^[a-zA-Z0-9.-]*$/, 'Use a server name like smtp.example.co.za').default(''),
+  port: z.coerce.number().int().min(1).max(65535).default(587),
+  security: z.enum(['auto', 'tls', 'starttls', 'none']).default('auto'),
+  user: z.string().trim().max(255).default(''),
+  password: z.string().max(500).optional(), // write-only; stored encrypted
+});
+
 const SCHEMA = z.object({
   org_name: z.string().trim().min(1).max(120).default('MailHarbor'),
   // Postal address shown in every email footer (sender identity, scope §3.5).
@@ -41,6 +50,7 @@ const SCHEMA = z.object({
   bounce_mailbox: mailbox.default({}),
   // Replies to campaigns (the Reply-To address's mailbox), read into the Inbox.
   replies_mailbox: mailbox.default({}),
+  smtp: smtp.default({}),
   webhook_token: z.string().default(''),
   backup_stale_hours: z.coerce.number().min(0).max(744).default(0),
   // Google Analytics campaign tags added to links (campaigns can switch them off).
@@ -61,7 +71,7 @@ const SCHEMA = z.object({
 });
 
 // zod 4 returns .default({}) objects as-is, so build nested defaults explicitly.
-const DEFAULTS = { ...SCHEMA.parse({}), bounce_mailbox: mailbox.parse({}), replies_mailbox: mailbox.parse({}) };
+const DEFAULTS = { ...SCHEMA.parse({}), bounce_mailbox: mailbox.parse({}), replies_mailbox: mailbox.parse({}), smtp: smtp.parse({}) };
 const CACHE_MS = 5000;
 
 class Settings {
@@ -78,7 +88,7 @@ class Settings {
     const { rows } = await this.pool.query('SELECT key, value FROM portal.settings');
     const stored = Object.fromEntries(rows.map((r) => [r.key, r.value]));
     const merged = { ...DEFAULTS, ...stored, bounce_mailbox: { ...DEFAULTS.bounce_mailbox, ...(stored.bounce_mailbox || {}) },
-      replies_mailbox: { ...DEFAULTS.replies_mailbox, ...(stored.replies_mailbox || {}) } };
+      replies_mailbox: { ...DEFAULTS.replies_mailbox, ...(stored.replies_mailbox || {}) }, smtp: { ...DEFAULTS.smtp, ...(stored.smtp || {}) } };
     if (!merged.from_email && this.config?.SMTP_FROM) {
       const m = /^(?:"?([^"<]*)"?\s*)?<([^>]+)>$/.exec(this.config.SMTP_FROM.trim());
       merged.from_email = m ? m[2] : this.config.SMTP_FROM.trim();
@@ -107,10 +117,10 @@ class Settings {
     return (s.public_url || '').replace(/\/+$/, '') || this.config?.platformPublicUrl || '';
   }
 
-  /** Mailbox settings with the password decrypted (server use only). kind: 'bounce' | 'replies'. */
+  /** Server settings with the password decrypted (server use only). kind: 'bounce' | 'replies' | 'smtp'. */
   async mailbox(kind = 'bounce') {
     const s = await this.all();
-    const m = { ...s[kind === 'replies' ? 'replies_mailbox' : 'bounce_mailbox'] };
+    const m = { ...s[{ replies: 'replies_mailbox', smtp: 'smtp', bounce: 'bounce_mailbox' }[kind]] };
     m.password = m.password_enc ? decrypt(this.encKey, m.password_enc) : '';
     delete m.password_enc;
     return m;
@@ -119,9 +129,11 @@ class Settings {
   /** Settings as shown in the UI: secrets are never returned. */
   async forUi() {
     const s = await this.all();
-    const { password_enc: enc, ...mb } = s.bounce_mailbox;  
-    const { password_enc: encR, ...rb } = s.replies_mailbox;  
+    const { password_enc: enc, ...mb } = s.bounce_mailbox;
+    const { password_enc: encR, ...rb } = s.replies_mailbox;
+    const { password_enc: encS, ...sm } = s.smtp;
     return { ...s, bounce_mailbox: { ...mb, password_set: Boolean(enc) }, replies_mailbox: { ...rb, password_set: Boolean(encR) },
+      smtp: { ...sm, password_set: Boolean(encS) },
       public_url_locked: Boolean(this.config?.envPublicUrl),
       effective_public_url: await this.publicUrl() };
   }
@@ -134,10 +146,12 @@ class Settings {
     // zod fills defaults even for omitted keys: only write what was sent.
     for (const [key, value] of Object.entries(partial).filter(([k]) => Object.hasOwn(patch, k))) {
       let v = value;
-      if (key === 'bounce_mailbox' || key === 'replies_mailbox') {
+      if (key === 'bounce_mailbox' || key === 'replies_mailbox' || key === 'smtp') {
         const { password, ...rest } = value;
         v = { ...current[key], ...rest };
         if (password !== undefined && password !== '') v.password_enc = encrypt(this.encKey, password);
+        // A new server or username without a new password: drop the old password rather than send it elsewhere.
+        else if (current[key].password_enc && (rest.host !== undefined && rest.host !== current[key].host)) delete v.password_enc;
       }
       await this.pool.query(
         `INSERT INTO portal.settings (key, value, updated_by) VALUES ($1, $2, $3)

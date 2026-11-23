@@ -1,12 +1,14 @@
 'use strict';
 
 /**
- * Environment configuration. Only the database and the SMTP server are
- * required; everything else has a safe default or lives in the in-app
- * Settings page (stored in PostgreSQL).
+ * Environment configuration. Only the database is required; everything else
+ * has a safe default or lives in the in-app Settings page (stored in
+ * PostgreSQL). The customer manages their mail server in Settings → Sending;
+ * SMTP_* variables are an optional default provided by the operator, used until
+ * the customer saves their own.
  *
- * Required:  DATABASE_URL, SMTP_HOST
- * Usual:     SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM
+ * Required:  DATABASE_URL
+ * Optional:  SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM (default mail server)
  * Platform:  PORT and RAILWAY_PUBLIC_DOMAIN are provided by Railway.
  */
 const { z } = require('zod');
@@ -21,8 +23,8 @@ const schema = z.object({
   // --- Required ------------------------------------------------------------
   DATABASE_URL: z.string({ error: 'is required: the PostgreSQL connection URL (on Railway: ${{Postgres.DATABASE_URL}})' })
     .min(1, 'is required: the PostgreSQL connection URL (on Railway: ${{Postgres.DATABASE_URL}})'),
-  SMTP_HOST: z.string({ error: 'is required: your outgoing mail server, e.g. smtp.example.co.za (also set SMTP_PORT, SMTP_USER, SMTP_PASSWORD)' })
-    .min(1, 'is required: your outgoing mail server'),
+  // --- Optional default mail server (the customer can set their own in Settings → Sending) ---
+  SMTP_HOST: z.string().min(1).optional(),
 
   // --- SMTP ----------------------------------------------------------------
   SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
@@ -62,6 +64,9 @@ const schema = z.object({
   WORKERS: bool(true),
   IMPORT_MAX_ROWS: z.coerce.number().int().min(1).max(500000).default(100000),
   IMPORT_MAX_MB: z.coerce.number().min(1).max(100).default(25),
+  // Mail servers entered in Settings may not be private/internal addresses (SSRF protection).
+  // Defaults to allowed outside production (local test servers); never set it in production.
+  MAIL_ALLOW_PRIVATE_HOSTS: z.enum(['true', 'false']).optional(),
 }).superRefine((c, ctx) => {
   if (Boolean(c.ADMIN_EMAIL) !== Boolean(c.ADMIN_PASSWORD)) {
     ctx.addIssue({ code: 'custom', path: ['ADMIN_PASSWORD'], message: 'Set both ADMIN_EMAIL and ADMIN_PASSWORD, or neither' });
@@ -86,6 +91,7 @@ function loadConfig(env = process.env) {
   return Object.freeze({
     ...c,
     isProd: c.NODE_ENV === 'production',
+    mailAllowPrivateHosts: c.MAIL_ALLOW_PRIVATE_HOSTS ? c.MAIL_ALLOW_PRIVATE_HOSTS === 'true' : c.NODE_ENV !== 'production',
     SMTP_SECURE: c.SMTP_SECURE ? c.SMTP_SECURE === 'true' : c.SMTP_PORT === 465,
     // PUBLIC_URL overrides (and locks) the Settings value; the Railway domain is only a fallback,
     // so a custom domain can be entered in Settings.

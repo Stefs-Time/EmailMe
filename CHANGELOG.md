@@ -8,6 +8,10 @@ versions may change behaviour.
 First version released to test customers. It replaces the internal development builds.
 
 ### Added
+- **Customer-managed mail server:** the customer sets their SMTP server, port, security, username and password in
+  Settings → Sending (password encrypted, write-only), checks the connection before saving, and switches sending
+  instantly. The `SMTP_*` variables become an optional default. Mail servers typed in Settings (SMTP and IMAP) must be
+  public addresses (SSRF protection).
 - **Inbox:** replies to campaigns are collected from a replies mailbox (Settings → Replies), linked to the contact and
   the campaign, and read, answered, noted, assigned and closed inside MailHarbor. Out-of-office replies are filed
   separately; "please remove me" replies are flagged and turned into a recorded unsubscribe in one click.
@@ -42,6 +46,7 @@ First version released to test customers. It replaces the internal development b
   - converts drafts written in the old visual/HTML editors into builder documents.
 - `portal.templates` and `campaigns.template_id` stay in the database, unused, so the upgrade can be rolled back.
 - **Take a backup before upgrading** (see `docs/internal/SOFT_RELEASE.md`).
-- New optional variable `SUPPORT_EMAIL`.
+- New optional variables `SUPPORT_EMAIL` and `MAIL_ALLOW_PRIVATE_HOSTS` (development only). `SMTP_HOST` is no longer
+  required: existing instances keep using their `SMTP_*` values until the customer saves a server in Settings.
 - Each customer needs a replies mailbox (IMAP) for the Inbox; without one, replies go to the Reply-To/From address
   as before and System health shows a warning.

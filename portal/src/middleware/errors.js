@@ -8,7 +8,7 @@ function notFoundHandler(req, res) {
 
 /** Converts any thrown error into the standard JSON envelope without leaking internals. */
 function errorHandler(logger) {
-   
+
   return (err, req, res, _next) => {
     if (err instanceof AppError) {
       if (err.status >= 500) logger.error({ err, path: req.path }, err.message);

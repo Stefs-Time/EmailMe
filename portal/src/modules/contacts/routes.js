@@ -158,7 +158,7 @@ function contactRoutes(deps) {
   r.post('/:id/erase', requirePermission('contacts:erase'), async (req, res) => {
     const id = parse(idParam, req.params.id);
     const body = parse(z.object({ confirm: z.literal('ERASE'), note }), req.body);
-    await service.erase(ctx(req), id);
+    await service.erase(ctx(req), id, body.note);
     res.json({ success: true, data: {} });
   });
 

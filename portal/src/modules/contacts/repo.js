@@ -180,7 +180,7 @@ async function getMessages(client, contactId) {
 }
 
 function strip(r) {
-  // eslint-disable-next-line no-unused-vars
+   
   const { total_count, ...rest } = r;
   return rest;
 }

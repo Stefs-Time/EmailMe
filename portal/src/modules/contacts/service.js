@@ -275,7 +275,8 @@ async function resolveReview(ctx, id, resolution, note) {
  * POPIA erasure: deletes the contact and personal data, keeping only a hashed
  * suppression entry so the person is never re-imported or contacted again.
  */
-async function erase(ctx, id) {
+/** POPIA erasure. `reason` (e.g. "Access request by email, 12 Nov") is kept in the audit log. */
+async function erase(ctx, id, reason = '') {
   return withTransaction(ctx.pool, async (db) => {
     const { rows } = await db.query('SELECT email, email_hash FROM portal.contacts WHERE id = $1 FOR UPDATE', [id]);
     if (!rows[0]) throw notFound('Contact not found');
@@ -290,7 +291,7 @@ async function erase(ctx, id) {
     await db.query('DELETE FROM portal.conversations WHERE contact_id = $1 OR LOWER(email) = $2', [id, normalizeEmail(email)]);
     await db.query('DELETE FROM portal.contacts WHERE id = $1', [id]);
     await recipientEvent(db, { emailHash: hash, type: 'erased', actorType: 'user', actorId: ctx.user.id });
-    await audit(db, ctx.req, 'contact.erased', { targetType: 'contact_hash', targetId: hash.slice(0, 16) });
+    await audit(db, ctx.req, 'contact.erased', { targetType: 'contact_hash', targetId: hash.slice(0, 16), details: reason ? { reason } : {} });
   });
 }
 

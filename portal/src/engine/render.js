@@ -92,7 +92,10 @@ function htmlToText(html) {
     .trim();
 }
 
-/** Visual-editor alignment classes → inline styles (email clients ignore classes). */
+/**
+ * Alignment classes of the former visual editor → inline styles. Only campaigns sent before the builder
+ * became the only editor still contain them (their content is frozen), so this stays for their view pages.
+ */
 function inlineEditorClasses(html) {
   return String(html || '')
     .replace(/class="mh-align-(left|center|right)"/g, 'style="text-align:$1"')

@@ -665,7 +665,7 @@ export function createBuilder(root, initial, { onChange, customTags = [], theme 
   });
   stage.addEventListener('drop', (e) => {
     // The marker shows where the block will land; trust it over the pointer position.
-    let t = null;
+    let t;
     if (drag && indicator.isConnected) {
       const list = indicator.parentElement;
       let index = 0; // blocks (other than the one being moved) before the marker
@@ -737,9 +737,4 @@ export function createBuilder(root, initial, { onChange, customTags = [], theme 
   }
 
   return { getDoc, selectedEditable, setDoc };
-}
-
-/** A document holding existing HTML as one block (switching from the HTML/visual editors). */
-export function documentFromHtml(h) {
-  return { version: 1, blocks: [{ id: uid(), type: 'html', props: { ...clone(DEFAULTS.html), html: h || '', pad: 0 } }] };
 }

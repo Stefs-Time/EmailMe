@@ -7,6 +7,7 @@ const { z } = require('zod');
 const { parse, AppError, unauthorized, validation } = require('../../lib/errors');
 const { requireAuth, ensureCsrfToken, PERMISSIONS, can } = require('../../middleware/auth');
 const { audit } = require('../../lib/audit');
+const { version: VERSION } = require('../../../package.json');
 
 const MAX_FAILED = 10;
 const LOCK_MINUTES = 15;
@@ -50,6 +51,7 @@ function authRoutes({ pool, settings, config }) {
       success: true,
       data: {
         user: req.user ? { ...req.user, permissions: permissionsFor(req.user.role) } : null,
+        version: req.user ? VERSION : undefined, // shown to signed-in users only
         csrfToken,
         orgName: s.org_name,
         setupNeeded: rowCount === 0,

@@ -40,7 +40,7 @@ async function renderEditor(el, ctx, formId) {
   const f = isNew
     ? { name: '', status: 'active', list_ids: [], settings: {} }
     : (await get(`/forms/${formId}`)).data;
-  const s = { heading: 'Join our mailing list', intro: 'Get our news, specials and invitations by email.', fields: { first_name: 'optional', last_name: 'off', company: 'off' },
+  const s = { heading: 'Join our mailing list', intro: 'Get our news, specials and invitations by email.',
     consent_text: 'Yes, I would like to receive marketing emails. I can unsubscribe at any time.', button_label: 'Subscribe',
     success_message: 'Thank you! If this is a new subscription, please check your inbox: we may ask you to confirm your email address.',
     redirect_url: '', accent: '#1f4e8c', source: '', ...f.settings, fields: { first_name: 'optional', last_name: 'off', company: 'off', ...(f.settings.fields || {}) } };

@@ -43,7 +43,7 @@ async function testMailbox(m) {
 
 /** Handles one raw email from either mailbox. Returns 'bounce' | 'reply' | 'ignored'. Throws when it must be retried. */
 async function handleMessage({ pool, settings, logger }, raw, { kind, ref }) {
-  let reports = [];
+  let reports;
   try {
     reports = await parseBounceEmail(raw);
   } catch (err) {

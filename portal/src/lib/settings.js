@@ -119,8 +119,8 @@ class Settings {
   /** Settings as shown in the UI: secrets are never returned. */
   async forUi() {
     const s = await this.all();
-    const { password_enc: enc, ...mb } = s.bounce_mailbox; // eslint-disable-line no-unused-vars
-    const { password_enc: encR, ...rb } = s.replies_mailbox; // eslint-disable-line no-unused-vars
+    const { password_enc: enc, ...mb } = s.bounce_mailbox;  
+    const { password_enc: encR, ...rb } = s.replies_mailbox;  
     return { ...s, bounce_mailbox: { ...mb, password_set: Boolean(enc) }, replies_mailbox: { ...rb, password_set: Boolean(encR) },
       public_url_locked: Boolean(this.config?.envPublicUrl),
       effective_public_url: await this.publicUrl() };

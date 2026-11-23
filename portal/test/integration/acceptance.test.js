@@ -890,7 +890,7 @@ t('UTM tagging: Google Analytics tags added to web links (frozen at send), per-c
 });
 
 t('saved segments: rules with bound parameters, contact filter, campaign narrowing, delete protection', async () => {
-  const durban = await http('admin', 'POST', '/api/contacts', { email: 'seg-dee@ok.example', firstName: 'Dee', listIds: [listId], consent: { method: 'web_form' }, attribs: { city: 'Umhlanga' } });
+  await http('admin', 'POST', '/api/contacts', { email: 'seg-dee@ok.example', firstName: 'Dee', listIds: [listId], consent: { method: 'web_form' }, attribs: { city: 'Umhlanga' } });
   await http('admin', 'POST', '/api/contacts', { email: 'seg-cal@ok.example', firstName: 'Cal', listIds: [listId], consent: { method: 'web_form' }, attribs: { city: 'Cape Town' } });
   const rules = { match: 'all', conditions: [{ field: 'attribute', key: 'city', op: 'is', value: 'umhlanga' }, { field: 'status', op: 'is', value: 'eligible' },
     { field: 'created_at', op: 'within_days', value: 30 }, { field: 'last_open_at', op: 'not_within_days', value: 90 }] };

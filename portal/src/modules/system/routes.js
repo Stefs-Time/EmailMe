@@ -9,6 +9,7 @@ const { audit } = require('../../lib/audit');
 const { describeSmtp } = require('../../engine/mailer');
 const { getState } = require('../../engine/worker');
 const { emailDomain } = require('../../lib/email');
+const { version: VERSION } = require('../../../package.json');
 
 let smtpCache = { at: 0, ok: null, error: null };
 
@@ -38,8 +39,7 @@ async function dnsChecks(fromEmail, bounceAddress) {
   const spf = (await txt(domain)).find((t) => /^v=spf1\b/i.test(t));
   const dmarc = (await txt(`_dmarc.${domain}`)).find((t) => /^v=DMARC1\b/i.test(t));
   const bounceDomain = emailDomain(bounceAddress || fromEmail);
-  let mx = [];
-  try { mx = await dns.resolveMx(bounceDomain); } catch { mx = []; }
+  const mx = await dns.resolveMx(bounceDomain).catch(() => []);
   return [
     { id: 'dns_spf', ok: Boolean(spf), severity: 'critical', title: `SPF record for ${domain}`,
       help: spf ? spf : `Add a TXT record on ${domain} authorising your SMTP provider, e.g. "v=spf1 include:<provider> -all".` },
@@ -64,7 +64,7 @@ function smtpHelp(error) {
   return `${e}. Ask MailHarbor support to check the mail server connection details.`;
 }
 
-function configChecks(s, publicUrl, mailboxState) {
+function configChecks(s, publicUrl, mailboxState, repliesState) {
   const checks = [];
   const add = (id, ok, title, help, severity = 'warning') => checks.push({ id, ok: Boolean(ok), title, help, severity });
   add('public_url', /^https:\/\//.test(publicUrl || ''), 'Public URL uses HTTPS',
@@ -73,6 +73,9 @@ function configChecks(s, publicUrl, mailboxState) {
   add('org_address', s.org_address, 'Postal address for email footers', 'Settings → General → Postal address. Shown in every email (sender identity).', 'critical');
   add('bounce_mailbox', s.bounce_mailbox.enabled && mailboxState?.ok !== false, 'Bounce mailbox connected',
     'Settings → Bounces. Without it, bounces that arrive after sending are not recorded. Use a dedicated mailbox.', 'critical');
+  add('replies_mailbox', s.replies_mailbox.enabled && repliesState?.ok !== false, 'Replies mailbox connected (Inbox)',
+    'Settings → Replies. Without it, replies to campaigns go to the Reply-To/From address outside MailHarbor.', 'warning');
+  add('reply_to', s.reply_to, 'Reply-To address set', 'Settings → Replies → Reply-To address: the replies mailbox address.', 'warning');
   add('bounce_address', s.bounce_address, 'Return-Path (bounce address) set',
     'Settings → Bounces → Bounce address: the dedicated mailbox address where failures are returned.', 'warning');
   add('global_unsub', s.global_unsubscribe, 'Unsubscribes are global (POPIA-safe default)', 'Settings → Compliance.', 'info');
@@ -98,6 +101,8 @@ function systemRoutes({ pool, settings, transport, config, worker }) {
     out.worker = await getState(pool, 'heartbeat', null);
     out.workerStale = !out.worker || Date.now() - new Date(out.worker.at).getTime() > 5 * 60000;
     out.mailbox = s.bounce_mailbox.enabled ? await getState(pool, 'mailbox', null) : null;
+    out.repliesMailbox = s.replies_mailbox.enabled ? await getState(pool, 'replies_mailbox', null) : null;
+    out.version = VERSION;
     out.backup = await getState(pool, 'backup_heartbeat', null);
     out.backupStaleHours = s.backup_stale_hours;
     const { rows: q } = await pool.query(
@@ -111,7 +116,7 @@ function systemRoutes({ pool, settings, transport, config, worker }) {
     out.checks = [
       { id: 'smtp', ok: out.smtp.ok, severity: 'critical', title: `SMTP server ${config.SMTP_HOST}:${config.SMTP_PORT} reachable and accepts login`,
         help: out.smtp.ok ? '' : smtpHelp(out.smtp.error) },
-      ...configChecks(s, publicUrl, out.mailbox),
+      ...configChecks(s, publicUrl, out.mailbox, out.repliesMailbox),
       ...(s.from_email ? await dnsChecks(s.from_email, s.bounce_address) : []),
     ];
     out.publicUrl = publicUrl;

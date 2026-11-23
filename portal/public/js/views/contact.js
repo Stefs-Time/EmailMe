@@ -1,5 +1,5 @@
 import { get, post, patch, download } from '../api.js';
-import { html, raw, mount, $, num, date, datetime, ago, statusBadge, loading, options, toast, errorToast, formModal,
+import { html, raw, mount, num, date, datetime, ago, statusBadge, loading, options, toast, errorToast, formModal,
   STATUS_INFO, label, CONSENT_LABELS, consentFields, consentFromForm } from '../ui.js';
 import { bounceBadge } from './dashboard.js';
 

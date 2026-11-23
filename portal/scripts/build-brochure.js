@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 'use strict';
+/* global document -- used inside page.evaluate(), which runs in the browser */
 
 /**
  * Builds the product overview PDF shown and downloadable in the app

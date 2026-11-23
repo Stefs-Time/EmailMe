@@ -1,6 +1,6 @@
 import { get, post, qs, download } from '../api.js';
 import { html, raw, mount, $, $$, num, date, ago, statusBadge, loading, empty, pager, options, toast, errorToast,
-  formModal, confirmModal, STATUS_INFO, label, CONSENT_LABELS, consentFields, consentFromForm } from '../ui.js';
+  formModal, STATUS_INFO, label, CONSENT_LABELS, consentFields, consentFromForm } from '../ui.js';
 
 const COLS = [
   ['email', 'Contact'], ['status', 'Status'], [null, 'Lists'], ['source', 'Source'],
@@ -166,7 +166,7 @@ export async function render(el, ctx) {
     state.page = 1; load();
   });
   $('#export', el)?.addEventListener('click', () => {
-    const { page, per_page, sort, dir, ...f } = state; // eslint-disable-line no-unused-vars
+    const { page, per_page, sort, dir, ...f } = state;  
     download(`/exports/contacts.csv${qs(f)}`);
     toast('Your export is downloading');
   });
@@ -185,7 +185,7 @@ export async function render(el, ctx) {
     const cb = e.target.closest('[data-sel]');
     if (cb) { selected[cb.checked ? 'add' : 'delete'](Number(cb.dataset.sel)); renderBulk(); return; }
     if (e.target.id === 'select-matching') {
-      const { page, per_page, sort, dir, ...f } = state; // eslint-disable-line no-unused-vars
+      const { page, per_page, sort, dir, ...f } = state;  
       get(`/contacts/ids${qs(f)}`).then((x) => {
         x.data.ids.forEach((id) => selected.add(id));
         renderBulk(); load();

@@ -14,7 +14,7 @@ export async function render(el, ctx) {
     ${!a.resolved_at ? html`<button class="btn btn-sm btn-light" data-resolve="${a.id}">Resolve</button>` : ''}</div>
     <div class="small text-muted-2">${a.resolved_at ? `Resolved ${datetime(a.resolved_at)}` : `${a.severity === 'critical' ? 'Critical' : 'Warning'} · ${num(a.occurrences)}× · last ${ago(a.last_seen)}`}</div></li>`;
 
-  mount(el, html`<div class="page-head"><div><h1>System health</h1><p>Database, email sending, background worker, bounce mailbox, DNS and the go-live checklist.</p></div>
+  mount(el, html`<div class="page-head"><div><h1>System health</h1><p>Database, email sending, background worker, mailboxes, DNS and the go-live checklist. MailHarbor ${h.version}.</p></div>
     <div class="d-flex gap-2">${ctx.can('settings:manage') ? html`<a class="btn btn-primary" href="#/settings"><i class="bi bi-gear me-1"></i>Settings</a>` : ''}
       <button class="btn btn-outline-primary" id="recheck"><i class="bi bi-arrow-repeat me-1"></i>Re-check SMTP</button></div></div>
     <div class="row g-3 mb-3">

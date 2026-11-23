@@ -1,6 +1,6 @@
 {
   "name": "mailharbor-portal",
-  "version": "1.0.0",
+  "version": "0.9.0",
   "private": true,
   "description": "MailHarbor: email marketing, contact management, bounce handling and reporting",
   "main": "src/server.js",
@@ -18,7 +18,8 @@
     "test:integration": "node --test --test-concurrency=1 \"test/integration/*.test.js\"",
     "backup": "node scripts/backup.js",
     "smtp-sink": "node test/helpers/smtpSink.js 2525",
-    "brochure": "node scripts/build-brochure.js"
+    "brochure": "node scripts/build-brochure.js",
+    "lint": "eslint ."
   },
   "license": "UNLICENSED",
   "dependencies": {
@@ -45,6 +46,9 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.15.0",
+    "globals": "17.14.0",
     "smtp-server": "^3.21.6"
   }
 }

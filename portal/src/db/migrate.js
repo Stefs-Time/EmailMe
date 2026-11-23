@@ -64,7 +64,7 @@ if (require.main === module) {
       ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: process.env.DATABASE_SSL_VERIFY !== 'false' } : undefined,
     });
     try {
-      await migrate(pool, { info: (o, m) => console.log(m, o.migration) });
+      await migrate(pool, { info: (o, m) => console.log(m, o.migration) }); // CLI: `npm run migrate`
       console.log('Migrations complete.');
     } finally {
       await pool.end();

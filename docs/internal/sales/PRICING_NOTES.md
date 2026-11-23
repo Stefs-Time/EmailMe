@@ -40,8 +40,26 @@ estimates; **measure real usage** on the first customers (Railway → project �
 | Migration | ~38 h: Standard + migration and suppression carry-over (8), sign-up forms (4), extra training and campaigns (4) | R32,300 | ~R22,200 | **R54,500** |
 
 The development contribution is the part of installation that recovers the cost of building MailHarbor. Over
-10 customers it recovers roughly R160k–R220k. Founding customers (40% off) pay R20,700 / R32,700: about the delivery cost,
-with no contribution.
+10 customers it recovers roughly R160k–R220k.
+
+## Pilot programme (invitation only)
+
+Replaces the earlier "founding customers 40% off" idea. Pilots are deliberately **below cost**: an investment in
+feedback, references and first real usage, not a revenue line.
+
+| | Pilot price | Cost to deliver | Difference |
+|---|---|---|---|
+| Installation (reduced scope: one import, one training session) | R7,500 | ~14 h ≈ R11,900 | −R4,400 |
+| Monthly (hosting + Essential support, ≤5k contacts) | R1,250 | Railway ~R260 + backups ~R5 + ops 0.5 h ≈ R425 + helpdesk and feedback call ~1 h ≈ R850 → **≈ R1,540** | −R290 a month |
+| 6-month pilot in total | R15,000 | ≈ R21,140 | **≈ −R6,100 per pilot** |
+| After the pilot (25% off Starter + Essential for 12 months) | R2,850 a month | | R11,400 of list price forgone in year one |
+
+- With the 5-pilot cap, the programme costs roughly **R30k** in delivery below cost, plus discounts on conversion.
+- Guardrails written into the PDF: invitation only, max 5, not transferable, 6 months (one extension of up to 3 months),
+  5,000 contacts / 25,000 emails a month, monthly feedback call, reference and case study.
+- The limits keep Railway usage near the minimum. If a pilot outgrows them, move them to a standard plan early.
+- Decide upfront what a successful pilot is (for example, 3 real campaigns sent and a reference), and choose pilots that
+  are likely to convert.
 
 ## Development & Support
 
@@ -65,4 +83,5 @@ with no contribution.
 2. **Hosting region and POPIA section 72.** Railway regions are outside South Africa (US, EU, Asia). Choose a region
    (EU West keeps data under GDPR, which helps the s72 cross-border test) and state it in the agreement.
 3. **Support plan required with hosting:** the PDF says yes (minimum Essential). Change it there if you prefer otherwise.
-4. **Founding-customer discount:** 40% off installation for the first three. Consider asking for a case study in return.
+4. **Pilot programme:** price (R7,500 + R1,250 a month), cap (5), length (6 months) and the 25% conversion discount are
+   suggestions; adjust them in the PDF's page 5 and here together.

@@ -146,6 +146,14 @@
   .terms p { break-inside: avoid; margin: 0 0 6px; }
   .terms b { color: var(--navy); }
   .sla td:first-child { font-weight: 700; color: var(--navy); }
+  .pilot { border-radius: 16px; padding: 16px 18px; background: linear-gradient(135deg, var(--navy) 0%, var(--navy2) 100%); color: #fff; }
+  .pilot .badge-top { background: var(--teal-l); color: #0f2846; font-size: 7.8pt; font-weight: 800; border-radius: 999px; padding: 3px 10px; letter-spacing: .04em; }
+  .pilot-prices { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 12px; margin-top: 12px; }
+  .pilot-prices > div { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); border-radius: 12px; padding: 12px 14px; }
+  .pilot .pl { font-size: 8.6pt; color: #cbd8ea; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+  .pilot .pp { font-size: 22pt; font-weight: 800; color: #fff; line-height: 1.15; margin-top: 4px; }
+  .pilot .pp small { font-size: 9.5pt; color: #cbd8ea; font-weight: 600; }
+  .pilot .was { font-size: 8.6pt; color: #b9cbe2; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -230,8 +238,8 @@
         <li>Lists, contacts and custom fields migrated</li><li>Unsubscribes, bounces and complaints carried over, so nobody is emailed by mistake</li>
         <li>Up to 3 sign-up forms placed on your website</li><li>4 training sessions; your first 3 campaigns built with you</li></ul></div>
   </div>
-  <div class="callout"><b>Founding customers:</b> the first three organisations on MailHarbor 0.9 receive <b>40% off installation</b> in return for
-    regular feedback during the early-access period. Installation is invoiced 50% on order and 50% at go-live.</div>
+  <div class="callout"><b>By invitation: Pilot programme.</b> A small number of organisations are invited to run MailHarbor at a
+    much lower price while it is in early access (see page 5). Installation is otherwise invoiced 50% on order and 50% at go-live.</div>
 
   <div class="eyebrow" style="margin-top:20px">2 · Hosting (monthly)</div>
   <h2 style="font-size:21pt">Sized to how much you send</h2>
@@ -294,6 +302,53 @@
   <div class="callout" style="margin-top:8px"><b>Next step:</b> tell us your number of contacts, how often you send, and whether you are moving from another
     platform. We will send a formal quote and a go-live plan.</div>
   <div class="foot"><span><b>MailHarbor</b> · Pricing · Suggested pricing, subject to a formal quote</span><span>4</span></div>
+</section>
+
+<!-- 5. Pilot programme (by invitation) -->
+<section class="page">
+  <div class="eyebrow">By invitation only</div>
+  <h2>Pilot programme</h2>
+  <p class="lead">We are inviting a few organisations to use MailHarbor at a fraction of the normal price while it is in early access.
+    You get the full platform; we get your honest feedback to shape what comes next.</p>
+
+  <div class="pilot">
+    <div class="pilot-head"><span class="badge-top" style="position:static">INVITATION ONLY · MAX 5 ORGANISATIONS</span></div>
+    <div class="pilot-prices">
+      <div><div class="pl">Installation</div><div class="pp">R7,500</div><div class="was">normally from R34,500</div></div>
+      <div><div class="pl">Hosting and support, together</div><div class="pp">R1,250 <small>/month</small></div><div class="was">normally from R3,800 a month</div></div>
+      <div><div class="pl">Pilot period</div><div class="pp">6 <small>months</small></div><div class="was">then choose a plan, or leave with your data</div></div>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:12px">
+    <div class="card"><h3><i class="bi bi-gift" style="color:#0f8f82"></i> What you get</h3>
+      <ul class="ticks"><li>The <b>full platform</b>: builder, Inbox, reports, sign-up forms, segments, POPIA tools</li>
+        <li>Your own private instance and database, monitored and backed up daily</li>
+        <li>Set-up: your web address, mail server and mailboxes connected, your email design, one contact import</li>
+        <li>One online training session (2 hours)</li>
+        <li>Helpdesk by email (Essential response times) and every new release</li>
+        <li>Up to <b>5,000 contacts</b> and <b>25,000 emails</b> a month</li></ul></div>
+    <div class="card"><h3><i class="bi bi-chat-heart" style="color:#1f4e8c"></i> What we ask in return</h3>
+      <ul class="ticks"><li>A 30-minute feedback call once a month</li>
+        <li>Report problems and ideas through the helpdesk</li>
+        <li>Use MailHarbor for real campaigns during the pilot</li>
+        <li>Permission to name you as a pilot customer, and a short case study at the end (you approve the wording)</li>
+        <li>Patience with early releases: you may see new features first</li></ul></div>
+  </div>
+
+  <h3 style="margin-top:16px">After six months</h3>
+  <div class="grid3" style="margin-top:6px">
+    <div class="card soft"><div class="icon"><i class="bi bi-arrow-up-right-circle"></i></div><h3>Stay on</h3>
+      <p>Choose any hosting and support plan. <b>No further installation fee</b>, and <b>25% off monthly fees</b> for your first 12 months.</p></div>
+    <div class="card soft"><div class="icon navy"><i class="bi bi-hourglass-split"></i></div><h3>Need more time?</h3>
+      <p>We can extend the pilot once by up to 3 months at the same price, by agreement.</p></div>
+    <div class="card soft"><div class="icon"><i class="bi bi-box-arrow-right"></i></div><h3>Leave</h3>
+      <p>We export your contacts, consent and unsubscribe history at no charge, then delete your service and backups.</p></div>
+  </div>
+  <p class="note" style="margin-top:12px">Pilot places are offered by invitation and are not transferable. Above the pilot limits we discuss moving to a standard
+    plan early. Pilot prices are in South African rand, excluding 15% VAT. Installation is payable on order; monthly fees monthly in advance.
+    The terms on page 4 otherwise apply, except the 12-month initial term.</p>
+  <div class="foot"><span><b>MailHarbor</b> · Pricing · Pilot programme</span><span>5</span></div>
 </section>
 </body>
 </html>

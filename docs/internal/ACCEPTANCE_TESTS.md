@@ -35,6 +35,19 @@ TEST_DATABASE_URL=postgres://user:pw@localhost:5432/mailharbor_test npm run test
 | TC15 | Application restart | Data/config retained | **Manual** | Restart the service; contacts, suppressions, settings, sessions and campaign progress are unchanged (all state is in PostgreSQL) |
 | TC16 | Backup restoration | Restored | **Manual** | Restore last night's backup on staging (`deploy/backup/restore.sh`, or `pg_restore` on Railway) and spot-check contacts, suppressions and a campaign report |
 
+Added for 0.9.0 (beyond the original scope):
+
+| ID | Scenario | Expected | Status | Evidence / how to verify |
+|---|---|---|---|---|
+| TC17 | Email design | Every email uses the logo, colours, font and footer from Settings → Email design; sent campaigns keep the design they were sent with | **Automated ✔** | Delivered email has the logo, background, brand-coloured button and footer line; after changing the design, the sent campaign's "view in browser" is unchanged and a draft's preview uses the new design |
+| TC18 | Upgrade from templates | Existing data keeps working after upgrading to 0.9 | **Automated ✔** / **Manual** (your data) | Started campaigns keep their template's HTML; the default template's look becomes the email design; old HTML drafts open in the builder as one HTML block; runs once |
+| TC19 | Report drill-downs | Every number opens exactly the rows it counts | **Automated ✔** | Each campaign tile's count equals its detail list; link, bounce, event and message filters; search and paging; CSV only for managers/admins; invalid filters 422 |
+| TC20 | Permission request | "Yes, you may contact me" records consent evidence once; suppressed people are never re-consented | **Automated ✔** | Consent record with campaign, time and IP; second click adds nothing; report and usage count it; segment on the consent method finds exactly those who said yes |
+| TC21 | Reply collected | A reply to a campaign appears in the Inbox, linked to the contact and campaign | **Automated ✔** (ingestion) / **Manual** (your replies mailbox) | Threaded by In-Reply-To; quoted "unsubscribe" text does not trigger a request; same email twice stored once; delivery reports still become bounces |
+| TC22 | Auto-reply and unsubscribe request | Out-of-office filed closed; "remove me" flagged; one click unsubscribes with the conversation as the reason | **Automated ✔** | Categories and states as described; contact unsubscribed; note added; conversation closed |
+| TC23 | Answer a reply | The answer arrives threaded in the recipient's mail client; their next reply rejoins the conversation | **Automated ✔** (test server) / **Manual** (real mail client) | Subject "Re: …", In-Reply-To and References set, original quoted; viewers cannot answer (403) |
+| TC24 | Roles across every screen | Each role sees only its screens; no errors | **Automated ✔** (role crawl, see UAT_AUDIT round 3) | Viewer, manager and admin over 36 screens: refused routes refused, no page or API errors, no axe violations |
+
 Additional automated checks:
 - first-run setup needs the log code;
 - CSRF rejection;
@@ -51,9 +64,12 @@ Additional automated checks:
 - the drag-and-drop builder: new campaigns start in the builder; unsafe designs are rejected (422) and rich text is
   cleaned before it is stored; a button without a link is flagged; the delivered email contains the rendered columns,
   personalisation and a click-tracked button; duplicating keeps the design;
-- the template builder: the built-in template is a builder design; templates without exactly one Campaign content
-  block are rejected; a designed template (logo, page colour, width, footer) wraps a delivered campaign, with exactly
-  one unsubscribe link (the footer's);
+- email design: invalid colours or logo addresses are refused (422); the preview uses unsaved values and stores
+  nothing; campaigns use the sender from Settings unless they set their own; raw HTML sent to the API becomes one HTML
+  block (scripts removed); the old templates API is gone (404);
+- inbox: viewers can read but not answer; attachments download only (`application/octet-stream`); the original HTML is
+  served sandboxed with remote images blocked; assignment to an unknown user is refused (409); erasing a contact
+  deletes their conversations, and the data export includes them;
 - samples and personalisation: every sample creates a valid builder campaign (subject and preview text included);
   unknown samples are rejected; web-address buttons in samples must be given a link before sending; imported columns
   are offered as personalisation fields;
@@ -87,22 +103,26 @@ Additional automated checks:
   - an unsubscribed address gets the same reply and stays unsubscribed;
   - outcome totals are correct, and closed forms return 404.
 
+**Integration tests** (`npm run test:integration`): 32 tests. **Lint** (`npm run lint`): clean.
+
 **Unit tests** (`npm run test:unit`, 25 tests): configuration rules, secret encryption, rendering and personalisation,
 DSN/ARF/auto-reply parsing, bounce classification, SMTP error classification, and the builder renderer (defaults,
-rejection of unsafe URLs, colours and block types, escaping, tag links, column stacking, image widths, click tracking) and the template renderer (complete document, doctype kept,
-a single content slot, footer links, rules on template-only blocks), UTM tagging rules, segment rule validation and
+rejection of unsafe URLs, colours and block types, escaping, tag links, column stacking, image widths, click tracking) the email layout (logo, colours, font, escaped footer line, preferences link, invalid values never reach the HTML,
+brand colours for headings, buttons and links, template-only blocks rejected), UTM tagging rules, segment rule validation and
 compilation (bound parameters only), and image compression (resize, format choice, EXIF rotation, metadata stripping,
 broken files).
 
 **Not automated:**
-- the IMAP layer against a real mailbox (the parser is tested; the connection layer only for failure);
-- delivery to real mailbox providers.
+- the IMAP layer against a real mailbox, for both the bounce and the replies mailbox (message processing is tested by
+  feeding real RFC 822 emails through the same function the IMAP reader calls; the connection layer only for failure);
+- delivery to real mailbox providers, and how real mail clients thread MailHarbor's answers.
 
 Both are covered by the sign-off script below.
 
-## Go-live sign-off script (≈ 45 minutes)
+## Go-live sign-off script (≈ 60 minutes)
 
-1. **System health:** all critical checks are green.
+1. **System health:** all critical checks are green; the replies mailbox and Reply-To checks are green.
+   **TC17:** Settings → Email design: add the logo and brand colour; the preview shows them.
 2. **TC01:** Settings → Sending → *Send test email* arrives in your inbox. Check that it is not in spam and that SPF, DKIM
    and DMARC show *pass* in the message headers.
 3. Create the list "UAT". Import a CSV of 3 staff addresses plus 1 `nonexistent-<random>@<your-domain>`.
@@ -119,6 +139,12 @@ Both are covered by the sign-off script below.
     click *Check now* again, and the alert clears.
 11. **TC15:** restart the service (Railway → Restart, or `docker compose restart portal`). Confirm nothing changed.
 12. **TC16:** restore last night's backup on a staging environment.
+13. **TC21–TC23:** a staff member replies to the campaign from step 4 from their own mail client. Within the replies
+    mailbox interval it appears in the **Inbox**, linked to the campaign. Answer it from the Inbox; the answer arrives in
+    their mail client in the same thread. They reply "please remove me": the conversation shows **Unsubscribe
+    request**; press **Unsubscribe** and confirm the contact shows *Unsubscribed*.
+14. **TC19:** on the campaign report, click *Hard bounces* and *Unique clicks*: the lists show exactly the people from
+    steps 5 and 9.
 
 **Go-live acceptance:** steps 5, 7 and 8 together prove that an invalid recipient is suppressed automatically after a
 hard bounce, cannot receive later campaigns, and stays suppressed across re-imports and restarts.

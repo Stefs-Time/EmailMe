@@ -99,7 +99,7 @@ const G = {
       <li><a href="#/forms">Sign-up forms</a>: a link and embed code for your website. Consent is recorded and double opt-in lists send a confirmation
         email. People who unsubscribed are never re-added.</li>
       <li>Google Analytics: links get UTM tags automatically, so visits from each campaign show up in Analytics. Rename or switch this off per
-        campaign in the envelope; administrators set the defaults in Settings → Sending.</li>
+        campaign under <em>Tracking</em>; administrators set the defaults in Settings → Sending.</li>
     </ul>
     <h3>Unsubscribe, preferences, "stay subscribed" and permission: handled by MailHarbor</h3>
     <p>Select a button (or select words and press the link button) and choose where it goes: <em>Unsubscribe page</em>,

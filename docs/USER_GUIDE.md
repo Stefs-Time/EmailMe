@@ -211,7 +211,7 @@ New campaigns open in the builder. It has three parts:
 
 ### Test, then send
 1. Click **Send test** and enter up to 5 addresses. Check the email on your phone and on a computer, and click every link.
-2. The **Ready to send** checklist must be all green: subject, sender, lists, content, postal address, public address
+2. The **Review & send** checklist must be all green: subject, sender, lists, content, postal address, public address
    and at least one eligible recipient.
 3. Click **Send now**, or **Schedule** for a date and time (South African time).
 
@@ -257,7 +257,7 @@ limits.
 
 **Google Analytics.** Links in your campaigns get UTM tags automatically. For example, `?utm_source=mailharbor&utm_medium=email&utm_campaign=november-specials`.
 In Google Analytics you then see visits and sales from each campaign under *Traffic acquisition*, as
-*mailharbor / email*. In the campaign's envelope you can switch tags off, or give the campaign its own name in Google
+*mailharbor / email*. Under the campaign's **Tracking** options you can switch tags off, or give the campaign its own name in Google
 Analytics. Administrators set the defaults, or limit tagging to your own website, in **Settings → Sending**.
 
 Benchmarks:

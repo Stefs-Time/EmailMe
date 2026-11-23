@@ -1,5 +1,8 @@
 # MailHarbor
 
+**Version 0.9.0: soft release for testing.** See [CHANGELOG.md](CHANGELOG.md) and the
+[soft-release runbook](docs/internal/SOFT_RELEASE.md).
+
 **Your contacts, safely in harbour.** MailHarbor is a self-contained email-marketing and contact-management portal for
 a South African organisation. It handles the whole job in one application: contacts, lists, imports and exports,
 campaigns, sending, open and click tracking, unsubscribes, bounce processing, suppression, POPIA consent evidence and reports.
@@ -263,6 +266,7 @@ The SMTP sink simulates failures by address prefix:
 | `npm run create-admin -- email "Name"` | Create an admin or reset an admin password from the command line |
 | `npm run backup` | One backup run (see `scripts/backup.js`) |
 | `npm run brochure` | Rebuild the product overview PDF and page previews from `docs/brochure/mailharbor-overview.html` (needs Playwright; development only) |
+| `npm run lint` | ESLint (dev dependency only; not in the production image) |
 | `npm run test:unit` | Unit tests (no database) |
 | `TEST_DATABASE_URL=… npm run test:integration` | End-to-end acceptance tests. **Drops the `portal` schema** of that database, and refuses to run unless the database name contains `test` |
 
@@ -299,49 +303,50 @@ Back up the database, and you back up both.
 
 ## Testing status
 
-Verified in the build environment:
-- **Unit tests:** config, secrets encryption, rendering and personalisation, DSN/ARF bounce parsing, bounce rules and
-  SMTP error classification.
-- **Acceptance tests** (`test/integration`), against real PostgreSQL 16 and a local SMTP server. They cover:
-  - first-run setup with the log code;
-  - import, then a personalised send;
-  - hard bounce → suppressed;
-  - 5.7.1 → review queue;
-  - soft-bounce retries and the soft-bounce limit;
-  - open/click tracking and one-click unsubscribe attributed to the campaign;
-  - complaint via webhook;
-  - re-import that keeps suppressed contacts suppressed, and exclusion from the next campaign;
-  - double opt-in;
-  - reactivation and POPIA erasure;
-  - SMTP outage → auto-pause → resume.
-- **Browser walkthrough (Playwright):** setup, settings (including Email design), lists, contacts, the campaign editor,
-  test send, send, report drill-downs, usage, system health. An axe accessibility scan found no violations on those pages.
-- **Drag-and-drop builder (Playwright):** 15-step walkthrough with the CSP enforced, covering palette drags, nested
-  columns, handle reordering, in-place editing, undo, test send, HTML conversion and phone width. It passed with no
-  console errors and no axe violations.
+Verified in the build environment for 0.9.0 (23 Nov 2026):
+- **Lint:** ESLint clean. **Dependencies:** `npm audit` reports 0 vulnerabilities (production and development).
+- **Unit tests (25):** configuration rules, secret encryption, rendering and personalisation, the email layout and
+  brand theme, DSN/ARF parsing, bounce rules and SMTP error classification, the builder renderer, UTM tagging, segment
+  rule compilation, image compression.
+- **Integration tests (32)** against PostgreSQL 16 and a local SMTP server, through the real HTTP API and send path:
+  setup, security and roles, import, personalised sending, hard/soft/policy bounces, tracking, unsubscribe, complaints,
+  suppression across re-imports, double opt-in, reactivation, POPIA erasure, SMTP outage → pause → resume, the builder,
+  samples, platform pages, the permission request, image library, UTM tags, segments, sign-up forms, email design
+  (including freezing at send), the upgrade from templates, report drill-downs, and the Inbox end to end (real RFC 822
+  replies, auto-replies, unsubscribe requests, threading of answers, permissions, erasure).
+- **Browser checks (Playwright, Chromium):**
+  - a role crawl of 36 screens as viewer, manager and admin (refused screens refused, no page or API errors, no axe
+    WCAG 2 A/AA violations);
+  - walkthroughs of the email design, the campaign editor, the report drill-downs and the Inbox on desktop and phone.
 
-**Not verified here:**
-- the IMAP connection against a real mailbox (only the parser is tested);
-- real SMTP providers and DNS checks against a real domain;
+  Details: [UAT_AUDIT.md](docs/internal/UAT_AUDIT.md) round 3.
+
+**Not verified here** (covered by the go-live script in [ACCEPTANCE_TESTS.md](docs/internal/ACCEPTANCE_TESTS.md)):
+- IMAP connections to a real bounce or replies mailbox (the message processing is tested; the connection only for
+  failure);
+- real SMTP providers, DNS checks against a real domain, and threading in real mail clients;
 - a live Railway deployment.
 
-The Docker image was built and smoke-tested. The build needed only the sandbox's proxy certificate added; the
-Dockerfile is unchanged. In the container:
-- it runs as the non-root user;
-- `/healthz` returns 200;
-- the SMTP connection is verified;
-- `scripts/backup.js` produces a verified dump with pg_dump 18.
-
-Do the [UAT checklist](docs/internal/ACCEPTANCE_TESTS.md) on staging before go-live.
+The Docker image was built and smoke-tested for this release (non-root user, migrations 001–008 applied, `/healthz`
+200).
 
 ## Known limitations
 
-- One application instance. The sender is safe with more than one (it uses row locks), but scheduling and alerting
-  are designed for one; keep Railway replicas at 1.
+- One application instance. The sender is safe with more than one (it uses row locks), but scheduling, mailbox reading
+  and alerting are designed for one; keep Railway replicas at 1.
 - No built-in DKIM signing. Use an SMTP provider that signs with DKIM for your domain.
 - Open tracking is approximate. Apple Mail Privacy Protection pre-loads images, and many clients block them. Treat clicks
   as the reliable engagement signal.
 - No A/B testing, automations or drip sequences.
+- Inbox:
+  - answers are plain text, without attachments;
+  - inline (`cid:`) images in replies are listed as attachments, not shown in place;
+  - one replies mailbox per instance, read on an interval (default 5 minutes);
+  - replies without reply headers are linked by sender to their latest campaign within 30 days (shown as such);
+  - conversations are kept until the contact is erased (no retention period yet).
+- Unsubscribe requests sent by email are flagged, not actioned automatically.
+- The "ask only once" rule for permission requests is shown as guidance, not enforced.
+- `portal.templates` is kept, unused, for the rollback window of the upgrade (see CHANGELOG).
 
 ## Documentation
 
@@ -353,6 +358,7 @@ them, and route anything platform-related to "contact MailHarbor support".
 | Guide | For |
 |---|---|
 | [GETTING_STARTED](docs/GETTING_STARTED.md) | New customers: what we need, first sign-in, first campaign |
+| [BETA_NOTES](docs/BETA_NOTES.md) | Test customers of 0.9: what's in it, what to test, known limitations, reporting problems |
 | [USER_GUIDE](docs/USER_GUIDE.md) | Staff: contacts, imports, campaigns, email design, reports |
 | [ADMIN_GUIDE](docs/ADMIN_GUIDE.md) | Customer administrators: settings, users, DNS, bounces, monitoring |
 | [SECURITY](docs/SECURITY.md) | Security controls, hosting model and POPIA |
@@ -362,6 +368,7 @@ them, and route anything platform-related to "contact MailHarbor support".
 
 | Guide | For |
 |---|---|
+| [SOFT_RELEASE](docs/internal/SOFT_RELEASE.md) | 0.9.0 soft release: readiness, upgrade, rollback, monitoring, triage, go/no-go |
 | [PROVISIONING](docs/internal/PROVISIONING.md) | Onboarding and offboarding a customer instance |
 | [OPERATIONS](docs/internal/OPERATIONS.md) | Backups, upgrades, monitoring, support account, troubleshooting |
 | [DEPLOY_RAILWAY](docs/internal/DEPLOY_RAILWAY.md) | Railway steps per customer project |

@@ -1,13 +1,14 @@
 # UI / UX / UAT audit
 
-**Latest run:** 17 Nov 2026 · **Build:** branch `ccr-65691816-bwuwkk`, built-in sending engine (no listmonk)
+**Latest run:** 23 Nov 2026 · **Build:** 0.9.0 (soft release), branch `ccr-65691816-bwuwkk`
 **Stack under test:** PostgreSQL 16, local SMTP test server, Chromium (Playwright), axe-core 4.x (WCAG 2 A/AA)
 
-There have been two rounds:
-- **Round 2 (current):** after MailHarbor was rebuilt with its own campaign, sending, tracking and bounce engine. It
-  covers the new screens (setup, campaigns, editor, templates, settings, system health) and re-checks role allocation.
-- **Round 1:** the earlier listmonk-based build. Its fixes to sign-in, imports, contacts and accessibility carried into
-  the current code. Findings that only concerned listmonk no longer apply and are listed at the end for the record.
+There have been three rounds:
+- **Round 3 (current, 0.9.0):** after templates were replaced by Settings → Email design, the campaign editor was
+  simplified, every report number became clickable, and the Inbox for replies was added. Full role crawl of every
+  screen, plus the findings fixed while building those features.
+- **Round 2:** after MailHarbor was rebuilt with its own campaign, sending, tracking and bounce engine.
+- **Round 1:** the earlier listmonk-based build. Findings that only concerned listmonk no longer apply.
 
 ## 1. Method
 
@@ -16,9 +17,27 @@ There have been two rounds:
 | Browser walkthrough | Fresh database → first-run setup with the log code → settings (address, SMTP test, bounce tab) → list + contact → campaign editor (subject, preheader, personalisation tag, button, autosave, readiness) → test send → send now → report → templates → system health |
 | Role crawl | Signed in as **viewer** and **manager**, opened all 21 routes (including deep links to admin-only and edit screens), recorded the menu, every visible action, failed API calls and page errors |
 | Accessibility | axe-core (WCAG 2 A/AA) on every screen in the walkthrough and the role crawl |
-| Functional regression | 25 unit tests + 29 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)) |
+| Functional regression | 25 unit tests + 32 end-to-end acceptance tests against PostgreSQL and the SMTP test server ([ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md)); ESLint clean |
+| Round 3 role crawl | Viewer, manager and admin each opened **36 screens** (every menu item, every Settings tab, report details, a conversation, a draft editor, segment and form editors); refused routes checked; page errors, API errors and axe recorded |
+| Round 3 walkthroughs | Email design (live preview, brand colour in builder and email), simplified campaign editor, campaign report tiles each matching their detail list, mail usage and audience drill-downs, Inbox (read, original formatting, attachment, reply, note, assign, close, unsubscribe request) on desktop and iPhone 13 |
 
-## 2. Round 2 findings and fixes
+## 2. Round 3 findings and fixes (0.9.0)
+
+| # | Area | Sev. | Finding | Fix | Status |
+|---|---|---|---|---|---|
+| R3-1 | Inbox | **High** | Emails from people that reached the bounce mailbox were moved to "processed" and silently discarded. | The mailbox reader puts every non-bounce email in the Inbox | Fixed, tested |
+| R3-2 | Rate limiting | **High** | The recipient pages' limiter (300/min) counted every staff API request, because its router is mounted at the root; a busy team could be throttled. | Limited to the recipient pages and the webhook | Fixed, regression covered by the suite |
+| R3-3 | Settings | Medium | Saving an invalid setting returned HTTP 500 instead of a validation error naming the field. | Settings use the shared validator (422 with field details) | Fixed, tested |
+| R3-4 | Dashboard / Suppression | Medium | "Recent bounce activity" rows linked to `#/contacts/undefined`, and the suppression list never showed its "view contact" links (both read a field the API doesn't return). | Use `contact_id` | Fixed, re-tested |
+| R3-5 | POPIA | Medium | The erase screen's reason was validated and then dropped, so the audit log didn't record why a contact was erased. | Reason stored with the audit entry | Fixed |
+| R3-6 | Inbox | Medium | A list view filter bound a parameter it didn't use, so the Inbox list failed (500). | Lazy view filters | Fixed, tested |
+| R3-7 | Inbox | Low | Remote images in a reply were blocked by the CSP but still attempted (console errors, tracking pixels requested). | Removed from the HTML unless the reader loads images | Fixed |
+| R3-8 | Accessibility | Low | The unread dot used `aria-label` without a role. | Hidden text for screen readers | Fixed: 0 violations |
+| R3-9 | Inbox | Low | Message order followed the sender's `Date` header (whole seconds, sender clocks). | Ordered by arrival | Fixed, tested |
+| R3-10 | Reports | Low | Mail usage tiles and the audience "Suppressed" column didn't match the lists they could open (approximate status groups). | Counts use the same filters as the lists they open | Fixed, tested |
+| R3-11 | Code | Low | Dead code from the removed template builder and editors; unused imports; a duplicate object key. | Removed; ESLint added (dev only) and clean | Done |
+
+## 3. Round 2 findings and fixes
 
 Severity:
 - **High:** a function is broken, or the data or compliance outcome is wrong.
@@ -185,7 +204,7 @@ The browser test passed all 10 steps:
 
 There were no console errors with the CSP enforced.
 
-## 3. Allocation matrix: scope requirement → screen → role
+## 4. Allocation matrix: scope requirement → screen → role
 
 ✔ = can do · 👁 = read only · – = hidden (direct link shows "no permission")
 
@@ -196,10 +215,12 @@ There were no console errors with the CSP enforced.
 | 3.2 | Sort and filter recipients | **Contacts**: search, status/list/source/consent filters, sortable columns, quick search | ✔ | ✔ | ✔ |
 | 3.3 | Recipient status model | Status badges; dashboard tiles; *Eligible to receive* filter | 👁 | 👁 | 👁 |
 | 3.4 | CSV import: validation, dedupe, suppression, preview, report | **Import** wizard + **Import history** | 👁 history | ✔ | ✔ |
-| 3.5 | Campaigns: create, templates, personalise, test, schedule, pause/resume/cancel | **Campaigns**, drag-and-drop builder / editor, **Templates** | 👁 | ✔ | ✔ |
+| 3.5 | Campaigns: create, personalise, test, schedule, pause/resume/cancel | **Campaigns**: Audience → Email → Review & send, drag-and-drop builder | 👁 | ✔ | ✔ |
+| 3.5 | Email look (logo, colours, footer) | **Settings → Email design** | – | – | ✔ |
+| – | Replies to campaigns | **Inbox** (read, answer, notes, assign, unsubscribe requests); **Settings → Replies** | 👁 | ✔ | ✔ + configure |
 | 3.6 | Bounce processing and classification | Automatic (SMTP, IMAP mailbox, webhook); **Settings → Bounces**; **Review queue**; contact bounce table | 👁 | ✔ resolve | ✔ + configure |
 | 3.7 | Unsubscribe and global suppression | Link + one-click header in every email; **Contact → Unsubscribe**; **Suppression list**; Settings → Compliance | 👁 | ✔ add | ✔ add / lift / configure |
-| 3.8 | Campaign reporting | Campaign page (metrics, top links, timeline, failures) + campaigns CSV | 👁 | 👁 + export | 👁 + export |
+| 3.8 | Campaign reporting | Campaign page (metrics, top links, timeline, failures), every number clickable to its recipients (**Details**) + CSV | 👁 | 👁 + export | 👁 + export |
 | 4 | Suppression rules, history | **Suppression list**, contact **History** | 👁 | ✔ | ✔ |
 | 4 | Reactivation only with authorisation and permission basis | **Suppression list → Lift** | – | – | ✔ |
 | 5 | Consent date, method, purpose, evidence | Add contact, import, **Record consent**, contact **Consent** card | 👁 | ✔ | ✔ |
@@ -213,11 +234,27 @@ There were no console errors with the CSP enforced.
 | 10 | Acceptance tests | `docs/ACCEPTANCE_TESTS.md`, automated suite | – | – | – |
 
 Menus observed in the role crawl:
-- **Viewer:** Dashboard · Contacts · Import history · Lists · Review queue · Suppression list · Campaigns · Templates · Audience & bounces · Guides
-- **Manager:** Dashboard · Contacts · Import · Lists · Review queue · Suppression list · Campaigns · Templates · Audience & bounces · Exports · Guides · System health, plus the *New campaign* button
+- **Viewer:** Dashboard · Contacts · Import history · Lists · Segments · Sign-up forms · Review queue · Suppression list · Inbox · Campaigns · Images · Audience & bounces · Mail usage · Guides · Product overview
+- **Manager:** as the viewer, with Import instead of Import history, plus Exports · System health
 - **Admin:** everything a manager has, plus Settings · Users · Audit log
 
-## 4. Run log (17 Nov 2026)
+## 5. Run log
+
+### 23 Nov 2026 (0.9.0)
+
+Role crawl, 36 screens per role:
+
+| Role | Refused as expected | Page errors | API errors | axe violations |
+|---|---|---|---|---|
+| Viewer | Import, campaign editor, segment editor, Exports, System health, all 6 Settings tabs, Users, Audit log | 0 | 0 | 0 |
+| Manager | All 6 Settings tabs, Users, Audit log | 0 | 0 | 0 |
+| Admin | – | 0 | 0 | 0 |
+
+Walkthroughs: Email design and simplified editor 25/25 checks; Inbox 25/25 checks (desktop and iPhone 13, no
+horizontal scroll); report drill-downs (10 campaign tiles each equal to their detail lists). Unit 25/25, integration
+32/32, `npm audit` 0 vulnerabilities, ESLint clean.
+
+### 17 Nov 2026 (round 2)
 
 Browser walkthrough on a fresh database:
 
@@ -237,7 +274,7 @@ Role crawl (viewer, manager × 21 routes):
 
 Acceptance suite: 29/29 pass. Unit tests: 25/25 pass.
 
-## 5. Round 1 (listmonk-based build): findings still relevant
+## 6. Round 1 (listmonk-based build): findings still relevant
 
 These fixes live in code the current build kept:
 
@@ -254,10 +291,11 @@ These fixes live in code the current build kept:
 Obsolete with the rebuild (listmonk-specific): F4, F5, F21 and R1–R5 (listmonk sync alerts, listmonk links, listmonk
 bounce-action defaults, listmonk API user, listmonk Railway image).
 
-## 6. Recommendations (not done: need a decision or external access)
+## 7. Recommendations (not done: need a decision or external access)
 
 1. **Run the go-live script** in [ACCEPTANCE_TESTS.md](ACCEPTANCE_TESTS.md) on the real infrastructure: your SMTP
-   provider, the IMAP bounce mailbox, DNS and Railway (Pro). None of these could be reached from the build environment.
+   provider, the IMAP bounce and replies mailboxes, DNS and Railway (Pro). None of these could be reached from the
+   build environment. Steps 13–14 cover the Inbox and drill-downs.
 2. **Warm up the sending domain:** start at 2–5 emails per second and small campaigns, and watch bounces and
    complaints in Reports.
 3. **Accessibility sign-off:** automated checks catch roughly a third of WCAG issues. A 30-minute screen-reader

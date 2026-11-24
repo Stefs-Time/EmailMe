@@ -2,7 +2,8 @@
 <!--
   MailHarbor suggested pricing (source of mailharbor-pricing.pdf in this folder).
   Internal sales material: prices and the cost model behind them are in PRICING_NOTES.md.
-  Rebuild the PDF after editing:  cd portal && npm run brochure -- pricing
+  Rebuild both PDFs after editing:  cd portal && npm run brochure -- pricing
+  (mailharbor-pricing.pdf with the Pilot programme; mailharbor-pricing-standard.pdf without it)
 -->
 <html lang="en">
 <head>
@@ -145,6 +146,8 @@
   .terms { columns: 2; column-gap: 16px; font-size: 8.7pt; color: #3a4757; margin-top: 6px; }
   .terms p { break-inside: avoid; margin: 0 0 6px; }
   .terms b { color: var(--navy); }
+  /* Editions: the build removes .pilot-only for the standard PDF and .standard-only for the pilot PDF. */
+  .standard-only { display: none; }
   .sla td:first-child { font-weight: 700; color: var(--navy); }
   .pilot { border-radius: 16px; padding: 16px 18px; background: linear-gradient(135deg, var(--navy) 0%, var(--navy2) 100%); color: #fff; }
   .pilot .badge-top { background: var(--teal-l); color: #0f2846; font-size: 7.8pt; font-weight: 800; border-radius: 999px; padding: 3px 10px; letter-spacing: .04em; }
@@ -238,8 +241,9 @@
         <li>Lists, contacts and custom fields migrated</li><li>Unsubscribes, bounces and complaints carried over, so nobody is emailed by mistake</li>
         <li>Up to 3 sign-up forms placed on your website</li><li>4 training sessions; your first 3 campaigns built with you</li></ul></div>
   </div>
-  <div class="callout"><b>By invitation: Pilot programme.</b> A small number of organisations are invited to run MailHarbor at a
+  <div class="callout pilot-only"><b>By invitation: Pilot programme.</b> A small number of organisations are invited to run MailHarbor at a
     much lower price while it is in early access (see page 5). Installation is otherwise invoiced 50% on order and 50% at go-live.</div>
+  <div class="callout standard-only"><b>Payment:</b> installation is invoiced 50% on order and 50% at go-live; monthly fees are invoiced monthly in advance.</div>
 
   <div class="eyebrow" style="margin-top:20px">2 · Hosting (monthly)</div>
   <h2 style="font-size:21pt">Sized to how much you send</h2>
@@ -304,8 +308,8 @@
   <div class="foot"><span><b>MailHarbor</b> · Pricing · Suggested pricing, subject to a formal quote</span><span>4</span></div>
 </section>
 
-<!-- 5. Pilot programme (by invitation) -->
-<section class="page">
+<!-- 5. Pilot programme (by invitation): left out of the standard edition -->
+<section class="page pilot-only">
   <div class="eyebrow">By invitation only</div>
   <h2>Pilot programme</h2>
   <p class="lead">We are inviting a few organisations to use MailHarbor at a fraction of the normal price while it is in early access.

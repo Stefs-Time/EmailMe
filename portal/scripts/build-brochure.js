@@ -35,11 +35,24 @@ const PREVIEWS = PRICING ? null : path.resolve(__dirname, '../public/downloads/o
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   const browser = await chromium.launch();
   try {
-    const page = await browser.newPage();
-    await page.goto(`file://${SRC}`, { waitUntil: 'networkidle' });
-    await page.evaluate(() => document.fonts.ready);
-    await page.pdf({ path: OUT, format: 'A4', printBackground: true, preferCSSPageSize: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
-    console.log(`Wrote ${path.relative(process.cwd(), OUT)} (${Math.round(fs.statSync(OUT).size / 1024)} KB)`);
+    // The pricing source holds two editions: with the Pilot programme (.pilot-only) and the standard one
+    // (.standard-only). Each PDF drops the other edition's elements before printing.
+    const editions = PRICING
+      ? [{ out: OUT, drop: '.standard-only' },
+        { out: OUT.replace(/\.pdf$/, '-standard.pdf'), drop: '.pilot-only', show: '.standard-only' }]
+      : [{ out: OUT }];
+    for (const ed of editions) {
+      const page = await browser.newPage();
+      await page.goto(`file://${SRC}`, { waitUntil: 'networkidle' });
+      await page.evaluate(() => document.fonts.ready);
+      await page.evaluate(({ drop, show }) => {
+        if (drop) document.querySelectorAll(drop).forEach((n) => n.remove());
+        if (show) document.querySelectorAll(show).forEach((n) => n.classList.remove(show.slice(1)));
+      }, { drop: ed.drop, show: ed.show });
+      await page.pdf({ path: ed.out, format: 'A4', printBackground: true, preferCSSPageSize: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
+      await page.close();
+      console.log(`Wrote ${path.relative(process.cwd(), ed.out)} (${Math.round(fs.statSync(ed.out).size / 1024)} KB)`);
+    }
 
     // Page previews for the in-app viewer (images work on every device; inline PDFs don't).
     // Files are overwritten each run; pages.json tells the viewer how many pages exist.

@@ -1,7 +1,7 @@
 # Pricing notes (internal)
 
 > **Internal.** The cost model behind [mailharbor-pricing-standard.pdf](mailharbor-pricing-standard.pdf) (standard) and [mailharbor-pricing.pdf](mailharbor-pricing.pdf) (with the Pilot programme). Both are built from
-> `mailharbor-pricing.html`; rebuild both with `cd portal && npm run brochure -- pricing`). The prices are **suggestions**: adjust
+> `mailharbor-pricing.html`; rebuild both with `cd portal && npm run brochure -- pricing`. The prices are **suggestions**: adjust
 > them here first, then in the HTML. Researched 23 Nov 2026; check rates again before quoting.
 
 ## Inputs
